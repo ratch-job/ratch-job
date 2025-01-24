@@ -2,5 +2,13 @@
 name = "ratch-job"
 version = "0.1.0"
 edition = "2021"
+authors = ["heqingpan <heqingpan@126.com>"]
+license = "Apache-2.0"
+description = "一个rust实现的分布式任务调度平台服务。计划完全兼容xxl-job协议，然后再增强一些任务调度平台能力。"
+repository = "https://github.com/ratch-job/ratch-job"
+homepage = "https://github.com/ratch-job/ratch-job"
+documentation = "https://docs.rs/ratch-job/latest"
+readme = "README.md"
+keywords = ["ratch-job"]
 
 [dependencies]
