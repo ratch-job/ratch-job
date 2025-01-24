@@ -1,5 +1,5 @@
 [package]
-name = "ratch-job"
+name = "ratchjob"
 version = "0.1.0"
 edition = "2021"
 authors = ["heqingpan <heqingpan@126.com>"]
@@ -9,6 +9,6 @@ repository = "https://github.com/ratch-job/ratch-job"
 homepage = "https://github.com/ratch-job/ratch-job"
 documentation = "https://docs.rs/ratch-job/latest"
 readme = "README.md"
-keywords = ["ratch-job"]
+keywords = ["ratch-job","ratchjob","xxl-job","xxljob"]
 
 [dependencies]
