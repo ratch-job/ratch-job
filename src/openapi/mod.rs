@@ -1,3 +1,5 @@
+pub mod xxljob;
+
 use crate::common::app_config::AppConfig;
 use crate::web_config::about_info;
 use actix_web::web;
