@@ -85,6 +85,19 @@ impl AppManager {
             app_info.instance_map.remove(&instance_key);
         }
     }
+
+    fn get_app_instance_addrs(&self, key: AppKey) -> Arc<Vec<Arc<String>>> {
+        if let Some(app_info) = self.app_map.get(&key) {
+            let mut addrs = Vec::new();
+            for (_, instance) in app_info.instance_map.iter() {
+                if instance.enable && instance.healthy {
+                    addrs.push(instance.addr.clone());
+                }
+            }
+            return Arc::new(addrs);
+        }
+        Arc::new(Vec::new())
+    }
 }
 
 impl Actor for AppManager {
@@ -111,6 +124,10 @@ impl Handler<AppManagerReq> for AppManager {
             }
             AppManagerReq::UnregisterAppInstance(key, addr) => {
                 self.unregister_app_instance(key, addr);
+            }
+            AppManagerReq::GetAppInstanceAddrs(key) => {
+                let addrs = self.get_app_instance_addrs(key);
+                return Ok(AppManagerResult::InstanceAddrs(addrs));
             }
         }
         Ok(AppManagerResult::None)

@@ -1,22 +1,63 @@
+use crate::app::model::{AppKey, AppManagerReq};
+use crate::common::constant::DEFAULT_XXL_NAMESPACE;
 use crate::common::share_data::ShareData;
 use crate::openapi::xxljob::model::server_request::{CallbackParam, RegistryParam};
-use crate::openapi::xxljob::model::xxl_api_empty_success;
+use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
+use log::log;
 use std::sync::Arc;
 
 pub(crate) async fn register(
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<RegistryParam>,
 ) -> impl Responder {
-    HttpResponse::Ok().json(xxl_api_empty_success())
+    let app_name = param.registry_key;
+    let instance_addr = param.registry_value;
+    let app_key = AppKey::new(app_name.clone(), DEFAULT_XXL_NAMESPACE.clone());
+    if let Ok(Ok(_)) = share_data
+        .app_manager
+        .send(AppManagerReq::RegisterAppInstance(
+            app_key,
+            instance_addr.clone(),
+        ))
+        .await
+    {
+        HttpResponse::Ok().json(xxl_api_empty_success())
+    } else {
+        let error_msg = format!(
+            "register error,app_name:{},addr:{}",
+            app_name, instance_addr
+        );
+        log::error!("{}", &error_msg);
+        HttpResponse::Ok().json(XxlApiResult::<()>::fail(Some(error_msg)))
+    }
 }
 
 pub(crate) async fn unregister(
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<RegistryParam>,
 ) -> impl Responder {
-    HttpResponse::Ok().json(xxl_api_empty_success())
+    let app_name = param.registry_key;
+    let instance_addr = param.registry_value;
+    let app_key = AppKey::new(app_name.clone(), DEFAULT_XXL_NAMESPACE.clone());
+    if let Ok(Ok(_)) = share_data
+        .app_manager
+        .send(AppManagerReq::UnregisterAppInstance(
+            app_key,
+            instance_addr.clone(),
+        ))
+        .await
+    {
+        HttpResponse::Ok().json(xxl_api_empty_success())
+    } else {
+        let error_msg = format!(
+            "unregister error,app_name:{},addr:{}",
+            app_name, instance_addr
+        );
+        log::error!("{}", &error_msg);
+        HttpResponse::Ok().json(XxlApiResult::<()>::fail(Some(error_msg)))
+    }
 }
 
 pub(crate) async fn callback(

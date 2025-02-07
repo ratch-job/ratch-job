@@ -96,11 +96,13 @@ pub enum AppManagerReq {
     RemoveApp(AppKey),
     RegisterAppInstance(AppKey, Arc<String>),
     UnregisterAppInstance(AppKey, Arc<String>),
+    GetAppInstanceAddrs(AppKey),
 }
 
 #[derive(Debug, Clone)]
 pub enum AppManagerResult {
     None,
+    InstanceAddrs(Arc<Vec<Arc<String>>>),
 }
 
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]
