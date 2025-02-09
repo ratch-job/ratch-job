@@ -1,5 +1,5 @@
 [package]
-name = "ratch-job"
+name = "ratchjob"
 version = "0.1.0"
 edition = "2021"
 authors = ["heqingpan <heqingpan@126.com>"]

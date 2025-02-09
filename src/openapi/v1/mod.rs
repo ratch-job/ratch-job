@@ -1,4 +1,5 @@
 pub mod app_api;
+pub mod job_api;
 pub mod model;
 
 use actix_web::web;
