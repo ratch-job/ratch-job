@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 pub const SUCCESS_CODE: i32 = 200;
 pub const FAIL_CODE: i32 = 500;
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct XxlApiResult<T>
 where
-    T: Sized + Default,
+    T: Sized,
 {
     pub content: Option<T>,
     pub code: i32,
@@ -17,7 +17,7 @@ where
 
 impl<T> XxlApiResult<T>
 where
-    T: Sized + Default,
+    T: Sized,
 {
     pub fn success(content: Option<T>) -> XxlApiResult<T> {
         Self {

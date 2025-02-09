@@ -5,6 +5,7 @@ use std::sync::Arc;
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<JobManagerResult>")]
 pub enum JobManagerReq {
+    AddJob(JobParam),
     UpdateJob(JobParam),
     Remove(u64),
     GetJob(u64),

@@ -1,4 +1,5 @@
 use crate::common::constant::EMPTY_ARC_STR;
+use crate::common::cron_utils::CronUtil;
 use crate::job::model::enum_type::{
     ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
 };
@@ -80,6 +81,36 @@ impl JobInfo {
             self.handle_name.clone(),
         )
     }
+
+    pub fn check_valid(&self) -> anyhow::Result<()> {
+        if self.id == 0 {
+            Err(anyhow::anyhow!("id is empty!"))
+        } else if self.namespace.is_empty() || self.app_name.is_empty() {
+            Err(anyhow::anyhow!("namespace or app_name is empty!"))
+        } else if self.run_mode == JobRunMode::Bean && self.handle_name.is_empty() {
+            Err(anyhow::anyhow!("bean handle_name is invalid!"))
+        } else if self.schedule_type == ScheduleType::Cron
+            && !CronUtil::check_cron_valid(&self.cron_value)
+        {
+            Err(anyhow::anyhow!("cron_value is invalid!"))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        if self.id == 0 || self.namespace.is_empty() || self.app_name.is_empty() {
+            false
+        } else if self.run_mode == JobRunMode::Bean && self.handle_name.is_empty() {
+            false
+        } else if self.schedule_type == ScheduleType::Cron
+            && !CronUtil::check_cron_valid(&self.cron_value)
+        {
+            false
+        } else {
+            true
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -112,10 +143,11 @@ impl JobKey {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JobParam {
-    pub id: u64,
-    pub app_name: Arc<String>,
-    pub namespace: Arc<String>,
+    pub id: Option<u64>,
+    pub app_name: Option<Arc<String>>,
+    pub namespace: Option<Arc<String>>,
     pub description: Option<Arc<String>>,
     pub schedule_type: Option<ScheduleType>,
     pub cron_value: Option<Arc<String>>,
@@ -134,9 +166,9 @@ pub struct JobParam {
 impl From<JobParam> for JobInfo {
     fn from(job_param: JobParam) -> Self {
         JobInfo {
-            id: job_param.id,
-            app_name: job_param.app_name,
-            namespace: job_param.namespace,
+            id: job_param.id.unwrap_or_default(),
+            app_name: job_param.app_name.unwrap_or_default(),
+            namespace: job_param.namespace.unwrap_or_default(),
             handle_name: job_param.handle_name.unwrap_or(EMPTY_ARC_STR.clone()),
             description: job_param.description.unwrap_or(EMPTY_ARC_STR.clone()),
             schedule_type: job_param.schedule_type.unwrap_or(ScheduleType::None),
