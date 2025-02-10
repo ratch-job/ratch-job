@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ScheduleType {
     Cron,
     Interval,
@@ -29,6 +30,7 @@ impl ScheduleType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum JobRunMode {
     Bean,
     GlueGroovy,
@@ -67,6 +69,7 @@ impl JobRunMode {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RouterStrategy {
     First,
     Last,
@@ -102,6 +105,7 @@ impl RouterStrategy {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PastDueStrategy {
     Default,
     Ignore,
@@ -128,6 +132,7 @@ impl PastDueStrategy {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ExecutorBlockStrategy {
     SerialExecution,
     DiscardLater,
