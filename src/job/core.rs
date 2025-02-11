@@ -1,19 +1,23 @@
 use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
 use crate::job::model::job::{JobInfo, JobKey, JobParam};
+use crate::schedule::core::ScheduleManager;
+use crate::schedule::model::actor_model::ScheduleManagerReq;
 use actix::prelude::*;
+use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[bean(inject)]
 pub struct JobManager {
     job_map: HashMap<u64, Arc<JobInfo>>,
-    key_to_id: HashMap<JobKey, u64>,
+    schedule_manager: Option<Addr<ScheduleManager>>,
 }
 
 impl JobManager {
     pub fn new() -> Self {
         JobManager {
             job_map: HashMap::new(),
-            key_to_id: HashMap::new(),
+            schedule_manager: None,
         }
     }
 
@@ -29,12 +33,11 @@ impl JobManager {
         }
         let job_info: JobInfo = job_param.into();
         job_info.check_valid()?;
-        if !job_info.handle_name.is_empty() {
-            let key = job_info.get_key();
-            self.key_to_id.insert(key, job_info.id);
-        }
         let value = Arc::new(job_info);
         self.job_map.insert(value.id, value.clone());
+        if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+            schedule_manager.do_send(ScheduleManagerReq::UpdateJob(value.clone()));
+        }
         Ok(value)
     }
 
@@ -44,16 +47,14 @@ impl JobManager {
             return Err(anyhow::anyhow!("UpdateJob JobParam.id==0 is invalid!"));
         }
         if let Some(job_info) = self.job_map.get(&id) {
-            let old_key = job_info.get_key();
             let mut new_job = job_info.as_ref().clone();
             new_job.update_param(job_param);
             job_info.check_valid()?;
-            let new_key = job_info.get_key();
-            if old_key != new_key {
-                self.key_to_id.remove(&old_key);
-                self.key_to_id.insert(new_key, job_info.id);
+            let value = Arc::new(new_job);
+            self.job_map.insert(job_info.id, value.clone());
+            if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+                schedule_manager.do_send(ScheduleManagerReq::UpdateJob(value.clone()));
             }
-            self.job_map.insert(job_info.id, Arc::new(new_job));
         } else {
             return Err(anyhow::anyhow!("UpdateJob,Nonexistent Job"));
         }
@@ -61,9 +62,9 @@ impl JobManager {
     }
 
     fn remove_job(&mut self, id: u64) {
-        if let Some(job_info) = self.job_map.remove(&id) {
-            let key = job_info.get_key();
-            self.key_to_id.remove(&key);
+        self.job_map.remove(&id);
+        if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+            schedule_manager.do_send(ScheduleManagerReq::RemoveJob(id));
         }
     }
 }
@@ -73,6 +74,19 @@ impl Actor for JobManager {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         log::info!("JobManager started");
+    }
+}
+
+impl Inject for JobManager {
+    type Context = Context<Self>;
+
+    fn inject(
+        &mut self,
+        factory_data: FactoryData,
+        _factory: BeanFactory,
+        _ctx: &mut Self::Context,
+    ) {
+        self.schedule_manager = factory_data.get_actor();
     }
 }
 
@@ -94,13 +108,6 @@ impl Handler<JobManagerReq> for JobManager {
             JobManagerReq::GetJob(id) => {
                 if let Some(job_info) = self.job_map.get(&id) {
                     return Ok(JobManagerResult::JobInfo(job_info.clone()));
-                }
-            }
-            JobManagerReq::GetJobByKey(key) => {
-                if let Some(id) = self.key_to_id.get(&key) {
-                    if let Some(job_info) = self.job_map.get(id) {
-                        return Ok(JobManagerResult::JobInfo(job_info.clone()));
-                    }
                 }
             }
         }

@@ -9,7 +9,6 @@ pub enum JobManagerReq {
     UpdateJob(JobParam),
     Remove(u64),
     GetJob(u64),
-    GetJobByKey(JobKey),
 }
 
 #[derive(Debug, Clone)]

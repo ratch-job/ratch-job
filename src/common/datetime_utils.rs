@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 use std::time::SystemTime;
 
 pub fn now_millis() -> u64 {
@@ -40,4 +40,22 @@ pub fn get_now_timestamp_str(offset: &FixedOffset) -> String {
         .with_timezone(offset)
         .format(DATETIME_TIMESTAMP_FMT)
         .to_string()
+}
+
+pub fn get_local_offset() -> FixedOffset {
+    Local::now().offset().fix()
+}
+
+pub fn get_datetime_by_second(
+    secs: u32,
+    fixed_offset: &FixedOffset,
+) -> Option<DateTime<FixedOffset>> {
+    DateTime::<Utc>::from_timestamp(secs as i64, 0).map(|v| v.with_timezone(fixed_offset))
+}
+
+pub fn get_datetime_millis(
+    mills: i64,
+    fixed_offset: &FixedOffset,
+) -> Option<DateTime<FixedOffset>> {
+    DateTime::<Utc>::from_timestamp_millis(mills).map(|v| v.with_timezone(fixed_offset))
 }
