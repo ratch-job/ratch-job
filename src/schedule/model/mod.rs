@@ -1,5 +1,4 @@
 pub mod actor_model;
-pub mod task;
 
 use crate::common::cron_utils::CronUtil;
 use crate::job::model::enum_type::ScheduleType;
@@ -45,7 +44,7 @@ impl JobRunState {
     }
     pub fn calculate_first_trigger_time<T: TimeZone>(&self, datetime: &DateTime<T>) -> u32 {
         match self.schedule_type {
-            ScheduleType::Delay => (datetime.timestamp() / 1000) as u32,
+            ScheduleType::Delay => datetime.timestamp() as u32,
             ScheduleType::None => 0,
             _ => self.calculate_next_trigger_time(datetime),
         }
@@ -81,7 +80,7 @@ impl JobRunState {
 
     pub fn calculate_next_trigger_time<T: TimeZone>(&self, datetime: &DateTime<T>) -> u32 {
         let mut result = 0;
-        let timestamp_seconds = (datetime.timestamp() / 1000) as u32;
+        let timestamp_seconds = datetime.timestamp() as u32;
         match self.schedule_type {
             ScheduleType::Cron => {
                 if let Some(cron_schedule) = self.cron_schedule.as_ref() {

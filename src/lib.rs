@@ -8,4 +8,5 @@ pub mod openapi;
 pub mod schedule;
 pub mod sequence;
 pub mod starter;
+pub mod task;
 pub mod web_config;

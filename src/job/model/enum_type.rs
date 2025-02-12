@@ -71,11 +71,17 @@ impl JobRunMode {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RouterStrategy {
+    /// 第一个
     First,
+    /// 最后一个
     Last,
+    /// 轮询
     RoundRobin,
+    /// 随机
     Random,
+    /// 一致性哈希
     ConsistentHash,
+    /// 分片广播
     ShardingBroadcast,
 }
 

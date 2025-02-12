@@ -22,7 +22,7 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
         SequenceManager::new().start(),
     ));
     factory.register(BeanDefinition::actor_from_obj(
-        ScheduleManager::new(None).start(),
+        ScheduleManager::new(app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60)).start(),
     ));
     Ok(factory.init().await)
 }

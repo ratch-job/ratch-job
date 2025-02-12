@@ -44,7 +44,14 @@ impl ScheduleManager {
 
     fn active_job(&mut self, job_id: u64, time: u32, version: u32) {
         self.active_time_set
-            .add(time as u64, TriggerInfo::new(job_id, time, version))
+            .add(time as u64, TriggerInfo::new(job_id, time, version));
+    }
+
+    fn update_job_trigger_time(&mut self, job_id: u64, last_time:u32, next_time:u32) {
+        if let Some(job)= self.job_run_state.get_mut(&job_id) {
+            job.pre_trigger_time = last_time;
+            job.next_trigger_time=next_time;
+        }
     }
 
     fn update_job(&mut self, job_info: Arc<JobInfo>) {
@@ -105,6 +112,7 @@ impl ScheduleManager {
                 let next_trigger_time = job.calculate_next_trigger_time(&date_time);
                 if next_trigger_time > 0 {
                     self.active_job(item.job_id, next_trigger_time, job.version);
+                    self.update_job_trigger_time(item.job_id,item.trigger_time,next_trigger_time);
                 } else {
                     log::info!("job next trigger is none,id:{}", &item.job_id);
                 }
