@@ -7,6 +7,7 @@ pub struct AppConfig {
     pub local_db_dir: String,
     pub http_api_port: u16,
     pub xxl_job_prefix_path: String,
+    pub xxl_default_access_token: String,
     pub http_console_port: u16,
     pub http_workers: Option<usize>,
     pub grpc_cluster_port: u16,
@@ -21,6 +22,8 @@ impl AppConfig {
             .eq_ignore_ascii_case("true");
         let local_db_dir = Self::get_data_dir(run_in_docker);
         let xxl_job_prefix_path = Self::get_xxl_job_prefix_path();
+        let xxl_default_access_token =
+            std::env::var("RATCH_XXL_DEFAULT_ACCESS_TOKEN").unwrap_or("default_token".to_string());
         let http_api_port = std::env::var("RATCH_HTTP_API_PORT")
             .unwrap_or_default()
             .parse()
@@ -45,6 +48,7 @@ impl AppConfig {
             local_db_dir,
             http_api_port,
             xxl_job_prefix_path,
+            xxl_default_access_token,
             http_console_port,
             http_workers,
             grpc_cluster_port,

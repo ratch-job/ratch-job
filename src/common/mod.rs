@@ -4,6 +4,7 @@ pub mod constant;
 pub mod cron_utils;
 pub mod datetime_utils;
 pub mod hash_utils;
+pub mod http_utils;
 pub mod option_utils;
 pub mod protobuf_utils;
 pub mod sequence_utils;

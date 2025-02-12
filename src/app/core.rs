@@ -3,18 +3,24 @@ use crate::app::model::{
 };
 use crate::common::constant::EMPTY_ARC_STR;
 use crate::common::datetime_utils::now_millis;
+use crate::task::core::TaskManager;
+use crate::task::model::actor_model::TaskManagerReq;
 use actix::prelude::*;
+use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+#[bean(inject)]
 pub struct AppManager {
     pub(crate) app_map: BTreeMap<AppKey, AppInfo>,
+    task_manager: Option<Addr<TaskManager>>,
 }
 
 impl AppManager {
     pub fn new() -> Self {
         AppManager {
             app_map: BTreeMap::new(),
+            task_manager: None,
         }
     }
 
@@ -56,6 +62,12 @@ impl AppManager {
     }
 
     fn register_app_instance(&mut self, key: AppKey, instance_key: Arc<String>) {
+        if let Some(task_manager) = self.task_manager.as_ref() {
+            task_manager.do_send(TaskManagerReq::AddAppInstance(
+                key.clone(),
+                instance_key.clone(),
+            ));
+        }
         if let Some(app_info) = self.app_map.get_mut(&key) {
             if let Some(instance) = app_info.instance_map.get_mut(&instance_key) {
                 instance.last_modified_millis = now_millis();
@@ -81,6 +93,12 @@ impl AppManager {
     }
 
     fn unregister_app_instance(&mut self, key: AppKey, instance_key: Arc<String>) {
+        if let Some(task_manager) = self.task_manager.as_ref() {
+            task_manager.do_send(TaskManagerReq::RemoveAppInstance(
+                key.clone(),
+                instance_key.clone(),
+            ));
+        }
         if let Some(app_info) = self.app_map.get_mut(&key) {
             app_info.instance_map.remove(&instance_key);
         }
@@ -105,6 +123,19 @@ impl Actor for AppManager {
 
     fn started(&mut self, _ctx: &mut Context<Self>) {
         log::info!("AppManager started");
+    }
+}
+
+impl Inject for AppManager {
+    type Context = Context<Self>;
+
+    fn inject(
+        &mut self,
+        factory_data: FactoryData,
+        _factory: BeanFactory,
+        _ctx: &mut Self::Context,
+    ) {
+        self.task_manager = factory_data.get_actor();
     }
 }
 

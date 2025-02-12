@@ -5,18 +5,23 @@ use crate::job::model::enum_type::ScheduleType;
 use crate::job::model::job::JobInfo;
 use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
 use crate::schedule::model::{JobRunState, TriggerInfo};
+use crate::task::core::TaskManager;
+use crate::task::model::actor_model::TaskManagerReq;
 use actix::prelude::*;
 use actix_web::cookie::time::macros::datetime;
 use anyhow::anyhow;
+use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, Offset, TimeZone, Utc};
 use inner_mem_cache::TimeoutSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[bean(inject)]
 pub struct ScheduleManager {
     job_run_state: HashMap<u64, JobRunState>,
     active_time_set: TimeoutSet<TriggerInfo>,
     fixed_offset: FixedOffset,
+    task_manager: Option<Addr<TaskManager>>,
 }
 
 impl Actor for ScheduleManager {
@@ -25,6 +30,14 @@ impl Actor for ScheduleManager {
     fn started(&mut self, ctx: &mut Self::Context) {
         log::info!("ScheduleManager started");
         self.heartbeat(ctx);
+    }
+}
+
+impl Inject for ScheduleManager {
+    type Context = Context<Self>;
+
+    fn inject(&mut self, factory_data: FactoryData, factory: BeanFactory, ctx: &mut Self::Context) {
+        self.task_manager = factory_data.get_actor();
     }
 }
 
@@ -39,6 +52,7 @@ impl ScheduleManager {
             job_run_state: HashMap::new(),
             active_time_set: TimeoutSet::new(),
             fixed_offset,
+            task_manager: None,
         }
     }
 
@@ -47,10 +61,10 @@ impl ScheduleManager {
             .add(time as u64, TriggerInfo::new(job_id, time, version));
     }
 
-    fn update_job_trigger_time(&mut self, job_id: u64, last_time:u32, next_time:u32) {
-        if let Some(job)= self.job_run_state.get_mut(&job_id) {
+    fn update_job_trigger_time(&mut self, job_id: u64, last_time: u32, next_time: u32) {
+        if let Some(job) = self.job_run_state.get_mut(&job_id) {
             job.pre_trigger_time = last_time;
-            job.next_trigger_time=next_time;
+            job.next_trigger_time = next_time;
         }
     }
 
@@ -93,31 +107,40 @@ impl ScheduleManager {
     }
 
     fn trigger_job(&mut self, seconds: u32) {
-        let date_time = get_datetime_by_second(seconds, &self.fixed_offset).unwrap();
-        for item in self.active_time_set.timeout(seconds as u64) {
-            if let Some(job) = self.job_run_state.get(&item.job_id) {
-                if job.version != item.version {
-                    //ignore
-                    log::info!("job version change ignore,id:{}", &item.job_id);
-                    continue;
-                }
-                log::info!(
-                    "prepare job,id:{},run_mode:{:?},handler_name:{}",
-                    &job.id,
-                    &job.source_job.run_mode,
-                    &job.source_job.handle_name
-                );
-                //TODO trigger job
-
-                let next_trigger_time = job.calculate_next_trigger_time(&date_time);
-                if next_trigger_time > 0 {
-                    self.active_job(item.job_id, next_trigger_time, job.version);
-                    self.update_job_trigger_time(item.job_id,item.trigger_time,next_trigger_time);
+        if let Some(task_manager) = self.task_manager.clone() {
+            let date_time = get_datetime_by_second(seconds, &self.fixed_offset).unwrap();
+            for item in self.active_time_set.timeout(seconds as u64) {
+                if let Some(job) = self.job_run_state.get(&item.job_id) {
+                    if job.version != item.version {
+                        //ignore
+                        log::info!("job version change ignore,id:{}", &item.job_id);
+                        continue;
+                    }
+                    log::info!(
+                        "prepare job,id:{},run_mode:{:?},handler_name:{}",
+                        &job.id,
+                        &job.source_job.run_mode,
+                        &job.source_job.handle_name
+                    );
+                    //TODO trigger job
+                    task_manager.do_send(TaskManagerReq::TriggerTask(
+                        item.trigger_time,
+                        job.source_job.clone(),
+                    ));
+                    let next_trigger_time = job.calculate_next_trigger_time(&date_time);
+                    if next_trigger_time > 0 {
+                        self.active_job(item.job_id, next_trigger_time, job.version);
+                        self.update_job_trigger_time(
+                            item.job_id,
+                            item.trigger_time,
+                            next_trigger_time,
+                        );
+                    } else {
+                        log::info!("job next trigger is none,id:{}", &item.job_id);
+                    }
                 } else {
-                    log::info!("job next trigger is none,id:{}", &item.job_id);
+                    log::info!("job not exist,id:{}", &item.job_id);
                 }
-            } else {
-                log::info!("job not exist,id:{}", &item.job_id);
             }
         }
     }

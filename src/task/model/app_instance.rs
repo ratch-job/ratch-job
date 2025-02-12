@@ -30,14 +30,14 @@ impl AppInstanceState {
 
 #[derive(Clone, Debug)]
 pub struct AppInstanceStateGroup {
-    pub app_key: Arc<AppKey>,
+    pub app_key: AppKey,
     pub instance_map: HashMap<Arc<String>, AppInstanceState>,
     pub instance_keys: Vec<Arc<String>>,
     pub round_robin_index: usize,
 }
 
 impl AppInstanceStateGroup {
-    pub fn new(app_key: Arc<AppKey>) -> Self {
+    pub fn new(app_key: AppKey) -> Self {
         AppInstanceStateGroup {
             app_key,
             instance_map: HashMap::new(),

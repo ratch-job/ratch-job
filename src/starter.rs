@@ -4,6 +4,7 @@ use crate::common::share_data::ShareData;
 use crate::job::core::JobManager;
 use crate::schedule::core::ScheduleManager;
 use crate::sequence::SequenceManager;
+use crate::task::core::TaskManager;
 use actix::Actor;
 use bean_factory::{BeanDefinition, BeanFactory, FactoryData};
 use std::sync::Arc;
@@ -13,16 +14,20 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     //let base_path = Arc::new(app_config.local_db_dir.clone());
     let factory = BeanFactory::new();
     factory.register(BeanDefinition::from_obj(app_config.clone()));
-    let app_manager = AppManager::new().start();
-    factory.register(BeanDefinition::actor_from_obj(app_manager));
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
+        AppManager::new().start(),
+    ));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         JobManager::new().start(),
     ));
     factory.register(BeanDefinition::actor_from_obj(
         SequenceManager::new().start(),
     ));
-    factory.register(BeanDefinition::actor_from_obj(
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
         ScheduleManager::new(app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60)).start(),
+    ));
+    factory.register(BeanDefinition::actor_from_obj(
+        TaskManager::new(app_config.clone()).start(),
     ));
     Ok(factory.init().await)
 }
@@ -33,12 +38,14 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
     let job_manager = factory_data.get_actor().unwrap();
     let sequence_manager = factory_data.get_actor().unwrap();
     let schedule_manager = factory_data.get_actor().unwrap();
+    let task_manager = factory_data.get_actor().unwrap();
     let app_data = Arc::new(ShareData {
         app_config,
         app_manager,
         job_manager,
         sequence_manager,
         schedule_manager,
+        task_manager,
         factory_data,
     });
     Ok(app_data)
