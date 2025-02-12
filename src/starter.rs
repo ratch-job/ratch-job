@@ -26,7 +26,7 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         ScheduleManager::new(app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60)).start(),
     ));
-    factory.register(BeanDefinition::actor_from_obj(
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
         TaskManager::new(app_config.clone()).start(),
     ));
     Ok(factory.init().await)

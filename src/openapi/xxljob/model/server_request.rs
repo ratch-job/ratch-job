@@ -1,3 +1,5 @@
+use crate::openapi::xxljob::model::SUCCESS_CODE;
+use crate::task::model::actor_model::TaskCallBackParam;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -17,4 +19,15 @@ pub struct CallbackParam {
     pub log_date_time: i64,
     pub handle_code: i32,
     pub handle_msg: Option<String>,
+}
+
+impl From<CallbackParam> for TaskCallBackParam {
+    fn from(value: CallbackParam) -> Self {
+        Self {
+            task_id: value.log_id,
+            task_date_time: value.log_date_time,
+            success: value.handle_code == SUCCESS_CODE,
+            handle_msg: value.handle_msg,
+        }
+    }
 }

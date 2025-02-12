@@ -116,13 +116,14 @@ impl ScheduleManager {
                         log::info!("job version change ignore,id:{}", &item.job_id);
                         continue;
                     }
+                    /*
                     log::info!(
                         "prepare job,id:{},run_mode:{:?},handler_name:{}",
                         &job.id,
                         &job.source_job.run_mode,
                         &job.source_job.handle_name
                     );
-                    //TODO trigger job
+                    */
                     task_manager.do_send(TaskManagerReq::TriggerTask(
                         item.trigger_time,
                         job.source_job.clone(),

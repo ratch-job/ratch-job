@@ -8,6 +8,7 @@ pub struct XxlClient<'a> {
     pub client: &'a reqwest::Client,
     pub headers: &'a HashMap<String, String>,
     pub addr: &'a Arc<String>,
+    is_addr_end_bias: bool,
 }
 
 impl<'a> XxlClient<'a> {
@@ -16,10 +17,12 @@ impl<'a> XxlClient<'a> {
         headers: &'a HashMap<String, String>,
         addr: &'a Arc<String>,
     ) -> Self {
+        let is_addr_end_bias = addr.ends_with("/");
         XxlClient {
             client,
             headers,
             addr,
+            is_addr_end_bias,
         }
     }
 
@@ -27,7 +30,7 @@ impl<'a> XxlClient<'a> {
         let body = serde_json::to_vec(param)?;
         match self.request(body, "run").await {
             Ok(_) => {
-                log::info!("XxlClient|run success");
+                //log::info!("XxlClient|run success");
                 Ok(())
             }
             Err(e) => {
@@ -39,7 +42,11 @@ impl<'a> XxlClient<'a> {
 
     async fn request(&self, body: Vec<u8>, sub_url: &str) -> anyhow::Result<()> {
         let mut registry_success = false;
-        let url = format!("{}/{}", self.addr, &sub_url);
+        let url = if self.is_addr_end_bias {
+            format!("{}{}", self.addr, &sub_url)
+        } else {
+            format!("{}/{}", self.addr, &sub_url)
+        };
         match HttpUtils::request(
             &self.client,
             "POST",
@@ -56,13 +63,24 @@ impl<'a> XxlClient<'a> {
                         registry_success = true;
                     }
                 }
+                if (!registry_success) {
+                    log::error!(
+                        "call response error:,url:{},resp:{}",
+                        &url,
+                        resp.get_lossy_string_body()
+                    );
+                }
             }
             Err(err) => {
                 log::error!("call response error:{},url:{}", err, &url);
             }
         }
         if !registry_success {
-            Err(anyhow::anyhow!("call failed"))
+            Err(anyhow::anyhow!(
+                "call failed,url:{},body:{}",
+                &url,
+                String::from_utf8_lossy(&body)
+            ))
         } else {
             Ok(())
         }

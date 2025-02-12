@@ -28,13 +28,13 @@ impl JobRunParam {
             executor_handler: Some(job_info.handle_name.clone()),
             executor_params: Some(job_info.trigger_param.clone()),
             executor_block_strategy: Some(job_info.blocking_strategy.to_str().to_string()),
-            executor_timeout: None,
+            executor_timeout: Some(job_info.timeout_second as i32),
             log_date_time: None,
-            glue_type: None,
+            glue_type: Some(job_info.run_mode.to_str().to_string()),
             glue_source: None,
             glue_update_time: None,
-            broadcast_index: None,
-            broadcast_total: None,
+            broadcast_index: Some(0),
+            broadcast_total: Some(0),
         }
     }
 }

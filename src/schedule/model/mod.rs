@@ -44,7 +44,7 @@ impl JobRunState {
     }
     pub fn calculate_first_trigger_time<T: TimeZone>(&self, datetime: &DateTime<T>) -> u32 {
         match self.schedule_type {
-            ScheduleType::Delay => datetime.timestamp() as u32,
+            //ScheduleType::Delay => datetime.timestamp() as u32,
             ScheduleType::None => 0,
             _ => self.calculate_next_trigger_time(datetime),
         }
@@ -94,9 +94,11 @@ impl JobRunState {
                     .rem_euclid(self.interval_second as i32);
                 result = (timestamp_seconds as i32 - remainder) as u32 + self.interval_second;
             }
+            /*
             ScheduleType::Delay => {
                 result = timestamp_seconds + self.delay_second;
             }
+             */
             ScheduleType::None => {}
         }
         result

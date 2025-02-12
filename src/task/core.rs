@@ -1,20 +1,26 @@
 use crate::app::model::AppKey;
 use crate::common::app_config::AppConfig;
+use crate::common::constant::SEQ_TASK_ID;
 use crate::common::get_app_version;
 use crate::job::model::job::JobInfo;
-use crate::task::model::actor_model::{TaskManagerReq, TaskManagerResult};
+use crate::sequence::{SequenceManager, SequenceRequest, SequenceResult};
+use crate::task::model::actor_model::{TaskCallBackParam, TaskManagerReq, TaskManagerResult};
 use crate::task::model::app_instance::{AppInstanceStateGroup, InstanceAddrSelectResult};
+use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobRunParam;
 use crate::task::model::task::JobTaskInfo;
 use crate::task::request_client::XxlClient;
 use actix::prelude::*;
+use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[bean(inject)]
 pub struct TaskManager {
     task_instance_map: HashMap<u64, JobTaskInfo>,
     app_instance_group: HashMap<AppKey, AppInstanceStateGroup>,
     xxl_request_header: HashMap<String, String>,
+    sequence_manager: Option<Addr<SequenceManager>>,
 }
 
 impl TaskManager {
@@ -34,7 +40,8 @@ impl TaskManager {
         TaskManager {
             task_instance_map: HashMap::new(),
             app_instance_group: HashMap::new(),
-            xxl_request_header: HashMap::new(),
+            xxl_request_header,
+            sequence_manager: None,
         }
     }
 
@@ -61,6 +68,10 @@ impl TaskManager {
         ctx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         let app_key = AppKey::new(job_info.app_name.clone(), job_info.namespace.clone());
+        if self.sequence_manager.is_none() {
+            return Err(anyhow::anyhow!("sequence_manager is none"));
+        }
+        let sequence_manager = self.sequence_manager.clone().unwrap();
         if let Some(app_instance_group) = self.app_instance_group.get_mut(&app_key) {
             let select = app_instance_group.select_instance(&job_info.router_strategy, job_info.id);
             Self::run_task(
@@ -69,15 +80,18 @@ impl TaskManager {
                 select,
                 app_instance_group.instance_keys.clone(),
                 self.xxl_request_header.clone(),
+                sequence_manager,
             )
             .into_actor(self)
-            .map(|r, _act, _ctx| match r {
-                Ok(_) => {
-                    log::info!("run task success")
+            .map(|task_info, act, _ctx| {
+                if task_info.status == TaskStatusType::Running {
+                    log::info!(
+                        "run task Running,job_id:{},task_id:{}",
+                        &task_info.job_id,
+                        &task_info.task_id
+                    );
                 }
-                Err(e) => {
-                    log::error!("run task error:{}", e)
-                }
+                act.task_instance_map.insert(task_info.task_id, task_info);
             })
             .spawn(ctx);
         }
@@ -90,26 +104,44 @@ impl TaskManager {
         select_instance: InstanceAddrSelectResult,
         addrs: Vec<Arc<String>>,
         xxl_request_header: HashMap<String, String>,
-    ) -> anyhow::Result<JobTaskInfo> {
+        sequence_manager: Addr<SequenceManager>,
+    ) -> JobTaskInfo {
         let mut task_instance = JobTaskInfo::from_job(trigger_time, &job_info);
         let client = reqwest::Client::new();
-        //todo 获取日志id
-        let task_id = 1;
+        let task_id = if let Ok(Ok(SequenceResult::NextId(task_id))) = sequence_manager
+            .send(SequenceRequest::GetNextId(SEQ_TASK_ID.clone()))
+            .await
+        {
+            task_id
+        } else {
+            log::error!("get task id error!");
+            task_instance.status = TaskStatusType::Error;
+            return task_instance;
+        };
         task_instance.task_id = task_id;
-        let param = JobRunParam::from_job_info(task_id, &job_info);
+        let mut param = JobRunParam::from_job_info(task_id, &job_info);
+        param.log_date_time = Some(trigger_time as u64 * 1000);
+        task_instance.status = TaskStatusType::Running;
         match select_instance {
             InstanceAddrSelectResult::Selected(addr) => {
-                //todo 重试
-                Self::do_run_task(addr, &param, &client, &xxl_request_header).await?;
+                if Self::do_run_task(addr, &param, &client, &xxl_request_header)
+                    .await
+                    .is_err()
+                {
+                    //todo 重试
+                    task_instance.status = TaskStatusType::Error;
+                }
             }
             InstanceAddrSelectResult::ALL(addrs) => {
                 for addr in addrs {
-                    Self::do_run_task(addr, &param, &client, &xxl_request_header).await?;
+                    Self::do_run_task(addr, &param, &client, &xxl_request_header)
+                        .await
+                        .ok();
                 }
             }
             InstanceAddrSelectResult::Empty => {}
         }
-        Ok(task_instance)
+        task_instance
     }
     async fn do_run_task(
         instance_addr: Arc<String>,
@@ -121,6 +153,30 @@ impl TaskManager {
         xxl_client.run_job(param).await?;
         Ok(())
     }
+
+    fn task_callback(&mut self, params: Vec<TaskCallBackParam>) -> anyhow::Result<()> {
+        let mut result = true;
+        for param in params {
+            if let Some(task_instance) = self.task_instance_map.get_mut(&param.task_id) {
+                if param.success {
+                    task_instance.status = TaskStatusType::Success;
+                } else {
+                    task_instance.status = TaskStatusType::Error;
+                    if let Some(msg) = param.handle_msg {
+                        task_instance.callback_message = Arc::new(msg);
+                    }
+                }
+            } else {
+                log::error!("task_instance is none,task_id:{}", &param.task_id);
+                result = false;
+            }
+        }
+        if result {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("some task_instance is none"))
+        }
+    }
 }
 
 impl Actor for TaskManager {
@@ -128,6 +184,19 @@ impl Actor for TaskManager {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         log::info!("TaskManager started")
+    }
+}
+
+impl Inject for TaskManager {
+    type Context = Context<Self>;
+
+    fn inject(
+        &mut self,
+        factory_data: FactoryData,
+        _factory: BeanFactory,
+        _ctx: &mut Self::Context,
+    ) {
+        self.sequence_manager = factory_data.get_actor();
     }
 }
 
@@ -144,6 +213,9 @@ impl Handler<TaskManagerReq> for TaskManager {
             }
             TaskManagerReq::TriggerTask(trigger_time, job) => {
                 self.trigger_task(trigger_time, job, ctx)?;
+            }
+            TaskManagerReq::TaskCallBacks(params) => {
+                self.task_callback(params)?;
             }
         }
         Ok(TaskManagerResult::None)

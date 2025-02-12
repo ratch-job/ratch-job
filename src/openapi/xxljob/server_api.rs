@@ -3,6 +3,7 @@ use crate::common::constant::DEFAULT_XXL_NAMESPACE;
 use crate::common::share_data::ShareData;
 use crate::openapi::xxljob::model::server_request::{CallbackParam, RegistryParam};
 use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
+use crate::task::model::actor_model::TaskManagerReq;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use log::log;
@@ -62,7 +63,21 @@ pub(crate) async fn unregister(
 
 pub(crate) async fn callback(
     share_data: Data<Arc<ShareData>>,
-    web::Json(param): web::Json<CallbackParam>,
+    web::Json(params): web::Json<Vec<CallbackParam>>,
 ) -> impl Responder {
-    HttpResponse::Ok().json(xxl_api_empty_success())
+    let id_list: Vec<u64> = params.iter().map(|p| p.log_id).collect();
+    if let Ok(Ok(_)) = share_data
+        .task_manager
+        .send(TaskManagerReq::TaskCallBacks(
+            params.into_iter().map(|p| p.into()).collect(),
+        ))
+        .await
+    {
+        log::info!("callback success,id list:{:?}", &id_list);
+        HttpResponse::Ok().json(xxl_api_empty_success())
+    } else {
+        let error_msg = format!("callback error,id list:{:?}", &id_list);
+        log::error!("{}", &error_msg);
+        HttpResponse::Ok().json(XxlApiResult::<()>::fail(Some(error_msg)))
+    }
 }
