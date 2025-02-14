@@ -99,7 +99,34 @@ impl AppManager {
         }
     }
 
+    fn check_instance_timeout(&mut self, now: u64) {
+        let mut timeout_instances = Vec::new();
+        for (app_key, app) in &mut self.app_map {
+            for (addr, instance) in &mut app.instance_map {
+                let start = instance.last_modified_millis;
+                if now - start > 3 * 60 * 1000u64 {
+                    timeout_instances.push((app_key.clone(), addr.clone()));
+                }
+            }
+        };
+        for (app_key, addr) in timeout_instances {
+            self.unregister_app_instance(app_key, addr);
+        }
+    }
+
+    fn heartbeat(&mut self, ctx: &mut Context<Self>) {
+        let later_millis = 60 * 1000;
+        ctx.run_later(
+            std::time::Duration::from_millis(later_millis),
+            move |act, ctx| {
+                act.check_instance_timeout(now_millis());
+                act.heartbeat(ctx);
+            },
+        );
+    }
+
     fn unregister_app_instance(&mut self, key: AppKey, instance_key: Arc<String>) {
+        log::info!("unregister_app_instance, {:?} {:?}", key, instance_key);
         if let Some(task_manager) = self.task_manager.as_ref() {
             task_manager.do_send(TaskManagerReq::RemoveAppInstance(
                 key.clone(),
@@ -142,8 +169,9 @@ impl AppManager {
 impl Actor for AppManager {
     type Context = Context<Self>;
 
-    fn started(&mut self, _ctx: &mut Context<Self>) {
+    fn started(&mut self, ctx: &mut Context<Self>) {
         log::info!("AppManager started");
+        self.heartbeat(ctx);
     }
 }
 
