@@ -63,7 +63,7 @@ impl<'a> XxlClient<'a> {
                         registry_success = true;
                     }
                 }
-                if (!registry_success) {
+                if !registry_success {
                     log::error!(
                         "call response error:,url:{},resp:{}",
                         &url,

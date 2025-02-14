@@ -1,5 +1,7 @@
+use crate::app::app_index::{AppIndex, AppQueryParam};
 use crate::app::model::{
-    AppInfo, AppInstance, AppKey, AppManagerReq, AppManagerResult, AppParam, RegisterType,
+    AppInfo, AppInfoDto, AppInstance, AppKey, AppManagerReq, AppManagerResult, AppParam,
+    RegisterType,
 };
 use crate::common::constant::EMPTY_ARC_STR;
 use crate::common::datetime_utils::now_millis;
@@ -7,20 +9,22 @@ use crate::task::core::TaskManager;
 use crate::task::model::actor_model::TaskManagerReq;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 #[bean(inject)]
 pub struct AppManager {
-    pub(crate) app_map: BTreeMap<AppKey, AppInfo>,
+    pub(crate) app_map: HashMap<AppKey, AppInfo>,
     task_manager: Option<Addr<TaskManager>>,
+    app_index: AppIndex,
 }
 
 impl AppManager {
     pub fn new() -> Self {
         AppManager {
-            app_map: BTreeMap::new(),
+            app_map: HashMap::new(),
             task_manager: None,
+            app_index: AppIndex::new(),
         }
     }
 
@@ -35,6 +39,8 @@ impl AppManager {
             }
             Self::set_app_instance_addrs(app_info, app_param.instance_addrs);
         } else {
+            self.app_index
+                .insert(key.namespace.clone(), key.name.clone());
             let mut app_info = AppInfo::new(
                 app_param.name.clone(),
                 app_param.namespace.clone(),
@@ -42,6 +48,7 @@ impl AppManager {
                 app_param.register_type.unwrap_or(RegisterType::Auto),
             );
             Self::set_app_instance_addrs(&mut app_info, app_param.instance_addrs);
+            self.app_map.insert(key, app_info);
         }
     }
 
@@ -116,6 +123,20 @@ impl AppManager {
         }
         Arc::new(Vec::new())
     }
+
+    fn query_page_info(&self, query_param: &AppQueryParam) -> (usize, Vec<AppInfoDto>) {
+        let (size, list) = self.app_index.query(query_param);
+        if size == 0 {
+            return (0, Vec::new());
+        }
+        let mut info_list = Vec::with_capacity(size);
+        for key in &list {
+            if let Some(app_info) = self.app_map.get(key) {
+                info_list.push(AppInfoDto::new_from(app_info));
+            }
+        }
+        (size, info_list)
+    }
 }
 
 impl Actor for AppManager {
@@ -159,6 +180,10 @@ impl Handler<AppManagerReq> for AppManager {
             AppManagerReq::GetAppInstanceAddrs(key) => {
                 let addrs = self.get_app_instance_addrs(key);
                 return Ok(AppManagerResult::InstanceAddrs(addrs));
+            }
+            AppManagerReq::QueryApp(param) => {
+                let (size, list) = self.query_page_info(&param);
+                return Ok(AppManagerResult::AppPageInfo(size, list));
             }
         }
         Ok(AppManagerResult::None)

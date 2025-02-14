@@ -1,3 +1,4 @@
+use crate::app::app_index::AppQueryParam;
 use crate::common::datetime_utils::now_millis;
 use actix::Message;
 use serde::{Deserialize, Serialize};
@@ -5,9 +6,27 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RegisterType {
     Auto,
     Manual,
+}
+
+impl RegisterType {
+    pub fn from_str(s: &str) -> RegisterType {
+        match s {
+            "AUTO" => RegisterType::Auto,
+            "MANUAL" => RegisterType::Manual,
+            _ => RegisterType::Auto,
+        }
+    }
+
+    pub fn to_str(&self) -> &str {
+        match self {
+            RegisterType::Auto => "AUTO",
+            RegisterType::Manual => "MANUAL",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -81,6 +100,26 @@ impl Ord for AppKey {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfoDto {
+    pub app_name: Arc<String>,
+    pub namespace: Arc<String>,
+    pub label: Arc<String>,
+    pub register_type: String,
+}
+
+impl AppInfoDto {
+    pub fn new_from(app_info: &AppInfo) -> Self {
+        AppInfoDto {
+            app_name: app_info.name.clone(),
+            namespace: app_info.namespace.clone(),
+            label: app_info.label.clone(),
+            register_type: app_info.register_type.to_str().to_owned(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppParam {
     pub name: Arc<String>,
     pub namespace: Arc<String>,
@@ -97,12 +136,14 @@ pub enum AppManagerReq {
     RegisterAppInstance(AppKey, Arc<String>),
     UnregisterAppInstance(AppKey, Arc<String>),
     GetAppInstanceAddrs(AppKey),
+    QueryApp(AppQueryParam),
 }
 
 #[derive(Debug, Clone)]
 pub enum AppManagerResult {
     None,
     InstanceAddrs(Arc<Vec<Arc<String>>>),
+    AppPageInfo(usize, Vec<AppInfoDto>),
 }
 
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]

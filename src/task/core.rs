@@ -171,11 +171,14 @@ impl TaskManager {
                 result = false;
             }
         }
+        /*
         if result {
-            Ok(())
         } else {
             Err(anyhow::anyhow!("some task_instance is none"))
         }
+        */
+        //todo 后续接入持久后再调整处理
+        Ok(())
     }
 }
 
