@@ -17,6 +17,7 @@ pub struct AppManager {
     pub(crate) app_map: HashMap<AppKey, AppInfo>,
     task_manager: Option<Addr<TaskManager>>,
     app_index: AppIndex,
+    instance_timeout: u32,
 }
 
 impl AppManager {
@@ -25,6 +26,7 @@ impl AppManager {
             app_map: HashMap::new(),
             task_manager: None,
             app_index: AppIndex::new(),
+            instance_timeout: 180,
         }
     }
 
@@ -99,27 +101,23 @@ impl AppManager {
         }
     }
 
-    fn check_instance_timeout(&mut self, now: u64) {
-        let mut timeout_instances = Vec::new();
+    fn check_instance_timeout(&mut self, now: u64, addr_app_manager: Addr<AppManager>) {
         for (app_key, app) in &mut self.app_map {
             for (addr, instance) in &mut app.instance_map {
                 let start = instance.last_modified_millis;
-                if now - start > 3 * 60 * 1000u64 {
-                    timeout_instances.push((app_key.clone(), addr.clone()));
+                if now - start > self.instance_timeout as u64 * 1000u64 {
+                    addr_app_manager.do_send(AppManagerReq::UnregisterAppInstance(app_key.clone(), addr.clone()));
                 }
             }
         };
-        for (app_key, addr) in timeout_instances {
-            self.unregister_app_instance(app_key, addr);
-        }
     }
 
     fn heartbeat(&mut self, ctx: &mut Context<Self>) {
-        let later_millis = 60 * 1000;
         ctx.run_later(
-            std::time::Duration::from_millis(later_millis),
+            std::time::Duration::from_secs(10),
             move |act, ctx| {
-                act.check_instance_timeout(now_millis());
+                let addr = ctx.address();
+                act.check_instance_timeout(now_millis(), addr);
                 act.heartbeat(ctx);
             },
         );
