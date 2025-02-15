@@ -88,6 +88,8 @@ impl AppManager {
                     .insert(instance_key.clone(), AppInstance::new(instance_key));
             }
         } else {
+            self.app_index
+                .insert(key.namespace.clone(), key.name.clone());
             let mut app_info = AppInfo::new(
                 key.name.clone(),
                 key.namespace.clone(),
@@ -106,21 +108,21 @@ impl AppManager {
             for (addr, instance) in &mut app.instance_map {
                 let start = instance.last_modified_millis;
                 if now - start > self.instance_timeout as u64 * 1000u64 {
-                    addr_app_manager.do_send(AppManagerReq::UnregisterAppInstance(app_key.clone(), addr.clone()));
+                    addr_app_manager.do_send(AppManagerReq::UnregisterAppInstance(
+                        app_key.clone(),
+                        addr.clone(),
+                    ));
                 }
             }
-        };
+        }
     }
 
     fn heartbeat(&mut self, ctx: &mut Context<Self>) {
-        ctx.run_later(
-            std::time::Duration::from_secs(10),
-            move |act, ctx| {
-                let addr = ctx.address();
-                act.check_instance_timeout(now_millis(), addr);
-                act.heartbeat(ctx);
-            },
-        );
+        ctx.run_later(std::time::Duration::from_secs(10), move |act, ctx| {
+            let addr = ctx.address();
+            act.check_instance_timeout(now_millis(), addr);
+            act.heartbeat(ctx);
+        });
     }
 
     fn unregister_app_instance(&mut self, key: AppKey, instance_key: Arc<String>) {

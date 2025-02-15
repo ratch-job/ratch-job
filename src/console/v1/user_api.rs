@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use crate::common::get_app_version;
 use crate::common::model::ApiResult;
 use crate::common::share_data::ShareData;
 use crate::console::model::user_model::UserPermissions;
+use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use std::sync::Arc;
 
 pub async fn get_user_web_resources(
     _req: HttpRequest,

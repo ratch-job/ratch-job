@@ -1,6 +1,6 @@
 pub mod app_api;
-pub mod user_api;
 pub mod namespace_api;
+pub mod user_api;
 
 use actix_web::web;
 use actix_web::web::ServiceConfig;
@@ -20,7 +20,6 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
             .service(
                 web::resource("/user/web_resources")
                     .route(web::get().to(user_api::get_user_web_resources)),
-            )
-        ,
+            ),
     );
 }
