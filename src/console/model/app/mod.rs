@@ -31,7 +31,7 @@ impl AppInfoParam {
 pub struct AppQueryListRequest {
     pub namespace: Option<Arc<String>>,
     pub app_name: Option<Arc<String>>,
-    pub like_name: Option<String>,
+    pub like_app_name: Option<String>,
     pub page_no: Option<usize>,
     pub page_size: Option<usize>,
 }
@@ -48,7 +48,7 @@ impl AppQueryListRequest {
         AppQueryParam {
             namespace: self.namespace,
             app_name: self.app_name,
-            like_name: self.like_name,
+            like_name: self.like_app_name,
             offset,
             limit,
         }
