@@ -105,6 +105,7 @@ impl AppManager {
 
     fn check_instance_timeout(&mut self, now: u64, addr_app_manager: Addr<AppManager>) {
         for (app_key, app) in &mut self.app_map {
+            //TODO 目前这个遍历的方式运算复杂度是O(n),可以使用BTreeMap优化为O(log(n))
             for (addr, instance) in &mut app.instance_map {
                 let start = instance.last_modified_millis;
                 if now - start > self.instance_timeout as u64 * 1000u64 {
@@ -159,10 +160,16 @@ impl AppManager {
         let mut info_list = Vec::with_capacity(size);
         for key in &list {
             if let Some(app_info) = self.app_map.get(key) {
-                info_list.push(AppInfoDto::new_from(app_info));
+                info_list.push(AppInfoDto::new_from(app_info, false));
             }
         }
         (size, info_list)
+    }
+
+    fn get_app_info(&self, key: &AppKey, with_addrs: bool) -> Option<AppInfoDto> {
+        self.app_map
+            .get(key)
+            .map(|v| AppInfoDto::new_from(v, with_addrs))
     }
 }
 
@@ -193,14 +200,17 @@ impl Handler<AppManagerReq> for AppManager {
 
     fn handle(&mut self, msg: AppManagerReq, _ctx: &mut Context<Self>) -> Self::Result {
         match msg {
-            AppManagerReq::UpdateApp(param) => {
-                self.update_app(param);
-            }
             AppManagerReq::RegisterAppInstance(key, addr) => {
                 self.register_app_instance(key, addr);
             }
+            AppManagerReq::UpdateApp(param) => {
+                self.update_app(param);
+            }
             AppManagerReq::RemoveApp(key) => {
                 self.app_map.remove(&key);
+            }
+            AppManagerReq::GetApp(key) => {
+                return Ok(AppManagerResult::AppInfo(self.get_app_info(&key, true)));
             }
             AppManagerReq::UnregisterAppInstance(key, addr) => {
                 self.unregister_app_instance(key, addr);

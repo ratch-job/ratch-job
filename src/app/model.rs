@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RegisterType {
     Auto,
@@ -106,15 +106,26 @@ pub struct AppInfoDto {
     pub namespace: Arc<String>,
     pub label: Arc<String>,
     pub register_type: String,
+    pub instance_addrs: Option<Vec<Arc<String>>>,
 }
 
 impl AppInfoDto {
-    pub fn new_from(app_info: &AppInfo) -> Self {
+    pub fn new_from(app_info: &AppInfo, with_addrs: bool) -> Self {
+        let instance_addrs = if with_addrs {
+            let mut addrs = vec![];
+            for (_, instance) in app_info.instance_map.iter() {
+                addrs.push(instance.addr.clone());
+            }
+            Some(addrs)
+        } else {
+            None
+        };
         AppInfoDto {
             app_name: app_info.name.clone(),
             namespace: app_info.namespace.clone(),
             label: app_info.label.clone(),
             register_type: app_info.register_type.to_str().to_owned(),
+            instance_addrs,
         }
     }
 }
@@ -128,11 +139,18 @@ pub struct AppParam {
     pub instance_addrs: Option<Vec<Arc<String>>>,
 }
 
+impl AppParam {
+    pub fn build_app_key(&self) -> AppKey {
+        AppKey::new(self.name.clone(), self.namespace.clone())
+    }
+}
+
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<AppManagerResult>")]
 pub enum AppManagerReq {
     UpdateApp(AppParam),
     RemoveApp(AppKey),
+    GetApp(AppKey),
     RegisterAppInstance(AppKey, Arc<String>),
     UnregisterAppInstance(AppKey, Arc<String>),
     GetAppInstanceAddrs(AppKey),
@@ -142,6 +160,7 @@ pub enum AppManagerReq {
 #[derive(Debug, Clone)]
 pub enum AppManagerResult {
     None,
+    AppInfo(Option<AppInfoDto>),
     InstanceAddrs(Arc<Vec<Arc<String>>>),
     AppPageInfo(usize, Vec<AppInfoDto>),
 }
