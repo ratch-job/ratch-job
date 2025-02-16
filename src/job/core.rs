@@ -1,5 +1,6 @@
+use crate::job::job_index::JobQueryParam;
 use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
-use crate::job::model::job::{JobInfo, JobKey, JobParam, JobWrap};
+use crate::job::model::job::{JobInfo, JobInfoDto, JobParam, JobTaskLogQueryParam, JobWrap};
 use crate::schedule::core::ScheduleManager;
 use crate::schedule::model::actor_model::ScheduleManagerReq;
 use crate::task::model::task::JobTaskInfo;
@@ -78,6 +79,51 @@ impl JobManager {
             job_wrap.update_task_log(task_log, self.job_task_log_limit);
         }
     }
+
+    fn query_jobs(&self, query_param: &JobQueryParam) -> (usize, Vec<JobInfoDto>) {
+        let mut rlist = Vec::new();
+        let end_index = query_param.offset + query_param.limit;
+        let mut index = 0;
+
+        for job_wrap in self.job_map.values() {
+            let job_info = &job_wrap.job;
+            if query_param.match_namespace(&job_info.namespace)
+                && query_param.match_app_name(&job_info.app_name)
+                && query_param.match_description(&job_info.description)
+                && query_param.match_handle_name(&job_info.handle_name)
+            {
+                if index >= query_param.offset && index < end_index {
+                    rlist.push(JobInfoDto::new_from(job_info));
+                }
+                index += 1;
+            }
+        }
+
+        (index, rlist)
+    }
+
+    fn query_job_task_logs(
+        &self,
+        query_param: &JobTaskLogQueryParam,
+    ) -> (usize, Vec<Arc<JobTaskInfo>>) {
+        let mut rlist = Vec::new();
+        let end_index = query_param.offset + query_param.limit;
+        let mut index = 0;
+
+        if let Some(job_wrap) = self.job_map.get(&query_param.job_id) {
+            for (task_id, task_log) in &job_wrap.task_log_map {
+                if index < query_param.offset {
+                    continue;
+                }
+                if index >= end_index {
+                    break;
+                }
+                rlist.push(task_log.clone());
+                index += 1;
+            }
+        }
+        (index, rlist)
+    }
 }
 
 impl Actor for JobManager {
@@ -108,7 +154,7 @@ impl Handler<JobManagerReq> for JobManager {
         match msg {
             JobManagerReq::AddJob(job_param) => {
                 let value = self.create_job(job_param)?;
-                return Ok(JobManagerResult::JobInfo(value));
+                return Ok(JobManagerResult::JobInfo(Some(value)));
             }
             JobManagerReq::UpdateJob(job_param) => {
                 self.update_job(job_param)?;
@@ -117,12 +163,23 @@ impl Handler<JobManagerReq> for JobManager {
                 self.remove_job(id);
             }
             JobManagerReq::GetJob(id) => {
-                if let Some(job_wrap) = self.job_map.get(&id) {
-                    return Ok(JobManagerResult::JobInfo(job_wrap.job.clone()));
-                }
+                let job_info = if let Some(job_wrap) = self.job_map.get(&id) {
+                    Some(job_wrap.job.clone())
+                } else {
+                    None
+                };
+                return Ok(JobManagerResult::JobInfo(job_info));
             }
             JobManagerReq::UpdateTask(task_info) => {
                 self.update_job_task(task_info);
+            }
+            JobManagerReq::QueryJob(query_param) => {
+                let (size, list) = self.query_jobs(&query_param);
+                return Ok(JobManagerResult::JobPageInfo(size, list));
+            }
+            JobManagerReq::QueryJobTaskLog(query_param) => {
+                let (size, list) = self.query_job_task_logs(&query_param);
+                return Ok(JobManagerResult::JobTaskLogPageInfo(size, list));
             }
         }
         Ok(JobManagerResult::None)

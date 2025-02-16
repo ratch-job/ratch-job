@@ -12,6 +12,7 @@ use std::sync::Arc;
 #[serde(rename_all = "camelCase")]
 pub struct JobInfo {
     pub id: u64,
+    pub enable: bool,
     pub app_name: Arc<String>,
     pub namespace: Arc<String>,
     pub description: Arc<String>,
@@ -73,14 +74,6 @@ impl JobInfo {
         if let Some(try_times) = job_param.try_times {
             self.try_times = try_times;
         }
-    }
-
-    pub fn get_key(&self) -> JobKey {
-        JobKey::new(
-            self.app_name.clone(),
-            self.namespace.clone(),
-            self.handle_name.clone(),
-        )
     }
 
     pub fn check_valid(&self) -> anyhow::Result<()> {
@@ -153,27 +146,11 @@ impl JobWrap {
     }
 }
 
-#[derive(Debug, Clone, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct JobKey {
-    pub app_name: Arc<String>,
-    pub namespace: Arc<String>,
-    pub handle_name: Arc<String>,
-}
-
-impl JobKey {
-    pub fn new(app_name: Arc<String>, namespace: Arc<String>, handle_name: Arc<String>) -> Self {
-        JobKey {
-            app_name,
-            namespace,
-            handle_name,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobParam {
     pub id: Option<u64>,
+    pub enable: Option<bool>,
     pub app_name: Option<Arc<String>>,
     pub namespace: Option<Arc<String>>,
     pub description: Option<Arc<String>>,
@@ -195,6 +172,7 @@ impl From<JobParam> for JobInfo {
     fn from(job_param: JobParam) -> Self {
         JobInfo {
             id: job_param.id.unwrap_or_default(),
+            enable: job_param.enable.unwrap_or(true),
             app_name: job_param.app_name.unwrap_or_default(),
             namespace: job_param.namespace.unwrap_or_default(),
             handle_name: job_param.handle_name.unwrap_or(EMPTY_ARC_STR.clone()),
@@ -219,6 +197,66 @@ impl From<JobParam> for JobInfo {
             version_id: 0,
             last_modified_millis: 0,
             register_time: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobTaskLogQueryParam {
+    pub job_id: u64,
+    pub offset: usize,
+    pub limit: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobInfoDto {
+    pub id: u64,
+    pub enable: bool,
+    pub app_name: Arc<String>,
+    pub namespace: Arc<String>,
+    pub description: Arc<String>,
+    pub schedule_type: String,
+    pub cron_value: Arc<String>,
+    pub delay_second: u32,
+    pub interval_second: u32,
+    pub run_mode: String,
+    pub handle_name: Arc<String>,
+    pub trigger_param: Arc<String>,
+    pub router_strategy: String,
+    pub past_due_strategy: String,
+    pub blocking_strategy: String,
+    pub timeout_second: u32,
+    pub try_times: u32,
+    pub version_id: u64,
+    pub last_modified_millis: u64,
+    pub register_time: u64,
+}
+
+impl JobInfoDto {
+    pub fn new_from(job_info: &JobInfo) -> Self {
+        JobInfoDto {
+            id: job_info.id,
+            enable: job_info.enable,
+            app_name: job_info.app_name.clone(),
+            namespace: job_info.namespace.clone(),
+            description: job_info.description.clone(),
+            schedule_type: job_info.schedule_type.to_str().to_owned(),
+            cron_value: job_info.cron_value.clone(),
+            delay_second: job_info.delay_second,
+            interval_second: job_info.interval_second,
+            run_mode: job_info.run_mode.to_str().to_owned(),
+            handle_name: job_info.handle_name.clone(),
+            trigger_param: job_info.trigger_param.clone(),
+            router_strategy: job_info.router_strategy.to_str().to_owned(),
+            past_due_strategy: job_info.past_due_strategy.to_str().to_owned(),
+            blocking_strategy: job_info.blocking_strategy.to_str().to_owned(),
+            timeout_second: job_info.timeout_second,
+            try_times: job_info.try_times,
+            version_id: job_info.version_id,
+            last_modified_millis: job_info.last_modified_millis,
+            register_time: job_info.register_time,
         }
     }
 }

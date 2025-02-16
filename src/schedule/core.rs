@@ -70,7 +70,7 @@ impl ScheduleManager {
 
     fn update_job(&mut self, job_info: Arc<JobInfo>) {
         let job_id = job_info.id;
-        if job_info.schedule_type == ScheduleType::None {
+        if job_info.schedule_type == ScheduleType::None || job_info.enable == false {
             self.job_run_state.remove(&job_id);
             return;
         }

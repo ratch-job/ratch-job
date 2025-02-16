@@ -19,7 +19,7 @@ async fn do_create_job(
         .await??
     {
         param.id = Some(id);
-        if let JobManagerResult::JobInfo(job_info) = share_data
+        if let JobManagerResult::JobInfo(Some(job_info)) = share_data
             .job_manager
             .send(JobManagerReq::AddJob(param))
             .await??
@@ -75,7 +75,7 @@ pub(crate) async fn get_job_info(
     web::Query(param): web::Query<JobParam>,
 ) -> impl Responder {
     let id = param.id.unwrap_or_default();
-    if let Ok(Ok(JobManagerResult::JobInfo(job_info))) =
+    if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) =
         share_data.job_manager.send(JobManagerReq::GetJob(id)).await
     {
         HttpResponse::Ok().json(XxlApiResult::success(Some(job_info)))

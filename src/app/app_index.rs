@@ -93,7 +93,7 @@ impl AppIndex {
         self.group_data.len()
     }
 
-    pub fn get_config_count(&self) -> usize {
+    pub fn get_item_count(&self) -> usize {
         self.group_data.values().map(|set| set.len()).sum()
     }
 }
