@@ -3,7 +3,9 @@ use crate::common::cron_utils::CronUtil;
 use crate::job::model::enum_type::{
     ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
 };
+use crate::task::model::task::JobTaskInfo;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,7 +27,6 @@ pub struct JobInfo {
     pub blocking_strategy: ExecutorBlockStrategy,
     pub timeout_second: u32,
     pub try_times: u32,
-    pub histories: Vec<JobHistoryInfo>,
     pub version_id: u64,
     pub last_modified_millis: u64,
     pub register_time: u64,
@@ -125,6 +126,33 @@ pub struct JobHistoryInfo {
     pub trigger_param: Arc<String>,
 }
 
+pub struct JobWrap {
+    pub job: Arc<JobInfo>,
+    pub histories: Vec<Arc<JobHistoryInfo>>,
+    pub task_log_map: BTreeMap<u64, Arc<JobTaskInfo>>,
+}
+
+impl JobWrap {
+    pub fn new(job: Arc<JobInfo>) -> Self {
+        Self {
+            job,
+            histories: vec![],
+            task_log_map: BTreeMap::new(),
+        }
+    }
+
+    pub fn update_task_log(&mut self, new_task_log: Arc<JobTaskInfo>, limit_count: usize) {
+        if let Some(task_log) = self.task_log_map.get_mut(&new_task_log.task_id) {
+            *task_log = new_task_log;
+        } else {
+            self.task_log_map.insert(new_task_log.task_id, new_task_log);
+            if self.task_log_map.len() > limit_count {
+                self.task_log_map.pop_first();
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobKey {
     pub app_name: Arc<String>,
@@ -188,7 +216,6 @@ impl From<JobParam> for JobInfo {
                 .unwrap_or(ExecutorBlockStrategy::SerialExecution),
             timeout_second: job_param.timeout_second.unwrap_or_default(),
             try_times: job_param.try_times.unwrap_or_default(),
-            histories: vec![],
             version_id: 0,
             last_modified_millis: 0,
             register_time: 0,

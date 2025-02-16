@@ -1,4 +1,5 @@
 use crate::job::model::job::{JobInfo, JobKey, JobParam};
+use crate::task::model::task::JobTaskInfo;
 use actix::Message;
 use std::sync::Arc;
 
@@ -7,6 +8,7 @@ use std::sync::Arc;
 pub enum JobManagerReq {
     AddJob(JobParam),
     UpdateJob(JobParam),
+    UpdateTask(Arc<JobTaskInfo>),
     Remove(u64),
     GetJob(u64),
 }
