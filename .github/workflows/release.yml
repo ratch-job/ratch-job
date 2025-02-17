@@ -1,0 +1,186 @@
+name: Release
+
+
+on:
+  push:
+    branches:
+      - ignore 
+#      - master
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - x86_64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc
+          - aarch64-pc-windows-msvc
+          - aarch64-apple-darwin
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            name: ratchjob-x86_64-unknown-linux-musl-${GITHUB_REF#refs/*/}.tar.gz
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: ratchjob-x86_64-unknown-linux-gnu-${GITHUB_REF#refs/*/}.tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-13
+            name: ratchjob-x86_64-apple-darwin-${GITHUB_REF#refs/*/}.tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: ratchjob-x86_64-pc-windows-msvc-${GITHUB_REF#refs/*/}.zip
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            name: ratchjob-i686-pc-windows-msvc-${GITHUB_REF#refs/*/}.zip
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            name: ratchjob-aarch64-pc-windows-msvc-${GITHUB_REF#refs/*/}.zip
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: ratchjob-aarch64-apple-darwin-${GITHUB_REF#refs/*/}.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Largely inspired by https://github.com/starship/starship/blob/35a0a20f5c4fea6a08e1b91ff631b089eef8fc50/.github/workflows/deploy.yml
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get install -y musl-tools 
+
+      # Install gnu-tar because BSD tar is buggy
+      # https://github.com/actions/cache/issues/403
+      - name: Install GNU tar (macOS)
+        if:  ${{ matrix.os == 'macos-13' || matrix.os == 'macos-latest' }}
+        run: |
+          brew install gnu-tar
+          echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
+
+      - name: Build 
+        if: matrix.target != 'x86_64-unknown-linux-musl'
+        run: cargo build --release
+
+      - name: Build linux-musl
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+      - name: Archive binary (windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/release
+          cp ../../doc/conf/.env.example .env
+          7z a ../../${{ matrix.name }} ratchjob.exe .env
+          cd -
+      - name: Archive binary (linux and macOS)
+        if: ${{  matrix.os != 'windows-latest' && matrix.target !='x86_64-unknown-linux-musl' }}
+        run: |
+          cd target/release
+          cp ../../doc/conf/.env.example .env
+          tar czvf ../../${{ matrix.name }} ratchjob .env
+          cd -
+      - name: Archive binary (linux-musl)
+        if: matrix.target =='x86_64-unknown-linux-musl'
+        run: |
+          # 注意，下面进入了三级目录，与上面两个打包操作路径不同
+          cd target/x86_64-unknown-linux-musl/release
+          cp ../../../doc/conf/.env.example .env
+          tar czvf ../../../${{ matrix.name }} ratchjob .env
+          cd -
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: |
+            *.tar.gz
+            *.zip
+
+  build-musl:
+    name: Build ${{ matrix.platform.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - target: "aarch64-unknown-linux-musl"
+            image: "rust-musl-cross:aarch64-musl"
+            compatibility: "manylinux2014 musllinux_1_1"
+            name: ratchjob-aarch64-unknown-linux-musl-${GITHUB_REF#refs/*/}.tar.gz
+    container:
+      image: docker://ghcr.io/rust-cross/${{ matrix.platform.image }}
+      env:
+        RUSTUP_HOME: /root/.rustup
+        CARGO_HOME: /root/.cargo
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add --toolchain stable ${{ matrix.platform.target }}
+        if: matrix.platform.target != 'powerpc64le-unknown-linux-musl' && matrix.platform.target != 's390x-unknown-linux-gnu'
+      - name: Build
+        run: |
+          cargo build --release --target ${{ matrix.platform.target }}
+      - name: Archive binary
+        run: |
+          cp doc/conf/.env.example target/${{ matrix.platform.target }}/release/.env
+          tar czvf ${{ matrix.platform.name }} -C target/${{ matrix.platform.target }}/release ratchjob .env
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: |
+            *.tar.gz
+
+  release-crates-io:
+    name: Release crates.io
+    runs-on: ubuntu-latest
+    if: "startsWith(github.ref, 'refs/tags/')"
+    needs: [ build ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo login
+        run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+      - name: cargo publish
+        run: cargo publish
+
+  release-github:
+    permissions:
+      # Used to sign the release's artifacts with sigstore-python.
+      id-token: write
+      # Used to upload release artifacts.
+      contents: write
+    name: Publish to GitHub releases
+    runs-on: ubuntu-latest
+    if: "startsWith(github.ref, 'refs/tags/')"
+    needs: [ build, build-musl ]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+      # 暂时移除签名(生成的文件比较多)
+      #- name: Sigstore Sign
+      #  uses: sigstore/gh-action-sigstore-python@v1.2.3
+      #  with:
+      #    inputs: ./*.tar.gz ./*.zip 
+      #    upload-signing-artifacts: true
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.tar.gz
+            *.zip
+#            *.sig
+#            *.crt
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+          generate_release_notes: true  
