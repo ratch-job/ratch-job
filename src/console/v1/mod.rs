@@ -25,7 +25,7 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
             .service(web::resource("/app/remove").route(web::post().to(app_api::remove_app)))
             .service(web::resource("/job/list").route(web::get().to(job_api::query_job_list)))
             .service(web::resource("/job/info").route(web::get().to(job_api::query_job_info)))
-            .service(web::resource("/job/add").route(web::post().to(job_api::add_job)))
+            .service(web::resource("/job/create").route(web::post().to(job_api::create_job)))
             .service(web::resource("/job/update").route(web::post().to(job_api::update_job)))
             .service(web::resource("/job/remove").route(web::post().to(job_api::remove_job)))
             .service(

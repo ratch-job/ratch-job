@@ -106,19 +106,16 @@ impl JobManager {
         &self,
         query_param: &JobTaskLogQueryParam,
     ) -> (usize, Vec<Arc<JobTaskInfo>>) {
+        //log::info!("query_job_task_logs,query_param={:?}", query_param);
         let mut rlist = Vec::new();
         let end_index = query_param.offset + query_param.limit;
         let mut index = 0;
 
         if let Some(job_wrap) = self.job_map.get(&query_param.job_id) {
-            for (task_id, task_log) in &job_wrap.task_log_map {
-                if index < query_param.offset {
-                    continue;
+            for (_task_id, task_log) in job_wrap.task_log_map.iter().rev() {
+                if index >= query_param.offset && index < end_index {
+                    rlist.push(task_log.clone());
                 }
-                if index >= end_index {
-                    break;
-                }
-                rlist.push(task_log.clone());
                 index += 1;
             }
         }

@@ -38,6 +38,9 @@ impl JobInfo {
         if let Some(description) = job_param.description {
             self.description = description;
         }
+        if let Some(enable) = job_param.enable {
+            self.enable = enable;
+        }
         if let Some(schedule_type) = job_param.schedule_type {
             self.schedule_type = schedule_type;
         }

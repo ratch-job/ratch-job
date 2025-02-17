@@ -1,6 +1,7 @@
 use crate::app::model::AppKey;
 use crate::common::app_config::AppConfig;
 use crate::common::constant::SEQ_TASK_ID;
+use crate::common::datetime_utils::now_second_u32;
 use crate::common::get_app_version;
 use crate::job::core::JobManager;
 use crate::job::model::actor_model::JobManagerReq;
@@ -89,15 +90,26 @@ impl TaskManager {
                 job_manager,
             )
             .into_actor(self)
-            .map(|task_info, act, _ctx| {
+            .map(|mut task_info, act, _ctx| {
                 if task_info.status == TaskStatusType::Running {
                     log::info!(
                         "run task Running,job_id:{},task_id:{}",
                         &task_info.job_id,
                         &task_info.task_id
                     );
+                    act.task_instance_map.insert(task_info.task_id, task_info);
+                } else if task_info.status == TaskStatusType::Error {
+                    log::error!(
+                        "run task error,job_id:{},task_id:{}",
+                        &task_info.job_id,
+                        &task_info.task_id
+                    );
+                    task_info.finish_time = now_second_u32();
+                    act.job_manager
+                        .as_ref()
+                        .unwrap()
+                        .do_send(JobManagerReq::UpdateTask(Arc::new(task_info)));
                 }
-                act.task_instance_map.insert(task_info.task_id, task_info);
             })
             .spawn(ctx);
         }
@@ -143,6 +155,7 @@ impl TaskManager {
                 {
                     //todo 重试
                     task_instance.status = TaskStatusType::Error;
+                    task_instance.finish_time = now_second_u32();
                 }
             }
             InstanceAddrSelectResult::ALL(addrs) => {
@@ -152,7 +165,11 @@ impl TaskManager {
                         .ok();
                 }
             }
-            InstanceAddrSelectResult::Empty => {}
+            InstanceAddrSelectResult::Empty => {
+                task_instance.status = TaskStatusType::Error;
+                task_instance.trigger_message = Arc::new("no instance selected".to_string());
+                task_instance.finish_time = now_second_u32();
+            }
         }
         job_manager.do_send(JobManagerReq::UpdateTask(Arc::new(task_instance.clone())));
         task_instance
@@ -175,6 +192,7 @@ impl TaskManager {
         let job_manager = self.job_manager.clone().unwrap();
         for param in params {
             if let Some(mut task_instance) = self.task_instance_map.remove(&param.task_id) {
+                task_instance.finish_time = now_second_u32();
                 if param.success {
                     task_instance.status = TaskStatusType::Success;
                 } else {
