@@ -78,7 +78,7 @@ impl AppConfig {
     }
 
     fn get_xxl_job_prefix_path() -> String {
-        if let Ok(v) = std::env::var("RATCH_DATA_DIR") {
+        if let Ok(v) = std::env::var("DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH") {
             if v.len() < 2 {
                 DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH.to_owned()
             } else {
