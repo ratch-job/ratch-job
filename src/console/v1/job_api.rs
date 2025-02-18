@@ -6,6 +6,7 @@ use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
 use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
 use crate::job::model::job::JobParam;
 use crate::sequence::{SequenceRequest, SequenceResult};
+use crate::task::model::actor_model::{TaskHistoryManagerReq, TaskHistoryManagerResult};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
@@ -156,6 +157,25 @@ pub(crate) async fn query_job_task_logs(
         HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("query_job_task_logs error".to_string()),
+        ))
+    }
+}
+
+pub(crate) async fn query_latest_task(
+    share_data: Data<Arc<ShareData>>,
+    web::Query(request): web::Query<JobTaskLogQueryListRequest>,
+) -> impl Responder {
+    let param = request.to_param();
+    if let Ok(Ok(TaskHistoryManagerResult::JobTaskLogPageInfo(total_count, list))) = share_data
+        .task_history_manager
+        .send(TaskHistoryManagerReq::QueryJobTaskLog(param))
+        .await
+    {
+        HttpResponse::Ok().json(ApiResult::success(Some(PageResult { total_count, list })))
+    } else {
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("query_latest_task error".to_string()),
         ))
     }
 }

@@ -30,6 +30,10 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
             .service(web::resource("/job/remove").route(web::post().to(job_api::remove_job)))
             .service(
                 web::resource("/job/task/list").route(web::get().to(job_api::query_job_task_logs)),
+            )
+            .service(
+                web::resource("/job/task/latest-history")
+                    .route(web::get().to(job_api::query_latest_task)),
             ),
     );
 }

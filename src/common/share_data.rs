@@ -4,6 +4,7 @@ use crate::job::core::JobManager;
 use crate::schedule::core::ScheduleManager;
 use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
+use crate::task::task_history::TaskHistoryManager;
 use actix::Addr;
 use bean_factory::FactoryData;
 use std::sync::Arc;
@@ -16,5 +17,6 @@ pub struct ShareData {
     pub sequence_manager: Addr<SequenceManager>,
     pub schedule_manager: Addr<ScheduleManager>,
     pub task_manager: Addr<TaskManager>,
+    pub task_history_manager: Addr<TaskHistoryManager>,
     pub factory_data: FactoryData,
 }

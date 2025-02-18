@@ -1,5 +1,6 @@
 use crate::app::model::AppKey;
-use crate::job::model::job::JobInfo;
+use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
+use crate::task::model::task::JobTaskInfo;
 use actix::Message;
 use std::sync::Arc;
 
@@ -21,5 +22,17 @@ pub enum TaskManagerReq {
 }
 
 pub enum TaskManagerResult {
+    None,
+}
+
+#[derive(Debug, Message)]
+#[rtype(result = "anyhow::Result<TaskHistoryManagerResult>")]
+pub enum TaskHistoryManagerReq {
+    UpdateTask(Arc<JobTaskInfo>),
+    QueryJobTaskLog(JobTaskLogQueryParam),
+}
+
+pub enum TaskHistoryManagerResult {
+    JobTaskLogPageInfo(usize, Vec<Arc<JobTaskInfo>>),
     None,
 }

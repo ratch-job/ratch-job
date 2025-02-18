@@ -3,7 +3,9 @@ use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
 use crate::job::model::job::{JobInfo, JobInfoDto, JobParam, JobTaskLogQueryParam, JobWrap};
 use crate::schedule::core::ScheduleManager;
 use crate::schedule::model::actor_model::ScheduleManagerReq;
+use crate::task::model::actor_model::TaskHistoryManagerReq;
 use crate::task::model::task::JobTaskInfo;
+use crate::task::task_history::TaskHistoryManager;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::HashMap;
@@ -13,6 +15,7 @@ use std::sync::Arc;
 pub struct JobManager {
     job_map: HashMap<u64, JobWrap>,
     schedule_manager: Option<Addr<ScheduleManager>>,
+    task_history_manager: Option<Addr<TaskHistoryManager>>,
     job_task_log_limit: usize,
 }
 
@@ -21,6 +24,7 @@ impl JobManager {
         JobManager {
             job_map: HashMap::new(),
             schedule_manager: None,
+            task_history_manager: None,
             job_task_log_limit: 200,
         }
     }
@@ -75,6 +79,9 @@ impl JobManager {
     }
 
     fn update_job_task(&mut self, task_log: Arc<JobTaskInfo>) {
+        if let Some(task_history_manager) = self.task_history_manager.as_ref() {
+            task_history_manager.do_send(TaskHistoryManagerReq::UpdateTask(task_log.clone()));
+        }
         if let Some(job_wrap) = self.job_map.get_mut(&task_log.job_id) {
             job_wrap.update_task_log(task_log, self.job_task_log_limit);
         }
@@ -141,6 +148,7 @@ impl Inject for JobManager {
         _ctx: &mut Self::Context,
     ) {
         self.schedule_manager = factory_data.get_actor();
+        self.task_history_manager = factory_data.get_actor();
     }
 }
 

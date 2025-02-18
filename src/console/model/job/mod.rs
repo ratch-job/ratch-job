@@ -102,7 +102,7 @@ pub struct JobTaskLogQueryListRequest {
 
 impl JobTaskLogQueryListRequest {
     pub fn to_param(self) -> JobTaskLogQueryParam {
-        let limit = self.page_size.unwrap_or(0xffff_ffff);
+        let limit = self.page_size.unwrap_or(10);
         let page_no = if self.page_no.unwrap_or(1) < 1 {
             1
         } else {

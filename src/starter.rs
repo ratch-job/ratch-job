@@ -5,6 +5,7 @@ use crate::job::core::JobManager;
 use crate::schedule::core::ScheduleManager;
 use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
+use crate::task::task_history::TaskHistoryManager;
 use actix::Actor;
 use bean_factory::{BeanDefinition, BeanFactory, FactoryData};
 use std::sync::Arc;
@@ -29,6 +30,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         TaskManager::new(app_config.clone()).start(),
     ));
+    factory.register(BeanDefinition::actor_from_obj(
+        TaskHistoryManager::new().start(),
+    ));
     Ok(factory.init().await)
 }
 
@@ -39,6 +43,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
     let sequence_manager = factory_data.get_actor().unwrap();
     let schedule_manager = factory_data.get_actor().unwrap();
     let task_manager = factory_data.get_actor().unwrap();
+    let task_history_manager = factory_data.get_actor().unwrap();
     let app_data = Arc::new(ShareData {
         app_config,
         app_manager,
@@ -46,6 +51,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         sequence_manager,
         schedule_manager,
         task_manager,
+        task_history_manager,
         factory_data,
     });
     Ok(app_data)

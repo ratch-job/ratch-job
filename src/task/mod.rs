@@ -3,3 +3,4 @@
 pub mod core;
 pub mod model;
 pub mod request_client;
+pub mod task_history;
