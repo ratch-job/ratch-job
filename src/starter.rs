@@ -6,6 +6,7 @@ use crate::schedule::core::ScheduleManager;
 use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
 use crate::task::task_history::TaskHistoryManager;
+use crate::webhook::core::WebHookManager;
 use actix::Actor;
 use bean_factory::{BeanDefinition, BeanFactory, FactoryData};
 use std::sync::Arc;
@@ -32,6 +33,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     ));
     factory.register(BeanDefinition::actor_from_obj(
         TaskHistoryManager::new().start(),
+    ));
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
+        WebHookManager::new().start(),
     ));
     Ok(factory.init().await)
 }
