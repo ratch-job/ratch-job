@@ -8,6 +8,7 @@ use crate::task::core::TaskManager;
 use actix::Actor;
 use bean_factory::{BeanDefinition, BeanFactory, FactoryData};
 use std::sync::Arc;
+use crate::webhook::core::WebHookManager;
 
 pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<FactoryData> {
     std::fs::create_dir_all(app_config.local_db_dir.as_str())?;
@@ -28,6 +29,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     ));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         TaskManager::new(app_config.clone()).start(),
+    ));
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
+        WebHookManager::new().start(),
     ));
     Ok(factory.init().await)
 }

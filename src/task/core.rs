@@ -17,6 +17,7 @@ use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::HashMap;
 use std::sync::Arc;
+use crate::webhook::core::WebHookManager;
 
 #[bean(inject)]
 pub struct TaskManager {
@@ -25,6 +26,7 @@ pub struct TaskManager {
     xxl_request_header: HashMap<String, String>,
     sequence_manager: Option<Addr<SequenceManager>>,
     job_manager: Option<Addr<JobManager>>,
+    webhook_manager: Option<Addr<WebHookManager>>
 }
 
 impl TaskManager {
@@ -47,6 +49,7 @@ impl TaskManager {
             xxl_request_header,
             sequence_manager: None,
             job_manager: None,
+            webhook_manager: None,
         }
     }
 
@@ -227,6 +230,7 @@ impl Inject for TaskManager {
     ) {
         self.sequence_manager = factory_data.get_actor();
         self.job_manager = factory_data.get_actor();
+        self.webhook_manager = factory_data.get_actor();
     }
 }
 

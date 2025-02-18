@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::time::Duration;
+use reqwest::{Body, Error, IntoUrl, Response, Url};
+use reqwest::header::HeaderMap;
 
 #[derive(Default, Clone, Debug)]
 pub struct ResponseWrap {
@@ -81,5 +83,16 @@ impl HttpUtils {
         }
         let res = req_builer.send().await?;
         Self::get_response_wrap(res).await
+    }
+
+    pub async fn post_body<T: IntoUrl, B: Into<Body>>(url: T, body: B, headers: Option<HeaderMap>, timeout_millis: Option<u64>) -> anyhow::Result<()> {
+        let client = reqwest::Client::new();
+        client.post(url)
+            .body(body)
+            .headers(headers.unwrap_or(HeaderMap::default()))
+            .timeout(Duration::from_millis(timeout_millis.unwrap_or(3000u64)))
+            .send()
+            .await?;
+        Ok(())
     }
 }
