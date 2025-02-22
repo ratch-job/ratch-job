@@ -48,6 +48,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
     let schedule_manager = factory_data.get_actor().unwrap();
     let task_manager = factory_data.get_actor().unwrap();
     let task_history_manager = factory_data.get_actor().unwrap();
+    let webhook_manager = factory_data.get_actor().unwrap();
     let app_data = Arc::new(ShareData {
         app_config,
         app_manager,
@@ -56,6 +57,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         schedule_manager,
         task_manager,
         task_history_manager,
+        webhook_manager,
         factory_data,
     });
     Ok(app_data)

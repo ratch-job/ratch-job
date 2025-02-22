@@ -8,6 +8,7 @@ use crate::task::task_history::TaskHistoryManager;
 use actix::Addr;
 use bean_factory::FactoryData;
 use std::sync::Arc;
+use crate::webhook::core::WebHookManager;
 
 #[derive(Clone, Debug)]
 pub struct ShareData {
@@ -18,5 +19,6 @@ pub struct ShareData {
     pub schedule_manager: Addr<ScheduleManager>,
     pub task_manager: Addr<TaskManager>,
     pub task_history_manager: Addr<TaskHistoryManager>,
+    pub webhook_manager: Addr<WebHookManager>,
     pub factory_data: FactoryData,
 }
