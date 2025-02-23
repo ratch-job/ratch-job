@@ -2,6 +2,7 @@ pub mod app;
 pub mod cli;
 pub mod common;
 pub mod console;
+pub mod grpc;
 pub mod job;
 pub mod namespace;
 pub mod openapi;
