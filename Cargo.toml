@@ -50,6 +50,13 @@ ratchjob-web-dist-wrap = "=0.1.1-alpha.2"
 mime_guess = { version = "2" }
 tonic = "0.12.3"
 prost = "0.13.5"
+async-raft-ext = "0.6.3"
+thiserror = "1.0"
+quick-protobuf = "0.8.1"
+binrw = "0.13.3"
+binrw_derive = "0.13.3"
+bytes = "1"
+byteorder = "1.4"
 
 [build-dependencies]
 #用于生成grpc代码，生成后注释掉避免编译额外依赖protoc

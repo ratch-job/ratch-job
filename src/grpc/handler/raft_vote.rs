@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::common::appdata::AppShareData;
 use crate::common::share_data::ShareData;
-use crate::grpc::nacos_proto::Payload;
 use crate::grpc::ratch_server_proto::Payload;
 use crate::grpc::{HandlerResult, PayloadHandler, PayloadUtils, RequestMeta};
 use async_trait::async_trait;

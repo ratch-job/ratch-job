@@ -80,8 +80,8 @@ impl PayloadHandler for InvokerHandler {
         request_meta: RequestMeta,
     ) -> anyhow::Result<HandlerResult> {
         let url = request_payload.r#type.as_str();
-        if let Some(handler)=self.match_handler(request_payload.r#type.as_str()){
-            return handler.handle(request_payload,request_meta).await;
+        if let Some(handler) = self.match_handler(request_payload.r#type.as_str()) {
+            return handler.handle(request_payload, request_meta).await;
         }
         log::warn!("InvokerHandler not fund handler,type:{}", url);
         Ok(HandlerResult::error(

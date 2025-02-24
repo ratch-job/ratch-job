@@ -1,5 +1,6 @@
 pub mod actor_utils;
 pub mod app_config;
+pub mod byte_utils;
 pub mod constant;
 pub mod cron_utils;
 pub mod datetime_utils;

@@ -6,6 +6,7 @@ pub mod grpc;
 pub mod job;
 pub mod namespace;
 pub mod openapi;
+pub mod raft;
 pub mod schedule;
 pub mod sequence;
 pub mod starter;
