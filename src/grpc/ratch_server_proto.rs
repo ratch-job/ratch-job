@@ -17,8 +17,17 @@ pub struct Payload {
     #[prost(message, optional, tag = "3")]
     pub body: ::core::option::Option<Any>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Response {
+    #[prost(int32, tag = "1")]
+    pub code: i32,
+    #[prost(message, optional, tag = "2")]
+    pub data: ::core::option::Option<Payload>,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
 /// Generated client implementations.
-pub mod request_server_client {
+pub mod request_client {
     #![allow(
         unused_variables,
         dead_code,
@@ -29,10 +38,10 @@ pub mod request_server_client {
     use tonic::codegen::http::Uri;
     use tonic::codegen::*;
     #[derive(Debug, Clone)]
-    pub struct RequestServerClient<T> {
+    pub struct RequestClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl RequestServerClient<tonic::transport::Channel> {
+    impl RequestClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -43,7 +52,7 @@ pub mod request_server_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> RequestServerClient<T>
+    impl<T> RequestClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -61,7 +70,7 @@ pub mod request_server_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> RequestServerClient<InterceptedService<T, F>>
+        ) -> RequestClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -74,7 +83,7 @@ pub mod request_server_client {
             <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
                 Into<StdError> + std::marker::Send + std::marker::Sync,
         {
-            RequestServerClient::new(InterceptedService::new(inner, interceptor))
+            RequestClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -110,21 +119,21 @@ pub mod request_server_client {
         pub async fn request(
             &mut self,
             request: impl tonic::IntoRequest<super::Payload>,
-        ) -> std::result::Result<tonic::Response<super::Payload>, tonic::Status> {
+        ) -> std::result::Result<tonic::Response<super::Response>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
             })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/RequestServer/request");
+            let path = http::uri::PathAndQuery::from_static("/Request/request");
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("RequestServer", "request"));
+                .insert(GrpcMethod::new("Request", "request"));
             self.inner.unary(req, path, codec).await
         }
     }
 }
 /// Generated client implementations.
-pub mod stream_server_client {
+pub mod stream_client {
     #![allow(
         unused_variables,
         dead_code,
@@ -135,10 +144,10 @@ pub mod stream_server_client {
     use tonic::codegen::http::Uri;
     use tonic::codegen::*;
     #[derive(Debug, Clone)]
-    pub struct StreamServerClient<T> {
+    pub struct StreamClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl StreamServerClient<tonic::transport::Channel> {
+    impl StreamClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -149,7 +158,7 @@ pub mod stream_server_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> StreamServerClient<T>
+    impl<T> StreamClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -167,7 +176,7 @@ pub mod stream_server_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> StreamServerClient<InterceptedService<T, F>>
+        ) -> StreamClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -180,7 +189,7 @@ pub mod stream_server_client {
             <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
                 Into<StdError> + std::marker::Send + std::marker::Sync,
         {
-            StreamServerClient::new(InterceptedService::new(inner, interceptor))
+            StreamClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -224,16 +233,16 @@ pub mod stream_server_client {
                 tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
             })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/StreamServer/stream");
+            let path = http::uri::PathAndQuery::from_static("/Stream/stream");
             let mut req = request.into_streaming_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("StreamServer", "stream"));
+                .insert(GrpcMethod::new("Stream", "stream"));
             self.inner.streaming(req, path, codec).await
         }
     }
 }
 /// Generated server implementations.
-pub mod request_server_server {
+pub mod request_server {
     #![allow(
         unused_variables,
         dead_code,
@@ -242,23 +251,23 @@ pub mod request_server_server {
         clippy::let_unit_value
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with RequestServerServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with RequestServer.
     #[async_trait]
-    pub trait RequestServer: std::marker::Send + std::marker::Sync + 'static {
+    pub trait Request: std::marker::Send + std::marker::Sync + 'static {
         async fn request(
             &self,
             request: tonic::Request<super::Payload>,
-        ) -> std::result::Result<tonic::Response<super::Payload>, tonic::Status>;
+        ) -> std::result::Result<tonic::Response<super::Response>, tonic::Status>;
     }
     #[derive(Debug)]
-    pub struct RequestServerServer<T> {
+    pub struct RequestServer<T> {
         inner: Arc<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
         max_decoding_message_size: Option<usize>,
         max_encoding_message_size: Option<usize>,
     }
-    impl<T> RequestServerServer<T> {
+    impl<T> RequestServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -306,9 +315,9 @@ pub mod request_server_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for RequestServerServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for RequestServer<T>
     where
-        T: RequestServer,
+        T: Request,
         B: Body + std::marker::Send + 'static,
         B::Error: Into<StdError> + std::marker::Send + 'static,
     {
@@ -323,19 +332,18 @@ pub mod request_server_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/RequestServer/request" => {
+                "/Request/request" => {
                     #[allow(non_camel_case_types)]
-                    struct requestSvc<T: RequestServer>(pub Arc<T>);
-                    impl<T: RequestServer> tonic::server::UnaryService<super::Payload> for requestSvc<T> {
-                        type Response = super::Payload;
+                    struct requestSvc<T: Request>(pub Arc<T>);
+                    impl<T: Request> tonic::server::UnaryService<super::Payload> for requestSvc<T> {
+                        type Response = super::Response;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::Payload>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut =
-                                async move { <T as RequestServer>::request(&inner, request).await };
+                            let fut = async move { <T as Request>::request(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -377,7 +385,7 @@ pub mod request_server_server {
             }
         }
     }
-    impl<T> Clone for RequestServerServer<T> {
+    impl<T> Clone for RequestServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -390,13 +398,13 @@ pub mod request_server_server {
         }
     }
     /// Generated gRPC service name
-    pub const SERVICE_NAME: &str = "RequestServer";
-    impl<T> tonic::server::NamedService for RequestServerServer<T> {
+    pub const SERVICE_NAME: &str = "Request";
+    impl<T> tonic::server::NamedService for RequestServer<T> {
         const NAME: &'static str = SERVICE_NAME;
     }
 }
 /// Generated server implementations.
-pub mod stream_server_server {
+pub mod stream_server {
     #![allow(
         unused_variables,
         dead_code,
@@ -405,9 +413,9 @@ pub mod stream_server_server {
         clippy::let_unit_value
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with StreamServerServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with StreamServer.
     #[async_trait]
-    pub trait StreamServer: std::marker::Send + std::marker::Sync + 'static {
+    pub trait Stream: std::marker::Send + std::marker::Sync + 'static {
         /// Server streaming response type for the stream method.
         type streamStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::Payload, tonic::Status>,
@@ -419,14 +427,14 @@ pub mod stream_server_server {
         ) -> std::result::Result<tonic::Response<Self::streamStream>, tonic::Status>;
     }
     #[derive(Debug)]
-    pub struct StreamServerServer<T> {
+    pub struct StreamServer<T> {
         inner: Arc<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
         max_decoding_message_size: Option<usize>,
         max_encoding_message_size: Option<usize>,
     }
-    impl<T> StreamServerServer<T> {
+    impl<T> StreamServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -474,9 +482,9 @@ pub mod stream_server_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for StreamServerServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for StreamServer<T>
     where
-        T: StreamServer,
+        T: Stream,
         B: Body + std::marker::Send + 'static,
         B::Error: Into<StdError> + std::marker::Send + 'static,
     {
@@ -491,10 +499,10 @@ pub mod stream_server_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/StreamServer/stream" => {
+                "/Stream/stream" => {
                     #[allow(non_camel_case_types)]
-                    struct streamSvc<T: StreamServer>(pub Arc<T>);
-                    impl<T: StreamServer> tonic::server::StreamingService<super::Payload> for streamSvc<T> {
+                    struct streamSvc<T: Stream>(pub Arc<T>);
+                    impl<T: Stream> tonic::server::StreamingService<super::Payload> for streamSvc<T> {
                         type Response = super::Payload;
                         type ResponseStream = T::streamStream;
                         type Future =
@@ -504,8 +512,7 @@ pub mod stream_server_server {
                             request: tonic::Request<tonic::Streaming<super::Payload>>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut =
-                                async move { <T as StreamServer>::stream(&inner, request).await };
+                            let fut = async move { <T as Stream>::stream(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -547,7 +554,7 @@ pub mod stream_server_server {
             }
         }
     }
-    impl<T> Clone for StreamServerServer<T> {
+    impl<T> Clone for StreamServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -560,8 +567,8 @@ pub mod stream_server_server {
         }
     }
     /// Generated gRPC service name
-    pub const SERVICE_NAME: &str = "StreamServer";
-    impl<T> tonic::server::NamedService for StreamServerServer<T> {
+    pub const SERVICE_NAME: &str = "Stream";
+    impl<T> tonic::server::NamedService for StreamServer<T> {
         const NAME: &'static str = SERVICE_NAME;
     }
 }

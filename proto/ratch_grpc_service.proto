@@ -31,12 +31,18 @@ message Payload {
     Any body = 3;
 }
 
-service RequestServer {
-    rpc request (Payload) returns (Payload) {
+message Response{
+    int32 code = 1;
+    Payload data= 2;
+    string message = 3;
+}
+
+service Request{
+    rpc request (Payload) returns (Response) {
     }
 }
 
-service StreamServer {
+service Stream{
     rpc stream (stream Payload) returns (stream Payload) {
     }
 }

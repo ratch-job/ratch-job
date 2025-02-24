@@ -52,5 +52,5 @@ tonic = "0.12.3"
 prost = "0.13.5"
 
 [build-dependencies]
-#用于生成grpc代码，生成后删除避免编译额外依赖protoc
-#tonic-build = "0.12"
+#用于生成grpc代码，生成后注释掉避免编译额外依赖protoc
+tonic-build = "0.12"
