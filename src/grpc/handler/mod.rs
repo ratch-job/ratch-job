@@ -14,6 +14,7 @@ pub mod raft_route;
 pub mod raft_snapshot;
 pub mod raft_vote;
 
+pub(crate) const CLUSTER_TOKEN: &str = "ClusterToken";
 pub(crate) const RAFT_APPEND_REQUEST: &str = "RaftAppendRequest";
 pub(crate) const RAFT_SNAPSHOT_REQUEST: &str = "RaftSnapshotRequest";
 pub(crate) const RAFT_VOTE_REQUEST: &str = "RaftVoteRequest";

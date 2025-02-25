@@ -29,7 +29,7 @@ pub fn vec_to_set(list: &Vec<u64>) -> HashSet<u64> {
 }
 
 #[derive(Clone)]
-pub struct store {
+pub struct Store {
     node_id: u64,
     index_manager: Addr<RaftIndexManager>,
     snapshot_manager: Addr<RaftSnapshotManager>,
@@ -38,7 +38,7 @@ pub struct store {
     apply_manager: Addr<StateApplyManager>,
 }
 
-impl store {
+impl Store {
     pub fn new(
         node_id: u64,
         index_manager: Addr<RaftIndexManager>,
@@ -98,7 +98,7 @@ impl store {
 }
 
 #[async_trait]
-impl RaftStorage<ClientRequest, ClientResponse> for store {
+impl RaftStorage<ClientRequest, ClientResponse> for Store {
     type Snapshot = tokio::fs::File;
     type ShutdownError = ShutdownError;
 

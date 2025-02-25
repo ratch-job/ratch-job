@@ -60,7 +60,7 @@ async fn disable_no_auth_console_index() -> impl Responder {
   <head>
     <meta charset='UTF-8' />
     <meta name='viewport' content='width=device-width, initial-scale=1.0' />
-    <title>R-NACOS</title>
+    <title>RATCH-JOB</title>
   </head>
   <body>
     <p>请使用控制台: http://localhost:8845/ratchjob/ </p>

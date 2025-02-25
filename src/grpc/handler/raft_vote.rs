@@ -23,14 +23,10 @@ impl PayloadHandler for RaftVoteRequestHandler {
         _request_meta: RequestMeta,
     ) -> anyhow::Result<HandlerResult> {
         let body_vec = request_payload.body.unwrap_or_default().value;
-        todo!()
-        /*
         let request: async_raft_ext::raft::VoteRequest = serde_json::from_slice(&body_vec)?;
         let res = self.app_data.raft.vote(request).await?;
-        let value = serde_json::to_string(&res)?;
-        //log::info!("RaftVoteRequestHandler result:{}",&value);
+        let value = serde_json::to_vec(&res)?;
         let payload = PayloadUtils::build_payload("RaftVoteResponse", value);
         Ok(HandlerResult::success(payload))
-         */
     }
 }

@@ -1,4 +1,8 @@
+pub mod code;
+pub mod model;
+
 use crate::common::sequence_utils::SimpleSequence;
+use crate::sequence::model::{SequenceRaftReq, SequenceRaftResult};
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
 /// 获取顺序递增的id功能

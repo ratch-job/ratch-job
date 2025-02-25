@@ -1,4 +1,5 @@
 use self::model::LogRecordDto;
+use crate::sequence::model::SequenceRaftReq;
 use async_raft_ext::raft::{Entry, EntryPayload};
 use async_raft_ext::{AppData, AppDataResponse};
 use serde::{Deserialize, Serialize};
@@ -19,6 +20,7 @@ pub type NodeId = u64;
 pub enum ClientRequest {
     NodeAddr { id: u64, addr: Arc<String> },
     Members(Vec<u64>),
+    //SequenceReq{ req: SequenceRaftReq }
 }
 
 impl AppData for ClientRequest {}
