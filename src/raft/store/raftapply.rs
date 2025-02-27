@@ -57,6 +57,9 @@ impl LogRecordLoader for LogRecordLoaderInstance {
                         .await
                         .ok();
                 }
+                ClientRequest::SequenceReq { req } => {
+                    self.data_wrap.sequence_db.send(req).await.ok();
+                }
             },
             _ => {}
         }
@@ -226,6 +229,7 @@ impl StateApplyManager {
         if let Some(data_wrap) = self.data_wrap.as_ref() {}
     }
 
+    /// 批量处理请求，一段是由主节点到从节点，不需要返回值
     fn apply_request_to_state_machine(&mut self, request: ApplyRequestDto) -> anyhow::Result<()> {
         //self.last_applied_log = request.index;
         //todo
@@ -244,10 +248,16 @@ impl StateApplyManager {
                     });
                 }
             }
+            ClientRequest::SequenceReq { req } => {
+                if let Some(data_wrap) = &self.data_wrap {
+                    data_wrap.sequence_db.do_send(req);
+                }
+            }
         };
         Ok(())
     }
 
+    /// 接收raft请求到状态机，需要返回结果到调用端
     async fn async_apply_request_to_state_machine(
         request: ApplyRequestDto,
         raft_data_wrap: &RaftDataWrap,
@@ -266,6 +276,10 @@ impl StateApplyManager {
                     node_addr: None,
                 });
                 Ok(ClientResponse::Success)
+            }
+            ClientRequest::SequenceReq { req } => {
+                let r = raft_data_wrap.sequence_db.send(req).await??;
+                Ok(ClientResponse::SequenceResp { resp: r })
             }
         };
         index_manager.do_send(RaftIndexRequest::SaveLastAppliedLog(last_applied_log));

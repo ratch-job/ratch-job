@@ -18,6 +18,7 @@ use crate::raft::store::raftsnapshot::RaftSnapshotManager;
 use crate::raft::store::ClientRequest;
 use crate::raft::RatchRaft;
 use crate::schedule::core::ScheduleManager;
+use crate::sequence::core::SequenceDbManager;
 use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
 use crate::task::task_history::TaskHistoryManager;
@@ -31,6 +32,7 @@ use std::time::Duration;
 
 pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<FactoryData> {
     std::fs::create_dir_all(app_config.local_db_dir.as_str())?;
+    let base_path = Arc::new(app_config.local_db_dir.clone());
     //let base_path = Arc::new(app_config.local_db_dir.clone());
     let factory = BeanFactory::new();
     factory.register(BeanDefinition::from_obj(app_config.clone()));
@@ -40,7 +42,7 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         JobManager::new().start(),
     ));
-    factory.register(BeanDefinition::actor_from_obj(
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
         SequenceManager::new().start(),
     ));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
@@ -52,13 +54,10 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_from_obj(
         TaskHistoryManager::new().start(),
     ));
-    config_raft(&app_config, &factory).await?;
-    Ok(factory.init().await)
-}
+    let sequence_db_addr = SequenceDbManager::new().start();
+    factory.register(BeanDefinition::actor_from_obj(sequence_db_addr.clone()));
 
-async fn config_raft(app_config: &Arc<AppConfig>, factory: &BeanFactory) -> anyhow::Result<()> {
-    std::fs::create_dir_all(app_config.local_db_dir.as_str())?;
-    let base_path = Arc::new(app_config.local_db_dir.clone());
+    // raft begin
     let index_manager = RaftIndexManager::new(base_path.clone()).start();
     let log_manager = RaftLogManager::new(base_path.clone(), Some(index_manager.clone()));
     let log_manager = create_actor_at_thread(log_manager);
@@ -92,7 +91,9 @@ async fn config_raft(app_config: &Arc<AppConfig>, factory: &BeanFactory) -> anyh
         conn_factory,
         app_config.clone(),
     ));
-    let raft_data_wrap = Arc::new(RaftDataWrap {});
+    let raft_data_wrap = Arc::new(RaftDataWrap {
+        sequence_db: sequence_db_addr,
+    });
     factory.register(BeanDefinition::from_obj(raft_data_wrap.clone()));
     let raft = build_raft(&app_config, store.clone(), cluster_sender.clone()).await?;
     factory.register(BeanDefinition::from_obj(raft.clone()));
@@ -107,7 +108,8 @@ async fn config_raft(app_config: &Arc<AppConfig>, factory: &BeanFactory) -> anyh
         raft.clone(),
     ));
     factory.register(BeanDefinition::from_obj(raft_request_route));
-    Ok(())
+    // raft end
+    Ok(factory.init().await)
 }
 
 async fn build_raft(

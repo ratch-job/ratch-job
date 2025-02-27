@@ -1,10 +1,7 @@
+use crate::sequence::core::SequenceDbManager;
 use actix::prelude::*;
 
 #[derive(Clone)]
-pub struct RaftDataWrap {}
-
-impl RaftDataWrap {
-    pub fn new() -> Self {
-        Self {}
-    }
+pub struct RaftDataWrap {
+    pub sequence_db: Addr<SequenceDbManager>,
 }

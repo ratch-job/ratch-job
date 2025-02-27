@@ -1,5 +1,6 @@
 use crate::sequence::model::{SequenceRaftReq, SequenceRaftResult};
 use actix::prelude::*;
+use bean_factory::bean;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -51,11 +52,11 @@ impl Handler<SequenceRaftReq> for SequenceDbManager {
 
     fn handle(&mut self, msg: SequenceRaftReq, _ctx: &mut Self::Context) -> Self::Result {
         match msg {
-            SequenceRaftReq::GetNextId(key) => {
+            SequenceRaftReq::NextId(key) => {
                 let id = self.next_id(key);
                 Ok(SequenceRaftResult::NextId(id))
             }
-            SequenceRaftReq::GetNextRange(key, step) => {
+            SequenceRaftReq::NextRange(key, step) => {
                 let start = self.next_range(key, step)?;
                 Ok(SequenceRaftResult::NextRange { start, len: step })
             }
