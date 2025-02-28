@@ -6,6 +6,7 @@ use crate::grpc::handler::RAFT_ROUTE_REQUEST;
 use crate::grpc::payload_utils::PayloadUtils;
 use crate::job::core::JobManager;
 use crate::raft::cluster::model::RouterRequest;
+use crate::raft::cluster::node_manager::ClusterNodeManager;
 use crate::raft::cluster::route::{RaftAddrRouter, RaftRequestRoute};
 use crate::raft::network::core::RaftRouter;
 use crate::raft::network::factory::{RaftClusterRequestSender, RaftConnectionFactory};
@@ -91,6 +92,7 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
         conn_factory,
         app_config.clone(),
     ));
+    factory.register(BeanDefinition::from_obj(cluster_sender.clone()));
     let raft_data_wrap = Arc::new(RaftDataWrap {
         sequence_db: sequence_db_addr,
     });
@@ -108,6 +110,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
         raft.clone(),
     ));
     factory.register(BeanDefinition::from_obj(raft_request_route));
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
+        ClusterNodeManager::new(app_config.raft_node_id).start(),
+    ));
     // raft end
     Ok(factory.init().await)
 }

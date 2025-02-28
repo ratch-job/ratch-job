@@ -11,6 +11,7 @@ use super::{
     },
     StoreUtils,
 };
+use crate::common::constant::SEQUENCE_TABLE_NAME;
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftdata::RaftDataWrap;
 use crate::raft::store::raftsnapshot::SnapshotWriterActor;
@@ -192,6 +193,12 @@ impl StateApplyManager {
         data_wrap: Arc<RaftDataWrap>,
         mut reader: SnapshotReader,
     ) -> anyhow::Result<()> {
+        while let Ok(Some(record)) = reader.read_record().await {
+            if record.tree.as_str() == SEQUENCE_TABLE_NAME.as_str() {
+                let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
+                data_wrap.sequence_db.send(req).await??;
+            }
+        }
         Ok(())
     }
 
@@ -338,6 +345,10 @@ impl StateApplyManager {
             _ => return Err(anyhow::anyhow!("RaftSnapshotResponse is error")),
         };
         //4. write data
+        data_wrap
+            .sequence_db
+            .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
+            .await??;
 
         //5. flush to file
         writer

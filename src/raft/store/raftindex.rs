@@ -9,15 +9,15 @@ use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
 };
 
-use crate::common::{
-    byte_utils::{bin_to_id, id_to_bin},
-    protobuf_utils::FileMessageReader,
-};
-
 use super::{
     log::{LogRange, RaftIndex, SnapshotRange},
     model::RaftIndexDto,
 };
+use crate::common::{
+    byte_utils::{bin_to_id, id_to_bin},
+    protobuf_utils::FileMessageReader,
+};
+use crate::raft::cluster::node_manager::{ClusterInnerNode, ClusterNodeManager, NodeManageRequest};
 
 pub struct RaftIndexInnerManager {
     file: tokio::fs::File,
@@ -112,6 +112,7 @@ pub struct RaftIndexManager {
     path: Arc<String>,
     lock_file: std::fs::File,
     inner: Option<Box<RaftIndexInnerManager>>,
+    cluster_node_manage: Option<Addr<ClusterNodeManager>>,
 }
 
 impl Drop for RaftIndexManager {
@@ -149,6 +150,7 @@ impl RaftIndexManager {
             path,
             lock_file,
             inner: None,
+            cluster_node_manage: None,
         }
     }
 
@@ -172,7 +174,9 @@ impl RaftIndexManager {
     }
 
     fn do_notify_membership(&self, is_change_member: bool) {
-        if let (Some(inner_manager)) = (self.inner.as_ref()) {
+        if let (Some(cluster_node_manage), Some(inner_manager)) =
+            (&self.cluster_node_manage, self.inner.as_ref())
+        {
             let mut nodes = vec![];
             if is_change_member {
                 for nid in &inner_manager.raft_index.member {
@@ -190,6 +194,7 @@ impl RaftIndexManager {
                     nodes.push((*nid, addr.to_owned()));
                 }
             }
+            cluster_node_manage.do_send(NodeManageRequest::UpdateNodes(nodes));
         }
     }
 
@@ -382,6 +387,7 @@ impl Inject for RaftIndexManager {
         _factory: bean_factory::BeanFactory,
         _ctx: &mut Self::Context,
     ) {
+        self.cluster_node_manage = factory_data.get_actor();
         self.do_notify_membership(false);
     }
 }
