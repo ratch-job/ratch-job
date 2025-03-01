@@ -40,8 +40,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         AppManager::new().start(),
     ));
+    let job_manager = JobManager::new().start();
     factory.register(BeanDefinition::actor_with_inject_from_obj(
-        JobManager::new().start(),
+        job_manager.clone(),
     ));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         SequenceManager::new().start(),
@@ -95,6 +96,7 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::from_obj(cluster_sender.clone()));
     let raft_data_wrap = Arc::new(RaftDataWrap {
         sequence_db: sequence_db_addr,
+        job_manager,
     });
     factory.register(BeanDefinition::from_obj(raft_data_wrap.clone()));
     let raft = build_raft(&app_config, store.clone(), cluster_sender.clone()).await?;

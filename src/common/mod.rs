@@ -9,6 +9,7 @@ pub mod http_utils;
 pub mod model;
 pub mod namespace_util;
 pub mod option_utils;
+pub mod pb;
 pub mod protobuf_utils;
 pub mod sequence_utils;
 pub mod share_data;

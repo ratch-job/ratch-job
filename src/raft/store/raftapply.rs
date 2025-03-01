@@ -61,6 +61,9 @@ impl LogRecordLoader for LogRecordLoaderInstance {
                 ClientRequest::SequenceReq { req } => {
                     self.data_wrap.sequence_db.send(req).await.ok();
                 }
+                ClientRequest::JobReq { req } => {
+                    self.data_wrap.job_manager.send(req).await.ok();
+                }
             },
             _ => {}
         }
@@ -260,6 +263,11 @@ impl StateApplyManager {
                     data_wrap.sequence_db.do_send(req);
                 }
             }
+            ClientRequest::JobReq { req } => {
+                if let Some(data_wrap) = &self.data_wrap {
+                    data_wrap.job_manager.do_send(req);
+                }
+            }
         };
         Ok(())
     }
@@ -287,6 +295,10 @@ impl StateApplyManager {
             ClientRequest::SequenceReq { req } => {
                 let r = raft_data_wrap.sequence_db.send(req).await??;
                 Ok(ClientResponse::SequenceResp { resp: r })
+            }
+            ClientRequest::JobReq { req } => {
+                let r = raft_data_wrap.job_manager.send(req).await??;
+                Ok(ClientResponse::JobResp { resp: r })
             }
         };
         index_manager.do_send(RaftIndexRequest::SaveLastAppliedLog(last_applied_log));

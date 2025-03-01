@@ -3,8 +3,11 @@ use crate::common::model::{ApiResult, PageResult};
 use crate::common::share_data::ShareData;
 use crate::console::model::job::{JobInfoParam, JobQueryListRequest, JobTaskLogQueryListRequest};
 use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
-use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
+use crate::job::model::actor_model::{
+    JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
+};
 use crate::job::model::job::JobParam;
+use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::sequence::{SequenceRequest, SequenceResult};
 use crate::task::model::actor_model::{TaskHistoryManagerReq, TaskHistoryManagerResult};
 use actix_web::web::Data;
@@ -63,12 +66,16 @@ async fn do_create_job(
         .await??
     {
         param.id = Some(id);
-        if let JobManagerResult::JobInfo(Some(job_info)) = share_data
-            .job_manager
-            .send(JobManagerReq::AddJob(param))
-            .await??
+        if let ClientResponse::JobResp {
+            resp: JobManagerRaftResult::JobInfo(job),
+        } = share_data
+            .raft_request_route
+            .request(ClientRequest::JobReq {
+                req: JobManagerRaftReq::AddJob(param),
+            })
+            .await?
         {
-            Ok(HttpResponse::Ok().json(ApiResult::success(Some(job_info))))
+            Ok(HttpResponse::Ok().json(ApiResult::success(Some(job))))
         } else {
             Err(anyhow::anyhow!("create job result type error!"))
         }
@@ -107,9 +114,11 @@ pub(crate) async fn update_job(
             Some("update_job error,the job id is invalid".to_string()),
         ));
     }
-    if let Ok(Ok(_)) = share_data
-        .job_manager
-        .send(JobManagerReq::UpdateJob(param))
+    if let Ok(_) = share_data
+        .raft_request_route
+        .request(ClientRequest::JobReq {
+            req: JobManagerRaftReq::UpdateJob(param),
+        })
         .await
     {
         HttpResponse::Ok().json(ApiResult::success(Some(())))
@@ -132,7 +141,13 @@ pub(crate) async fn remove_job(
             Some("remove_job error,the job id is invalid".to_string()),
         ));
     }
-    if let Ok(Ok(_)) = share_data.job_manager.send(JobManagerReq::Remove(id)).await {
+    if let Ok(_) = share_data
+        .raft_request_route
+        .request(ClientRequest::JobReq {
+            req: JobManagerRaftReq::Remove(id),
+        })
+        .await
+    {
         HttpResponse::Ok().json(ApiResult::success(Some(())))
     } else {
         HttpResponse::Ok().json(ApiResult::<()>::error(
