@@ -25,5 +25,16 @@ message JobDo {
     uint32 try_times = 17;
     uint64 version_id = 18;
     uint64 last_modified_millis = 19;
-    uint64 register_time = 20;
+    uint64 create_time = 20;
+}
+
+message JobTaskDo {
+    uint64 task_id = 1;
+    uint64 job_id = 2;
+    uint32 trigger_time = 3;
+    string instance_addr = 4;
+    string trigger_message = 5;
+    string status = 6;
+    uint32 finish_time = 7;
+    string callback_message = 8;
 }

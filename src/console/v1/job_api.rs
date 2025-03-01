@@ -13,6 +13,7 @@ use crate::task::model::actor_model::{TaskHistoryManagerReq, TaskHistoryManagerR
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
+use crate::common::datetime_utils::now_millis;
 
 pub(crate) async fn query_job_list(
     share_data: Data<Arc<ShareData>>,
@@ -66,6 +67,7 @@ async fn do_create_job(
         .await??
     {
         param.id = Some(id);
+        param.update_time = Some(now_millis());
         if let ClientResponse::JobResp {
             resp: JobManagerRaftResult::JobInfo(job),
         } = share_data
@@ -106,7 +108,7 @@ pub(crate) async fn update_job(
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<JobInfoParam>,
 ) -> impl Responder {
-    let param = param.to_param();
+    let mut param = param.to_param();
     let id = param.id.clone().unwrap_or_default();
     if id == 0 {
         return HttpResponse::Ok().json(ApiResult::<()>::error(

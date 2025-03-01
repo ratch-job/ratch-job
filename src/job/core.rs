@@ -19,6 +19,7 @@ use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use quick_protobuf::{BytesReader, Writer};
 use std::collections::HashMap;
 use std::sync::Arc;
+use crate::common::datetime_utils::now_millis;
 
 #[bean(inject)]
 pub struct JobManager {
@@ -48,8 +49,11 @@ impl JobManager {
                 "CreateJob，The job already exists and is repeatedly created"
             ));
         }
-        let job_info: JobInfo = job_param.into();
+        let mut job_info: JobInfo = job_param.into();
         job_info.check_valid()?;
+        let now  = now_millis();
+        job_info.last_modified_millis = now;
+        job_info.create_time = now;
         let value = Arc::new(job_info);
         self.job_map.insert(value.id, JobWrap::new(value.clone()));
         if let Some(schedule_manager) = self.schedule_manager.as_ref() {
@@ -208,16 +212,6 @@ impl Handler<JobManagerReq> for JobManager {
 
     fn handle(&mut self, msg: JobManagerReq, _ctx: &mut Self::Context) -> Self::Result {
         match msg {
-            JobManagerReq::AddJob(job_param) => {
-                let value = self.create_job(job_param)?;
-                return Ok(JobManagerResult::JobInfo(Some(value)));
-            }
-            JobManagerReq::UpdateJob(job_param) => {
-                self.update_job(job_param)?;
-            }
-            JobManagerReq::Remove(id) => {
-                self.remove_job(id);
-            }
             JobManagerReq::GetJob(id) => {
                 let job_info = if let Some(job_wrap) = self.job_map.get(&id) {
                     Some(job_wrap.job.clone())

@@ -32,7 +32,7 @@ pub struct JobInfo {
     pub try_times: u32,
     pub version_id: u64,
     pub last_modified_millis: u64,
-    pub register_time: u64,
+    pub create_time: u64,
 }
 
 impl JobInfo {
@@ -79,6 +79,10 @@ impl JobInfo {
         if let Some(try_times) = job_param.try_times {
             self.try_times = try_times;
         }
+        if let Some(update_time) = job_param.update_time {
+            self.create_time = update_time;
+        }
+        self.version_id+=1;
     }
 
     pub fn check_valid(&self) -> anyhow::Result<()> {
@@ -132,7 +136,7 @@ impl JobInfo {
             try_times: self.try_times,
             version_id: self.version_id,
             last_modified_millis: self.last_modified_millis,
-            register_time: self.register_time,
+            create_time: self.create_time,
         }
     }
 }
@@ -160,7 +164,7 @@ impl<'a> From<JobDo<'a>> for JobInfo {
             try_times: job_do.try_times,
             version_id: job_do.version_id,
             last_modified_millis: job_do.last_modified_millis,
-            register_time: job_do.register_time,
+            create_time: job_do.create_time,
         }
     }
 }
@@ -224,6 +228,7 @@ pub struct JobParam {
     pub blocking_strategy: Option<ExecutorBlockStrategy>,
     pub timeout_second: Option<u32>,
     pub try_times: Option<u32>,
+    pub update_time: Option<u64>,
 }
 
 impl From<JobParam> for JobInfo {
@@ -253,8 +258,8 @@ impl From<JobParam> for JobInfo {
             timeout_second: job_param.timeout_second.unwrap_or_default(),
             try_times: job_param.try_times.unwrap_or_default(),
             version_id: 0,
-            last_modified_millis: 0,
-            register_time: 0,
+            last_modified_millis: job_param.update_time.unwrap_or(0),
+            create_time: 0,
         }
     }
 }
@@ -314,7 +319,7 @@ impl JobInfoDto {
             try_times: job_info.try_times,
             version_id: job_info.version_id,
             last_modified_millis: job_info.last_modified_millis,
-            register_time: job_info.register_time,
+            register_time: job_info.create_time,
         }
     }
 }

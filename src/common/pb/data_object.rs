@@ -36,7 +36,7 @@ pub struct JobDo<'a> {
     pub try_times: u32,
     pub version_id: u64,
     pub last_modified_millis: u64,
-    pub register_time: u64,
+    pub create_time: u64,
 }
 
 impl<'a> MessageRead<'a> for JobDo<'a> {
@@ -63,7 +63,7 @@ impl<'a> MessageRead<'a> for JobDo<'a> {
                 Ok(136) => msg.try_times = r.read_uint32(bytes)?,
                 Ok(144) => msg.version_id = r.read_uint64(bytes)?,
                 Ok(152) => msg.last_modified_millis = r.read_uint64(bytes)?,
-                Ok(160) => msg.register_time = r.read_uint64(bytes)?,
+                Ok(160) => msg.create_time = r.read_uint64(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -94,7 +94,7 @@ impl<'a> MessageWrite for JobDo<'a> {
         + if self.try_times == 0u32 { 0 } else { 2 + sizeof_varint(*(&self.try_times) as u64) }
         + if self.version_id == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.version_id) as u64) }
         + if self.last_modified_millis == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.last_modified_millis) as u64) }
-        + if self.register_time == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.register_time) as u64) }
+        + if self.create_time == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.create_time) as u64) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -117,7 +117,67 @@ impl<'a> MessageWrite for JobDo<'a> {
         if self.try_times != 0u32 { w.write_with_tag(136, |w| w.write_uint32(*&self.try_times))?; }
         if self.version_id != 0u64 { w.write_with_tag(144, |w| w.write_uint64(*&self.version_id))?; }
         if self.last_modified_millis != 0u64 { w.write_with_tag(152, |w| w.write_uint64(*&self.last_modified_millis))?; }
-        if self.register_time != 0u64 { w.write_with_tag(160, |w| w.write_uint64(*&self.register_time))?; }
+        if self.create_time != 0u64 { w.write_with_tag(160, |w| w.write_uint64(*&self.create_time))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct JobTaskDo<'a> {
+    pub task_id: u64,
+    pub job_id: u64,
+    pub trigger_time: u32,
+    pub instance_addr: Cow<'a, str>,
+    pub trigger_message: Cow<'a, str>,
+    pub status: Cow<'a, str>,
+    pub finish_time: u32,
+    pub callback_message: Cow<'a, str>,
+}
+
+impl<'a> MessageRead<'a> for JobTaskDo<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.task_id = r.read_uint64(bytes)?,
+                Ok(16) => msg.job_id = r.read_uint64(bytes)?,
+                Ok(24) => msg.trigger_time = r.read_uint32(bytes)?,
+                Ok(34) => msg.instance_addr = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(42) => msg.trigger_message = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(50) => msg.status = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(56) => msg.finish_time = r.read_uint32(bytes)?,
+                Ok(66) => msg.callback_message = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for JobTaskDo<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.task_id == 0u64 { 0 } else { 1 + sizeof_varint(*(&self.task_id) as u64) }
+        + if self.job_id == 0u64 { 0 } else { 1 + sizeof_varint(*(&self.job_id) as u64) }
+        + if self.trigger_time == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.trigger_time) as u64) }
+        + if self.instance_addr == "" { 0 } else { 1 + sizeof_len((&self.instance_addr).len()) }
+        + if self.trigger_message == "" { 0 } else { 1 + sizeof_len((&self.trigger_message).len()) }
+        + if self.status == "" { 0 } else { 1 + sizeof_len((&self.status).len()) }
+        + if self.finish_time == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.finish_time) as u64) }
+        + if self.callback_message == "" { 0 } else { 1 + sizeof_len((&self.callback_message).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.task_id != 0u64 { w.write_with_tag(8, |w| w.write_uint64(*&self.task_id))?; }
+        if self.job_id != 0u64 { w.write_with_tag(16, |w| w.write_uint64(*&self.job_id))?; }
+        if self.trigger_time != 0u32 { w.write_with_tag(24, |w| w.write_uint32(*&self.trigger_time))?; }
+        if self.instance_addr != "" { w.write_with_tag(34, |w| w.write_string(&**&self.instance_addr))?; }
+        if self.trigger_message != "" { w.write_with_tag(42, |w| w.write_string(&**&self.trigger_message))?; }
+        if self.status != "" { w.write_with_tag(50, |w| w.write_string(&**&self.status))?; }
+        if self.finish_time != 0u32 { w.write_with_tag(56, |w| w.write_uint32(*&self.finish_time))?; }
+        if self.callback_message != "" { w.write_with_tag(66, |w| w.write_string(&**&self.callback_message))?; }
         Ok(())
     }
 }

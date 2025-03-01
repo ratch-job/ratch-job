@@ -11,6 +11,7 @@ use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::future::Future;
 use std::sync::Arc;
+use crate::common::datetime_utils::now_millis;
 
 async fn do_create_job(
     share_data: Data<Arc<ShareData>>,
@@ -22,6 +23,7 @@ async fn do_create_job(
         .await??
     {
         param.id = Some(id);
+        param.update_time = Some(now_millis());
         if let ClientResponse::JobResp {
             resp: JobManagerRaftResult::JobInfo(job),
         } = share_data
@@ -55,8 +57,9 @@ pub(crate) async fn create_job(
 
 async fn do_update_job(
     share_data: Data<Arc<ShareData>>,
-    param: JobParam,
+    mut param: JobParam,
 ) -> anyhow::Result<HttpResponse> {
+    param.update_time = Some(now_millis());
     share_data
         .raft_request_route
         .request(ClientRequest::JobReq {

@@ -4,7 +4,7 @@ use crate::common::constant::SEQ_TASK_ID;
 use crate::common::datetime_utils::now_second_u32;
 use crate::common::get_app_version;
 use crate::job::core::JobManager;
-use crate::job::model::actor_model::JobManagerReq;
+use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerReq};
 use crate::job::model::job::JobInfo;
 use crate::sequence::{SequenceManager, SequenceRequest, SequenceResult};
 use crate::task::model::actor_model::{TaskCallBackParam, TaskManagerReq, TaskManagerResult};
@@ -17,6 +17,8 @@ use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::HashMap;
 use std::sync::Arc;
+use crate::raft::cluster::route::RaftRequestRoute;
+use crate::raft::store::ClientRequest;
 
 #[bean(inject)]
 pub struct TaskManager {
@@ -25,6 +27,7 @@ pub struct TaskManager {
     xxl_request_header: HashMap<String, String>,
     sequence_manager: Option<Addr<SequenceManager>>,
     job_manager: Option<Addr<JobManager>>,
+    raft_request_route: Option<Arc<RaftRequestRoute>>,
 }
 
 impl TaskManager {
@@ -47,6 +50,7 @@ impl TaskManager {
             xxl_request_header,
             sequence_manager: None,
             job_manager: None,
+            raft_request_route: None,
         }
     }
 
@@ -73,11 +77,12 @@ impl TaskManager {
         ctx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         let app_key = AppKey::new(job_info.app_name.clone(), job_info.namespace.clone());
-        if self.sequence_manager.is_none() || self.job_manager.is_none() {
+        if self.sequence_manager.is_none() || self.job_manager.is_none() || self.raft_request_route.is_none() {
             return Err(anyhow::anyhow!("sequence_manager or job_manager is none"));
         }
         let sequence_manager = self.sequence_manager.clone().unwrap();
         let job_manager = self.job_manager.clone().unwrap();
+        let raft_request_route = self.raft_request_route.clone().unwrap();
         if let Some(app_instance_group) = self.app_instance_group.get_mut(&app_key) {
             let select = app_instance_group.select_instance(&job_info.router_strategy, job_info.id);
             Self::run_task(
@@ -88,6 +93,7 @@ impl TaskManager {
                 self.xxl_request_header.clone(),
                 sequence_manager,
                 job_manager,
+                raft_request_route,
             )
             .into_actor(self)
             .map(|mut task_info, act, _ctx| {
@@ -124,6 +130,7 @@ impl TaskManager {
         xxl_request_header: HashMap<String, String>,
         sequence_manager: Addr<SequenceManager>,
         job_manager: Addr<JobManager>,
+        raft_request_route: Arc<RaftRequestRoute>
     ) -> JobTaskInfo {
         let mut task_instance = JobTaskInfo::from_job(trigger_time, &job_info);
         let client = reqwest::Client::new();
@@ -135,8 +142,9 @@ impl TaskManager {
         } else {
             log::error!("get task id error!");
             task_instance.status = TaskStatusType::Error;
+            task_instance.finish_time = now_second_u32();
             task_instance.trigger_message = Arc::new("get task id error!".to_string());
-            job_manager.do_send(JobManagerReq::UpdateTask(Arc::new(task_instance.clone())));
+            raft_request_route.request(ClientRequest::JobReq {req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone()))}).await.ok();
             return task_instance;
         };
         task_instance.task_id = task_id;
@@ -146,16 +154,19 @@ impl TaskManager {
         if let InstanceAddrSelectResult::Selected(addr) = &select_instance {
             task_instance.instance_addr = addr.clone();
         }
-        job_manager.do_send(JobManagerReq::UpdateTask(Arc::new(task_instance.clone())));
+        raft_request_route.request(ClientRequest::JobReq {req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone()))}).await.ok();
         match select_instance {
             InstanceAddrSelectResult::Selected(addr) => {
-                if Self::do_run_task(addr, &param, &client, &xxl_request_header)
+                match Self::do_run_task(addr, &param, &client, &xxl_request_header)
                     .await
-                    .is_err()
                 {
-                    //todo 重试
-                    task_instance.status = TaskStatusType::Error;
-                    task_instance.finish_time = now_second_u32();
+                    Err(err) => {
+                        //todo 重试
+                        task_instance.trigger_message = Arc::new(err.to_string());
+                        task_instance.status = TaskStatusType::Error;
+                        task_instance.finish_time = now_second_u32();
+                    }
+                    _=> {}
                 }
             }
             InstanceAddrSelectResult::ALL(addrs) => {
@@ -171,7 +182,7 @@ impl TaskManager {
                 task_instance.finish_time = now_second_u32();
             }
         }
-        job_manager.do_send(JobManagerReq::UpdateTask(Arc::new(task_instance.clone())));
+        raft_request_route.request(ClientRequest::JobReq {req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone()))}).await.ok();
         task_instance
     }
     async fn do_run_task(
@@ -227,6 +238,7 @@ impl Inject for TaskManager {
     ) {
         self.sequence_manager = factory_data.get_actor();
         self.job_manager = factory_data.get_actor();
+        self.raft_request_route = factory_data.get_bean();
     }
 }
 

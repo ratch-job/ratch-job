@@ -6,6 +6,7 @@ use crate::job::model::enum_type::{
 use crate::job::model::job::{JobParam, JobTaskLogQueryParam};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use crate::common::datetime_utils::now_millis;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +58,7 @@ impl JobInfoParam {
                 .map(|s| ExecutorBlockStrategy::from_str(&s)),
             timeout_second: self.timeout_second,
             try_times: self.try_times,
+            update_time: Some(now_millis())
         }
     }
 }

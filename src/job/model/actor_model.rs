@@ -8,10 +8,7 @@ use std::sync::Arc;
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<JobManagerResult>")]
 pub enum JobManagerReq {
-    AddJob(JobParam),
-    UpdateJob(JobParam),
     UpdateTask(Arc<JobTaskInfo>),
-    Remove(u64),
     GetJob(u64),
     QueryJob(JobQueryParam),
     QueryJobTaskLog(JobTaskLogQueryParam),
