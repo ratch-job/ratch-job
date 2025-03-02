@@ -1,3 +1,4 @@
+use crate::common::constant;
 use std::sync::Arc;
 
 const DEFAULT_DB_PATH: &str = "ratch_db";
@@ -13,6 +14,12 @@ pub struct AppConfig {
     pub grpc_cluster_port: u16,
     pub run_in_docker: bool,
     pub gmt_fixed_offset_hours: Option<i32>,
+    pub raft_node_id: u64,
+    pub raft_node_addr: String,
+    pub raft_auto_init: bool,
+    pub raft_join_addr: String,
+    pub raft_snapshot_log_size: u64,
+    pub cluster_token: Arc<String>,
 }
 
 impl AppConfig {
@@ -44,6 +51,24 @@ impl AppConfig {
             .unwrap_or_default()
             .parse()
             .ok();
+        let cluster_token = std::env::var("RATCH_CLUSTER_TOKEN")
+            .map(Arc::new)
+            .unwrap_or(constant::EMPTY_ARC_STR.clone());
+        let raft_node_id = std::env::var("RATCH_RAFT_NODE_ID")
+            .unwrap_or("1".to_owned())
+            .parse()
+            .unwrap_or(1);
+        let raft_node_addr = std::env::var("RATCH_RAFT_NODE_ADDR")
+            .unwrap_or(format!("127.0.0.1:{}", &grpc_cluster_port));
+        let raft_auto_init = std::env::var("RATCH_RAFT_AUTO_INIT")
+            .unwrap_or("".to_owned())
+            .parse()
+            .unwrap_or(raft_node_id == 1);
+        let raft_join_addr = std::env::var("RATCH_RAFT_JOIN_ADDR").unwrap_or_default();
+        let raft_snapshot_log_size = std::env::var("RATCH_RAFT_SNAPSHOT_LOG_SIZE")
+            .unwrap_or("10000".to_owned())
+            .parse()
+            .unwrap_or(10000);
         Self {
             local_db_dir,
             http_api_port,
@@ -54,6 +79,12 @@ impl AppConfig {
             grpc_cluster_port,
             run_in_docker,
             gmt_fixed_offset_hours,
+            cluster_token,
+            raft_node_id,
+            raft_node_addr,
+            raft_auto_init,
+            raft_join_addr,
+            raft_snapshot_log_size,
         }
     }
 
