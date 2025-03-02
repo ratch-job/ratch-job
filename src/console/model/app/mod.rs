@@ -17,7 +17,7 @@ pub struct AppInfoParam {
 impl AppInfoParam {
     pub fn to_param(self) -> AppParam {
         AppParam {
-            name: self.app_name.unwrap_or_default(),
+            app_name: self.app_name.unwrap_or_default(),
             namespace: get_namespace_by_option(&self.namespace),
             label: self.label,
             register_type: self.register_type.map(|s| RegisterType::from_str(&s)),

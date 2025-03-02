@@ -16,7 +16,7 @@ use crate::common::constant::{
     SEQUENCE_TABLE_NAME,
 };
 use crate::raft::store::model::SnapshotRecordDto;
-use crate::raft::store::raftdata::RaftDataWrap;
+use crate::raft::store::raftdata::RaftDataHandler;
 use crate::raft::store::raftsnapshot::SnapshotWriterActor;
 use crate::raft::store::{ClientRequest, ClientResponse};
 use actix::prelude::*;
@@ -26,12 +26,12 @@ use async_trait::async_trait;
 use bean_factory::{bean, Inject};
 
 pub struct LogRecordLoaderInstance {
-    pub(crate) data_wrap: Arc<RaftDataWrap>,
+    pub(crate) data_wrap: Arc<RaftDataHandler>,
     pub(crate) index_manager: Addr<RaftIndexManager>,
 }
 
 impl LogRecordLoaderInstance {
-    fn new(data_wrap: Arc<RaftDataWrap>, index_manager: Addr<RaftIndexManager>) -> Self {
+    fn new(data_wrap: Arc<RaftDataHandler>, index_manager: Addr<RaftIndexManager>) -> Self {
         Self {
             data_wrap,
             index_manager,
@@ -44,33 +44,12 @@ impl LogRecordLoader for LogRecordLoaderInstance {
     async fn load(&self, record: super::model::LogRecordDto) -> anyhow::Result<()> {
         let entry = StoreUtils::log_record_to_entry(record)?;
         match entry.payload {
-            EntryPayload::Normal(req) => match req.data {
-                ClientRequest::NodeAddr { id, addr } => {
-                    self.index_manager
-                        .send(RaftIndexRequest::AddNodeAddr(id, addr))
-                        .await
-                        .ok();
-                }
-                ClientRequest::Members(member) => {
-                    self.index_manager
-                        .send(RaftIndexRequest::SaveMember {
-                            member: member.clone(),
-                            member_after_consensus: None,
-                            node_addr: None,
-                        })
-                        .await
-                        .ok();
-                }
-                ClientRequest::SequenceReq { req } => {
-                    self.data_wrap.sequence_db.send(req).await.ok();
-                }
-                ClientRequest::JobReq { req } => {
-                    self.data_wrap.job_manager.send(req).await.ok();
-                }
-                ClientRequest::ScheduleReq { req } => {
-                    self.data_wrap.schedule_manager.send(req).await.ok();
-                }
-            },
+            EntryPayload::Normal(req) => {
+                self.data_wrap
+                    .load_log(req.data, &self.index_manager)
+                    .await
+                    .ok();
+            }
             _ => {}
         }
         Ok(())
@@ -82,7 +61,7 @@ pub struct StateApplyManager {
     index_manager: Option<Addr<RaftIndexManager>>,
     snapshot_manager: Option<Addr<RaftSnapshotManager>>,
     log_manager: Option<Addr<RaftLogManager>>,
-    data_wrap: Option<Arc<RaftDataWrap>>,
+    data_wrap: Option<Arc<RaftDataHandler>>,
     snapshot_next_index: u64,
     last_applied_log: u64,
 }
@@ -199,37 +178,11 @@ impl StateApplyManager {
     }
 
     async fn do_load_snapshot(
-        data_wrap: Arc<RaftDataWrap>,
+        data_wrap: Arc<RaftDataHandler>,
         mut reader: SnapshotReader,
     ) -> anyhow::Result<()> {
         while let Ok(Some(record)) = reader.read_record().await {
-            /*
-            if record.tree.as_str() == SEQUENCE_TABLE_NAME.as_str() {
-                let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
-                data_wrap.sequence_db.send(req).await??;
-            }
-             */
-            match record.tree.as_str() {
-                ref tree if *tree == SEQUENCE_TABLE_NAME.as_str() => {
-                    let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
-                    data_wrap.sequence_db.send(req).await??;
-                }
-                ref tree
-                    if *tree == JOB_TABLE_NAME.as_str()
-                        || *tree == JOB_TASK_TABLE_NAME.as_str() =>
-                {
-                    let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
-                    data_wrap.job_manager.send(req).await??;
-                }
-                ref tree
-                    if *tree == JOB_TASK_RUNNING_TABLE_NAME.as_str()
-                        || *tree == JOB_TASK_HISTORY_TABLE_NAME.as_str() =>
-                {
-                    let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
-                    data_wrap.schedule_manager.send(req).await??;
-                }
-                _ => {}
-            }
+            data_wrap.load_snapshot(record).await?;
         }
         Ok(())
     }
@@ -268,86 +221,34 @@ impl StateApplyManager {
         if let Some(data_wrap) = self.data_wrap.as_ref() {}
     }
 
-    /// 批量处理请求，一段是由主节点到从节点，不需要返回值
+    /// 批量处理请求，一般是由主节点到从节点，不需要返回值
     fn apply_request_to_state_machine(&mut self, request: ApplyRequestDto) -> anyhow::Result<()> {
         //self.last_applied_log = request.index;
-        //todo
-        match request.request {
-            ClientRequest::NodeAddr { id, addr } => {
-                if let Some(index_manager) = &self.index_manager {
-                    index_manager.do_send(RaftIndexRequest::AddNodeAddr(id, addr));
-                }
-            }
-            ClientRequest::Members(member) => {
-                if let Some(index_manager) = &self.index_manager {
-                    index_manager.do_send(RaftIndexRequest::SaveMember {
-                        member: member.clone(),
-                        member_after_consensus: None,
-                        node_addr: None,
-                    });
-                }
-            }
-            ClientRequest::SequenceReq { req } => {
-                if let Some(data_wrap) = &self.data_wrap {
-                    data_wrap.sequence_db.do_send(req);
-                }
-            }
-            ClientRequest::JobReq { req } => {
-                if let Some(data_wrap) = &self.data_wrap {
-                    data_wrap.job_manager.do_send(req);
-                }
-            }
-            ClientRequest::ScheduleReq { req } => {
-                if let Some(data_wrap) = &self.data_wrap {
-                    data_wrap.schedule_manager.do_send(req);
-                }
-            }
-        };
+        if let (Some(data_wrap), Some(index_manager)) = (&self.data_wrap, &self.index_manager) {
+            data_wrap.do_send_log(request.request, index_manager)?;
+        }
         Ok(())
     }
 
     /// 接收raft请求到状态机，需要返回结果到调用端
     async fn async_apply_request_to_state_machine(
         request: ApplyRequestDto,
-        raft_data_wrap: &RaftDataWrap,
+        raft_data_wrap: &RaftDataHandler,
         index_manager: Addr<RaftIndexManager>,
     ) -> anyhow::Result<ClientResponse> {
         let last_applied_log = request.index;
-        let r = match request.request {
-            ClientRequest::NodeAddr { id, addr } => {
-                index_manager.do_send(RaftIndexRequest::AddNodeAddr(id, addr));
-                Ok(ClientResponse::Success)
-            }
-            ClientRequest::Members(member) => {
-                index_manager.do_send(RaftIndexRequest::SaveMember {
-                    member: member.clone(),
-                    member_after_consensus: None,
-                    node_addr: None,
-                });
-                Ok(ClientResponse::Success)
-            }
-            ClientRequest::SequenceReq { req } => {
-                let r = raft_data_wrap.sequence_db.send(req).await??;
-                Ok(ClientResponse::SequenceResp { resp: r })
-            }
-            ClientRequest::JobReq { req } => {
-                let r = raft_data_wrap.job_manager.send(req).await??;
-                Ok(ClientResponse::JobResp { resp: r })
-            }
-            ClientRequest::ScheduleReq { req } => {
-                let r = raft_data_wrap.schedule_manager.send(req).await??;
-                Ok(ClientResponse::ScheduleReq { resp: r })
-            }
-        };
+        let r = raft_data_wrap
+            .apply_log_to_state_machine(request.request, &index_manager)
+            .await?;
         index_manager.do_send(RaftIndexRequest::SaveLastAppliedLog(last_applied_log));
-        r
+        Ok(r)
     }
 
     async fn do_build_snapshot(
         log_manager: Addr<RaftLogManager>,
         index_manager: Addr<RaftIndexManager>,
         snapshot_manager: Addr<RaftSnapshotManager>,
-        data_wrap: Arc<RaftDataWrap>,
+        data_wrap: Arc<RaftDataHandler>,
         last_index: u64,
     ) -> anyhow::Result<(SnapshotHeaderDto, Arc<String>, u64)> {
         //1. get last applied log
@@ -395,18 +296,7 @@ impl StateApplyManager {
             _ => return Err(anyhow::anyhow!("RaftSnapshotResponse is error")),
         };
         //4. write data
-        data_wrap
-            .sequence_db
-            .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
-            .await??;
-        data_wrap
-            .job_manager
-            .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
-            .await??;
-        data_wrap
-            .schedule_manager
-            .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
-            .await??;
+        data_wrap.build_snapshot(writer.clone()).await?;
 
         //5. flush to file
         writer
