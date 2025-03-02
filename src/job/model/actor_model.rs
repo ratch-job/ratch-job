@@ -28,6 +28,7 @@ pub enum JobManagerRaftReq {
     AddJob(JobParam),
     UpdateJob(JobParam),
     UpdateTask(Arc<JobTaskInfo>),
+    UpdateTaskList(Vec<Arc<JobTaskInfo>>),
     Remove(u64),
 }
 

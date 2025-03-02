@@ -1,4 +1,5 @@
 use crate::common::constant::SEQ_JOB_ID;
+use crate::common::datetime_utils::now_millis;
 use crate::common::share_data::ShareData;
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
@@ -11,7 +12,6 @@ use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::future::Future;
 use std::sync::Arc;
-use crate::common::datetime_utils::now_millis;
 
 async fn do_create_job(
     share_data: Data<Arc<ShareData>>,

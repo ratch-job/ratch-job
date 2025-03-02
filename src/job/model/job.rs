@@ -82,7 +82,7 @@ impl JobInfo {
         if let Some(update_time) = job_param.update_time {
             self.create_time = update_time;
         }
-        self.version_id+=1;
+        self.version_id += 1;
     }
 
     pub fn check_valid(&self) -> anyhow::Result<()> {

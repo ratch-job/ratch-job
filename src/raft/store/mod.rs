@@ -1,5 +1,6 @@
 use self::model::LogRecordDto;
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerRaftResult};
+use crate::schedule::model::actor_model::{ScheduleManagerRaftReq, ScheduleManagerRaftResult};
 use crate::sequence::model::{SequenceRaftReq, SequenceRaftResult};
 use async_raft_ext::raft::{Entry, EntryPayload};
 use async_raft_ext::{AppData, AppDataResponse};
@@ -23,6 +24,7 @@ pub enum ClientRequest {
     Members(Vec<u64>),
     SequenceReq { req: SequenceRaftReq },
     JobReq { req: JobManagerRaftReq },
+    ScheduleReq { req: ScheduleManagerRaftReq },
 }
 
 impl AppData for ClientRequest {}
@@ -33,6 +35,7 @@ pub enum ClientResponse {
     Fail,
     SequenceResp { resp: SequenceRaftResult },
     JobResp { resp: JobManagerRaftResult },
+    ScheduleReq { resp: ScheduleManagerRaftResult },
 }
 
 impl Default for ClientResponse {

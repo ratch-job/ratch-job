@@ -11,7 +11,10 @@ use super::{
     },
     StoreUtils,
 };
-use crate::common::constant::SEQUENCE_TABLE_NAME;
+use crate::common::constant::{
+    JOB_TABLE_NAME, JOB_TASK_HISTORY_TABLE_NAME, JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME,
+    SEQUENCE_TABLE_NAME,
+};
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftdata::RaftDataWrap;
 use crate::raft::store::raftsnapshot::SnapshotWriterActor;
@@ -63,6 +66,9 @@ impl LogRecordLoader for LogRecordLoaderInstance {
                 }
                 ClientRequest::JobReq { req } => {
                     self.data_wrap.job_manager.send(req).await.ok();
+                }
+                ClientRequest::ScheduleReq { req } => {
+                    self.data_wrap.schedule_manager.send(req).await.ok();
                 }
             },
             _ => {}
@@ -197,9 +203,32 @@ impl StateApplyManager {
         mut reader: SnapshotReader,
     ) -> anyhow::Result<()> {
         while let Ok(Some(record)) = reader.read_record().await {
+            /*
             if record.tree.as_str() == SEQUENCE_TABLE_NAME.as_str() {
                 let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
                 data_wrap.sequence_db.send(req).await??;
+            }
+             */
+            match record.tree.as_str() {
+                ref tree if *tree == SEQUENCE_TABLE_NAME.as_str() => {
+                    let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
+                    data_wrap.sequence_db.send(req).await??;
+                }
+                ref tree
+                    if *tree == JOB_TABLE_NAME.as_str()
+                        || *tree == JOB_TASK_TABLE_NAME.as_str() =>
+                {
+                    let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
+                    data_wrap.job_manager.send(req).await??;
+                }
+                ref tree
+                    if *tree == JOB_TASK_RUNNING_TABLE_NAME.as_str()
+                        || *tree == JOB_TASK_HISTORY_TABLE_NAME.as_str() =>
+                {
+                    let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
+                    data_wrap.schedule_manager.send(req).await??;
+                }
+                _ => {}
             }
         }
         Ok(())
@@ -268,6 +297,11 @@ impl StateApplyManager {
                     data_wrap.job_manager.do_send(req);
                 }
             }
+            ClientRequest::ScheduleReq { req } => {
+                if let Some(data_wrap) = &self.data_wrap {
+                    data_wrap.schedule_manager.do_send(req);
+                }
+            }
         };
         Ok(())
     }
@@ -299,6 +333,10 @@ impl StateApplyManager {
             ClientRequest::JobReq { req } => {
                 let r = raft_data_wrap.job_manager.send(req).await??;
                 Ok(ClientResponse::JobResp { resp: r })
+            }
+            ClientRequest::ScheduleReq { req } => {
+                let r = raft_data_wrap.schedule_manager.send(req).await??;
+                Ok(ClientResponse::ScheduleReq { resp: r })
             }
         };
         index_manager.do_send(RaftIndexRequest::SaveLastAppliedLog(last_applied_log));
@@ -359,6 +397,14 @@ impl StateApplyManager {
         //4. write data
         data_wrap
             .sequence_db
+            .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
+            .await??;
+        data_wrap
+            .job_manager
+            .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
+            .await??;
+        data_wrap
+            .schedule_manager
             .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
             .await??;
 

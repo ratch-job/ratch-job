@@ -6,19 +6,19 @@ use crate::common::get_app_version;
 use crate::job::core::JobManager;
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerReq};
 use crate::job::model::job::JobInfo;
+use crate::raft::cluster::route::RaftRequestRoute;
+use crate::raft::store::ClientRequest;
 use crate::sequence::{SequenceManager, SequenceRequest, SequenceResult};
-use crate::task::model::actor_model::{TaskCallBackParam, TaskManagerReq, TaskManagerResult};
+use crate::task::model::actor_model::{TaskManagerReq, TaskManagerResult};
 use crate::task::model::app_instance::{AppInstanceStateGroup, InstanceAddrSelectResult};
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobRunParam;
-use crate::task::model::task::JobTaskInfo;
+use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use crate::task::request_client::XxlClient;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::raft::cluster::route::RaftRequestRoute;
-use crate::raft::store::ClientRequest;
 
 #[bean(inject)]
 pub struct TaskManager {
@@ -77,7 +77,10 @@ impl TaskManager {
         ctx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         let app_key = AppKey::new(job_info.app_name.clone(), job_info.namespace.clone());
-        if self.sequence_manager.is_none() || self.job_manager.is_none() || self.raft_request_route.is_none() {
+        if self.sequence_manager.is_none()
+            || self.job_manager.is_none()
+            || self.raft_request_route.is_none()
+        {
             return Err(anyhow::anyhow!("sequence_manager or job_manager is none"));
         }
         let sequence_manager = self.sequence_manager.clone().unwrap();
@@ -130,7 +133,7 @@ impl TaskManager {
         xxl_request_header: HashMap<String, String>,
         sequence_manager: Addr<SequenceManager>,
         job_manager: Addr<JobManager>,
-        raft_request_route: Arc<RaftRequestRoute>
+        raft_request_route: Arc<RaftRequestRoute>,
     ) -> JobTaskInfo {
         let mut task_instance = JobTaskInfo::from_job(trigger_time, &job_info);
         let client = reqwest::Client::new();
@@ -144,7 +147,12 @@ impl TaskManager {
             task_instance.status = TaskStatusType::Error;
             task_instance.finish_time = now_second_u32();
             task_instance.trigger_message = Arc::new("get task id error!".to_string());
-            raft_request_route.request(ClientRequest::JobReq {req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone()))}).await.ok();
+            raft_request_route
+                .request(ClientRequest::JobReq {
+                    req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone())),
+                })
+                .await
+                .ok();
             return task_instance;
         };
         task_instance.task_id = task_id;
@@ -154,19 +162,22 @@ impl TaskManager {
         if let InstanceAddrSelectResult::Selected(addr) = &select_instance {
             task_instance.instance_addr = addr.clone();
         }
-        raft_request_route.request(ClientRequest::JobReq {req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone()))}).await.ok();
+        raft_request_route
+            .request(ClientRequest::JobReq {
+                req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone())),
+            })
+            .await
+            .ok();
         match select_instance {
             InstanceAddrSelectResult::Selected(addr) => {
-                match Self::do_run_task(addr, &param, &client, &xxl_request_header)
-                    .await
-                {
+                match Self::do_run_task(addr, &param, &client, &xxl_request_header).await {
                     Err(err) => {
                         //todo 重试
                         task_instance.trigger_message = Arc::new(err.to_string());
                         task_instance.status = TaskStatusType::Error;
                         task_instance.finish_time = now_second_u32();
                     }
-                    _=> {}
+                    _ => {}
                 }
             }
             InstanceAddrSelectResult::ALL(addrs) => {
@@ -182,7 +193,12 @@ impl TaskManager {
                 task_instance.finish_time = now_second_u32();
             }
         }
-        raft_request_route.request(ClientRequest::JobReq {req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone()))}).await.ok();
+        raft_request_route
+            .request(ClientRequest::JobReq {
+                req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone())),
+            })
+            .await
+            .ok();
         task_instance
     }
     async fn do_run_task(

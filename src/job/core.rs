@@ -1,6 +1,7 @@
 use crate::common::byte_utils::id_to_bin;
-use crate::common::constant::SEQUENCE_TABLE_NAME;
-use crate::common::pb::data_object::JobDo;
+use crate::common::constant::{JOB_TABLE_NAME, JOB_TASK_TABLE_NAME, SEQUENCE_TABLE_NAME};
+use crate::common::datetime_utils::now_millis;
+use crate::common::pb::data_object::{JobDo, JobTaskDo};
 use crate::job::job_index::JobQueryParam;
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
@@ -19,13 +20,11 @@ use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use quick_protobuf::{BytesReader, Writer};
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::common::datetime_utils::now_millis;
 
 #[bean(inject)]
 pub struct JobManager {
     job_map: HashMap<u64, JobWrap>,
     schedule_manager: Option<Addr<ScheduleManager>>,
-    task_history_manager: Option<Addr<TaskHistoryManager>>,
     job_task_log_limit: usize,
 }
 
@@ -34,7 +33,6 @@ impl JobManager {
         JobManager {
             job_map: HashMap::new(),
             schedule_manager: None,
-            task_history_manager: None,
             job_task_log_limit: 200,
         }
     }
@@ -51,7 +49,7 @@ impl JobManager {
         }
         let mut job_info: JobInfo = job_param.into();
         job_info.check_valid()?;
-        let now  = now_millis();
+        let now = now_millis();
         job_info.last_modified_millis = now;
         job_info.create_time = now;
         let value = Arc::new(job_info);
@@ -103,8 +101,8 @@ impl JobManager {
     }
 
     fn update_job_task(&mut self, task_log: Arc<JobTaskInfo>) {
-        if let Some(task_history_manager) = self.task_history_manager.as_ref() {
-            task_history_manager.do_send(TaskHistoryManagerReq::UpdateTask(task_log.clone()));
+        if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+            schedule_manager.do_send(ScheduleManagerReq::UpdateTask(task_log.clone()));
         }
         if let Some(job_wrap) = self.job_map.get_mut(&task_log.job_id) {
             job_wrap.update_task_log(task_log, self.job_task_log_limit);
@@ -154,6 +152,7 @@ impl JobManager {
     }
 
     fn build_snapshot(&self, writer: Addr<SnapshotWriterActor>) -> anyhow::Result<()> {
+        //任务
         for (key, job_wrap) in &self.job_map {
             let mut buf = Vec::new();
             {
@@ -162,21 +161,48 @@ impl JobManager {
                 writer.write_message(&value_do)?;
             }
             let record = SnapshotRecordDto {
-                tree: SEQUENCE_TABLE_NAME.clone(),
+                tree: JOB_TABLE_NAME.clone(),
                 key: id_to_bin(*key),
                 value: buf,
                 op_type: 0,
             };
             writer.do_send(SnapshotWriterRequest::Record(record));
         }
+        //任务运行实例
+        for (_, job_wrap) in &self.job_map {
+            for (task_id, task_log) in job_wrap.task_log_map.iter() {
+                let mut buf = Vec::new();
+                {
+                    let mut writer = Writer::new(&mut buf);
+                    let value_do = task_log.as_ref().to_do();
+                    writer.write_message(&value_do)?;
+                }
+                let record = SnapshotRecordDto {
+                    tree: JOB_TASK_TABLE_NAME.clone(),
+                    key: id_to_bin(*task_id),
+                    value: buf,
+                    op_type: 0,
+                };
+                writer.do_send(SnapshotWriterRequest::Record(record));
+            }
+        }
         Ok(())
     }
 
     fn load_snapshot_record(&mut self, record: SnapshotRecordDto) -> anyhow::Result<()> {
-        let mut reader = BytesReader::from_bytes(&record.value);
-        let value_do: JobDo = reader.read_message(&record.value)?;
-        let value = Arc::new(value_do.into());
-        self.do_update_job(value);
+        if record.tree.as_str() == JOB_TABLE_NAME.as_str() {
+            let mut reader = BytesReader::from_bytes(&record.value);
+            let value_do: JobDo = reader.read_message(&record.value)?;
+            let value = Arc::new(value_do.into());
+            self.do_update_job(value);
+        } else if record.tree.as_str() == JOB_TASK_TABLE_NAME.as_str() {
+            let mut reader = BytesReader::from_bytes(&record.value);
+            let value_do: JobTaskDo = reader.read_message(&record.value)?;
+            let value: Arc<JobTaskInfo> = Arc::new(value_do.into());
+            if let Some(job_wrap) = self.job_map.get_mut(&value.job_id) {
+                job_wrap.update_task_log(value, self.job_task_log_limit);
+            }
+        }
         Ok(())
     }
 
@@ -203,7 +229,6 @@ impl Inject for JobManager {
         _ctx: &mut Self::Context,
     ) {
         self.schedule_manager = factory_data.get_actor();
-        self.task_history_manager = factory_data.get_actor();
     }
 }
 
@@ -252,6 +277,11 @@ impl Handler<JobManagerRaftReq> for JobManager {
             }
             JobManagerRaftReq::UpdateTask(task_info) => {
                 self.update_job_task(task_info);
+            }
+            JobManagerRaftReq::UpdateTaskList(tasks) => {
+                for tasks in tasks {
+                    self.update_job_task(tasks);
+                }
             }
         }
         Ok(JobManagerRaftResult::None)

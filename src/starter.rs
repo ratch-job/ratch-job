@@ -47,8 +47,10 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         SequenceManager::new().start(),
     ));
+    let schedule_manager =
+        ScheduleManager::new(app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60)).start();
     factory.register(BeanDefinition::actor_with_inject_from_obj(
-        ScheduleManager::new(app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60)).start(),
+        schedule_manager.clone(),
     ));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         TaskManager::new(app_config.clone()).start(),
@@ -97,6 +99,7 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     let raft_data_wrap = Arc::new(RaftDataWrap {
         sequence_db: sequence_db_addr,
         job_manager,
+        schedule_manager,
     });
     factory.register(BeanDefinition::from_obj(raft_data_wrap.clone()));
     let raft = build_raft(&app_config, store.clone(), cluster_sender.clone()).await?;

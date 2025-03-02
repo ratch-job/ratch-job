@@ -1,4 +1,5 @@
 use crate::common::constant::SEQ_JOB_ID;
+use crate::common::datetime_utils::now_millis;
 use crate::common::model::{ApiResult, PageResult};
 use crate::common::share_data::ShareData;
 use crate::console::model::job::{JobInfoParam, JobQueryListRequest, JobTaskLogQueryListRequest};
@@ -8,12 +9,12 @@ use crate::job::model::actor_model::{
 };
 use crate::job::model::job::JobParam;
 use crate::raft::store::{ClientRequest, ClientResponse};
+use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
 use crate::sequence::{SequenceRequest, SequenceResult};
 use crate::task::model::actor_model::{TaskHistoryManagerReq, TaskHistoryManagerResult};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
-use crate::common::datetime_utils::now_millis;
 
 pub(crate) async fn query_job_list(
     share_data: Data<Arc<ShareData>>,
@@ -183,9 +184,9 @@ pub(crate) async fn query_latest_task(
     web::Query(request): web::Query<JobTaskLogQueryListRequest>,
 ) -> impl Responder {
     let param = request.to_param();
-    if let Ok(Ok(TaskHistoryManagerResult::JobTaskLogPageInfo(total_count, list))) = share_data
-        .task_history_manager
-        .send(TaskHistoryManagerReq::QueryJobTaskLog(param))
+    if let Ok(Ok(ScheduleManagerResult::JobTaskLogPageInfo(total_count, list))) = share_data
+        .schedule_manager
+        .send(ScheduleManagerReq::QueryJobTaskLog(param))
         .await
     {
         HttpResponse::Ok().json(ApiResult::success(Some(PageResult { total_count, list })))

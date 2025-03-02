@@ -1,16 +1,8 @@
 use crate::app::model::AppKey;
 use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
-use crate::task::model::task::JobTaskInfo;
+use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::Message;
 use std::sync::Arc;
-
-#[derive(Debug, Clone)]
-pub struct TaskCallBackParam {
-    pub task_id: u64,
-    pub task_date_time: i64,
-    pub success: bool,
-    pub handle_msg: Option<String>,
-}
 
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<TaskManagerResult>")]

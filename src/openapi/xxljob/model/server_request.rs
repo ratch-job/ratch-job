@@ -1,5 +1,4 @@
 use crate::openapi::xxljob::model::SUCCESS_CODE;
-use crate::task::model::actor_model::TaskCallBackParam;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -21,7 +20,7 @@ pub struct CallbackParam {
     pub handle_msg: Option<String>,
 }
 
-impl From<CallbackParam> for TaskCallBackParam {
+impl From<CallbackParam> for crate::task::model::task::TaskCallBackParam {
     fn from(value: CallbackParam) -> Self {
         Self {
             task_id: value.log_id,

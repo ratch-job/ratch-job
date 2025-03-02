@@ -1,10 +1,10 @@
-use std::borrow::Cow;
 use crate::common::constant::EMPTY_ARC_STR;
+use crate::common::pb::data_object::JobTaskDo;
 use crate::job::model::job::JobInfo;
 use crate::task::model::enum_type::TaskStatusType;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::sync::Arc;
-use crate::common::pb::data_object::JobTaskDo;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,4 +60,13 @@ impl<'a> From<JobTaskDo<'a>> for JobTaskInfo {
             callback_message: Arc::new(task_do.callback_message.to_string()),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskCallBackParam {
+    pub task_id: u64,
+    pub task_date_time: i64,
+    pub success: bool,
+    pub handle_msg: Option<String>,
 }
