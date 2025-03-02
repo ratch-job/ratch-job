@@ -1,8 +1,9 @@
-use crate::app::model::{AppKey, AppManagerReq, AppManagerResult, RegisterType};
+use crate::app::model::{AppKey, AppManagerRaftReq, AppManagerReq, AppManagerResult, RegisterType};
 use crate::common::model::{ApiResult, PageResult};
 use crate::common::share_data::ShareData;
 use crate::console::model::app::{AppInfoParam, AppQueryListRequest};
 use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
+use crate::raft::store::ClientRequest;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
@@ -31,7 +32,7 @@ pub(crate) async fn query_app_info(
     web::Query(param): web::Query<AppInfoParam>,
 ) -> impl Responder {
     let param = param.to_param();
-    if param.name.is_empty() {
+    if param.app_name.is_empty() {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("app name is empty!".to_string()),
@@ -56,16 +57,18 @@ pub(crate) async fn set_app(
     web::Json(param): web::Json<AppInfoParam>,
 ) -> impl Responder {
     let param = param.to_param();
-    if param.name.is_empty() {
+    if param.app_name.is_empty() {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("app name is empty!".to_string()),
         ));
     }
 
-    if let Ok(Ok(_)) = share_data
-        .app_manager
-        .send(AppManagerReq::UpdateApp(param))
+    if let Ok(_) = share_data
+        .raft_request_route
+        .request(ClientRequest::AppReq {
+            req: AppManagerRaftReq::UpdateApp(param),
+        })
         .await
     {
         HttpResponse::Ok().json(ApiResult::success(Some(())))
@@ -103,9 +106,11 @@ pub(crate) async fn remove_app(
         //不存在数据，相当与已删除
         return HttpResponse::Ok().json(ApiResult::success(Some(())));
     }
-    if let Ok(Ok(_)) = share_data
-        .app_manager
-        .send(AppManagerReq::RemoveApp(param.build_app_key()))
+    if let Ok(_) = share_data
+        .raft_request_route
+        .request(ClientRequest::AppReq {
+            req: AppManagerRaftReq::RemoveApp(param.build_app_key()),
+        })
         .await
     {
         HttpResponse::Ok().json(ApiResult::success(Some(())))

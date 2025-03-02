@@ -1,4 +1,5 @@
 use self::model::LogRecordDto;
+use crate::app::model::{AppManagerRaftReq, AppManagerRaftResult};
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerRaftResult};
 use crate::schedule::model::actor_model::{ScheduleManagerRaftReq, ScheduleManagerRaftResult};
 use crate::sequence::model::{SequenceRaftReq, SequenceRaftResult};
@@ -22,6 +23,7 @@ pub type NodeId = u64;
 pub enum ClientRequest {
     NodeAddr { id: u64, addr: Arc<String> },
     Members(Vec<u64>),
+    AppReq { req: AppManagerRaftReq },
     SequenceReq { req: SequenceRaftReq },
     JobReq { req: JobManagerRaftReq },
     ScheduleReq { req: ScheduleManagerRaftReq },
@@ -33,6 +35,7 @@ impl AppData for ClientRequest {}
 pub enum ClientResponse {
     Success,
     Fail,
+    AppResp { resp: AppManagerRaftResult },
     SequenceResp { resp: SequenceRaftResult },
     JobResp { resp: JobManagerRaftResult },
     ScheduleReq { resp: ScheduleManagerRaftResult },

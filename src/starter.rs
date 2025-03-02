@@ -12,7 +12,7 @@ use crate::raft::network::core::RaftRouter;
 use crate::raft::network::factory::{RaftClusterRequestSender, RaftConnectionFactory};
 use crate::raft::store::core::Store;
 use crate::raft::store::raftapply::StateApplyManager;
-use crate::raft::store::raftdata::RaftDataWrap;
+use crate::raft::store::raftdata::RaftDataHandler;
 use crate::raft::store::raftindex::RaftIndexManager;
 use crate::raft::store::raftlog::RaftLogManager;
 use crate::raft::store::raftsnapshot::RaftSnapshotManager;
@@ -38,8 +38,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     //let base_path = Arc::new(app_config.local_db_dir.clone());
     let factory = BeanFactory::new();
     factory.register(BeanDefinition::from_obj(app_config.clone()));
+    let app_manager = AppManager::new().start();
     factory.register(BeanDefinition::actor_with_inject_from_obj(
-        AppManager::new().start(),
+        app_manager.clone(),
     ));
     let job_manager = JobManager::new().start();
     factory.register(BeanDefinition::actor_with_inject_from_obj(
@@ -100,8 +101,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
         app_config.clone(),
     ));
     factory.register(BeanDefinition::from_obj(cluster_sender.clone()));
-    let raft_data_wrap = Arc::new(RaftDataWrap {
+    let raft_data_wrap = Arc::new(RaftDataHandler {
         sequence_db: sequence_db_addr,
+        app_manager,
         job_manager,
         schedule_manager,
     });

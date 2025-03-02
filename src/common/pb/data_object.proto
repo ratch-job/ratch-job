@@ -38,3 +38,11 @@ message JobTaskDo {
     uint32 finish_time = 7;
     string callback_message = 8;
 }
+
+message AppInfoDo {
+    string app_name = 1;
+    string namespace = 2;
+    string label = 3;
+    string register_type = 4;
+    bool tmp = 5;
+}
