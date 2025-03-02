@@ -109,6 +109,13 @@ impl AppInstance {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInstanceDto {
+    pub app_key: AppKey,
+    pub instance_addr: Arc<String>,
+}
+
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppKey {

@@ -1,4 +1,5 @@
 use crate::raft::store::{ClientRequest, ClientResponse};
+use actix::Message;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -44,4 +45,33 @@ impl TryFrom<RouterResponse> for ClientResponse {
             _ => Err(anyhow::anyhow!("Invalid RaftResponse")),
         }
     }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct VoteInfo {
+    pub voted_for: u64,
+    pub term: u64,
+}
+
+impl VoteInfo {
+    pub fn new(voted_for: u64, term: u64) -> Self {
+        VoteInfo { voted_for, term }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.voted_for == 0 && self.term == 0
+    }
+}
+
+#[derive(Message, Debug)]
+#[rtype(result = "anyhow::Result<VoteChangeResponse>")]
+pub enum VoteChangeRequest {
+    VoteChange {
+        vote_info: VoteInfo,
+        local_is_master: bool,
+    },
+}
+
+pub enum VoteChangeResponse {
+    None,
 }

@@ -9,6 +9,7 @@ use crate::common::pb::data_object::JobTaskDo;
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerReq};
 use crate::job::model::enum_type::ScheduleType;
 use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
+use crate::raft::cluster::model::{VoteChangeRequest, VoteChangeResponse, VoteInfo};
 use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse};
@@ -46,14 +47,17 @@ pub struct ScheduleManager {
     /// 任务实例历史记录
     history_task: JobTaskLogGroup,
     history_task_log_limit: usize,
+    last_vote_info: VoteInfo,
+    local_is_master: bool,
+    app_start_second: u32,
+    last_trigger_time: u32,
 }
 
 impl Actor for ScheduleManager {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
+    fn started(&mut self, _ctx: &mut Self::Context) {
         log::info!("ScheduleManager started");
-        self.heartbeat(ctx);
     }
 }
 
@@ -87,10 +91,18 @@ impl ScheduleManager {
             running_task: Default::default(),
             history_task: JobTaskLogGroup::new(),
             history_task_log_limit: 10000,
+            last_vote_info: VoteInfo::default(),
+            local_is_master: false,
+            app_start_second: now_second_u32(),
+            last_trigger_time: 0,
         }
     }
 
     fn active_job(&mut self, job_id: u64, time: u32, version: u32) {
+        // 前期如果不是leader节点，则不执行调度任务
+        if !self.local_is_master || time == 0 {
+            return;
+        }
         self.active_time_set
             .add(time as u64, TriggerInfo::new(job_id, time, version));
     }
@@ -180,6 +192,10 @@ impl ScheduleManager {
         }
     }
     fn heartbeat(&mut self, ctx: &mut Context<Self>) {
+        // 前期只支持主节点发起调度
+        if !self.local_is_master {
+            return;
+        }
         self.trigger_job(now_second_u32());
         let later_millis = 1000 - now_millis() % 1000;
         ctx.run_later(
@@ -240,6 +256,9 @@ impl ScheduleManager {
     }
 
     fn update_running_task(&mut self, task_log: Arc<JobTaskInfo>) {
+        if self.last_trigger_time < task_log.trigger_time {
+            self.last_trigger_time = task_log.trigger_time;
+        }
         match task_log.status {
             TaskStatusType::Init | TaskStatusType::Running => {
                 self.running_task.insert(task_log.task_id, task_log);
@@ -322,6 +341,43 @@ impl ScheduleManager {
     fn load_completed(&mut self, _ctx: &mut Context<Self>) -> anyhow::Result<()> {
         Ok(())
     }
+
+    fn update_vote(&mut self, vote_info: VoteInfo, local_is_master: bool, ctx: &mut Context<Self>) {
+        if self.last_vote_info.term < vote_info.term {
+            let last_local_is_master = self.local_is_master;
+            self.last_vote_info = vote_info;
+            self.local_is_master = local_is_master;
+            if !last_local_is_master && local_is_master {
+                self.init_run_job();
+                self.heartbeat(ctx);
+            }
+            if !local_is_master {
+                // 从节点清理任务
+                self.active_time_set.clear();
+            }
+        }
+    }
+
+    fn init_run_job(&mut self) {
+        // 初始化任务调度
+        let start_second = std::cmp::min(
+            std::cmp::max(self.last_trigger_time, self.app_start_second),
+            now_second_u32() - 1,
+        );
+        let mut active_jobs: Vec<(u64, u32, u32)> = Vec::new();
+        if let Some(now_datetime) = get_datetime_by_second(start_second, &self.fixed_offset) {
+            for (_, job_run_state) in &mut self.job_run_state {
+                let next_trigger_time = job_run_state.calculate_first_trigger_time(&now_datetime);
+                if next_trigger_time > 0 {
+                    job_run_state.next_trigger_time = next_trigger_time;
+                    active_jobs.push((job_run_state.id, next_trigger_time, job_run_state.version));
+                }
+            }
+        }
+        for (job_id, next_trigger_time, version) in active_jobs {
+            self.active_job(job_id, next_trigger_time, version);
+        }
+    }
 }
 
 impl Handler<ScheduleManagerReq> for ScheduleManager {
@@ -330,7 +386,7 @@ impl Handler<ScheduleManagerReq> for ScheduleManager {
     fn handle(&mut self, msg: ScheduleManagerReq, _ctx: &mut Context<Self>) -> Self::Result {
         match msg {
             ScheduleManagerReq::UpdateJob(job) => {
-                log::info!("ScheduleManagerReq::UpdateJob,job_id:{}", &job.id);
+                //log::info!("ScheduleManagerReq::UpdateJob,job_id:{}", &job.id);
                 self.update_job(job);
             }
             ScheduleManagerReq::RemoveJob(job_id) => {
@@ -377,5 +433,21 @@ impl Handler<RaftApplyDataRequest> for ScheduleManager {
             }
         }
         Ok(RaftApplyDataResponse::None)
+    }
+}
+
+impl Handler<VoteChangeRequest> for ScheduleManager {
+    type Result = anyhow::Result<VoteChangeResponse>;
+
+    fn handle(&mut self, msg: VoteChangeRequest, ctx: &mut Context<Self>) -> Self::Result {
+        match msg {
+            VoteChangeRequest::VoteChange {
+                vote_info,
+                local_is_master,
+            } => {
+                self.update_vote(vote_info, local_is_master, ctx);
+            }
+        }
+        Ok(VoteChangeResponse::None)
     }
 }
