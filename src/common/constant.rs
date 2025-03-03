@@ -8,4 +8,7 @@ lazy_static::lazy_static! {
 
     pub static ref SEQ_JOB_ID: Arc<String> =  Arc::new("job_id".to_string());
     pub static ref SEQ_TASK_ID: Arc<String> =  Arc::new("task_id".to_string());
+
+    pub static ref SEQ_NOTIFY_OBJECT_ID: Arc<String> =  Arc::new("object_id".to_string());
+    pub static ref SEQ_NOTIFY_OBJEC_REL_ID: Arc<String> =  Arc::new("object_rel_id".to_string());
 }

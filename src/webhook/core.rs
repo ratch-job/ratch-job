@@ -1,124 +1,34 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::sync::Arc;
-use actix::{Actor, Context, Handler};
+use actix::{Actor, ActorFutureExt, Addr, AsyncContext, Context, ContextFutureSpawner, Handler, WrapFuture};
 use anyhow::anyhow;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::app::model::AppKey;
+use crate::common::constant::SEQ_TASK_ID;
 use crate::common::http_utils::HttpUtils;
 use crate::job::core::JobManager;
+use crate::sequence::{SequenceManager, SequenceRequest, SequenceResult};
 use crate::task::request_client::XxlClient;
 use crate::webhook::actor_model::{WebhookManagerReq, WebhookManagerResult};
-use crate::webhook::model::{EventInfo, NotifyEvent, WebHookObject, WebHookSource};
+use crate::webhook::model::{EventInfo, NotifyConfigModelOb, NotifyEvent, NotifyObject, WebHookSource};
 
 #[bean(inject)]
 pub struct WebHookManager {
-    webhook_object_map: HashMap<AppKey, Vec<WebHookObject>>,
-    notify_event_map: HashMap<AppKey, Vec<EventInfo>>,
+    notify_object_map: HashMap<u64, NotifyConfigModelOb>,
+    sequence_manager: Option<Addr<SequenceManager>>,
 }
 
 impl WebHookManager {
     pub fn new() -> Self {
         WebHookManager{
-            webhook_object_map: Default::default(),
-            notify_event_map: Default::default(),
+            notify_object_map: Default::default(),
+            sequence_manager: None,
         }
-    }
-
-    pub fn update_webhook_object(&mut self, app: AppKey, info: WebHookObject) -> anyhow::Result<()> {
-        if let Some(vec) = self.webhook_object_map.get_mut(&app) {
-            let find = vec.iter_mut().find(|w|w.hook_source == info.hook_source.clone());
-            if let Some(hook) = find {
-                hook.token = info.token.clone();
-            }else{
-                vec.push(info);
-            }
-        }else{
-            self.webhook_object_map.insert(app, vec![info]);
-        }
-        Ok(())
-    }
-
-    pub fn delete_webhook_object(&mut self, app: AppKey, source: WebHookSource) -> anyhow::Result<()> {
-        if let Some(vec) = self.webhook_object_map.get_mut(&app) {
-            let find = vec.iter_mut().position(|w|w.hook_source == source);
-            if let Some(i) = find {
-                vec.remove(i);
-            }
-        }
-        Ok(())
-    }
-
-    pub fn update_event_map(&mut self, app: AppKey, event: NotifyEvent, source: WebHookSource ) -> anyhow::Result<()> {
-        if let Some(vec) = self.notify_event_map.get_mut(&app) {
-            let find_opt = vec.iter_mut().find(|w|w.event == event&&w.source == source);
-            if find_opt.is_some(){
-                //已经存在了
-                return Err(anyhow!("已经存在，不允许修改".to_string()))
-            }else{
-                vec.push(EventInfo{ event, source });
-            }
-        }else{
-            self.notify_event_map.insert(app, vec![EventInfo{ event, source }]);
-        }
-        Ok(())
-    }
-
-    pub fn delete_event(&mut self, app: AppKey, event: NotifyEvent, source: WebHookSource) -> anyhow::Result<()> {
-        if let Some(vec) = self.notify_event_map.get_mut(&app) {
-            let find = vec.iter_mut().position(|w|w.event == event&&w.source == source);
-            if let Some(i) = find {
-                vec.remove(i);
-            }
-        }
-        Ok(())
-    }
-
-    pub async fn send_notify(&self, app: AppKey, event: NotifyEvent) {
-        if let Some(vec) = self.notify_event_map.get(&app) {
-            for info in vec {
-                if info.event == event.clone() {
-                    match &event {
-                        NotifyEvent::ExeJobFail(fail_msg) => {
-                            let objects_opt = self.webhook_object_map.get(&app);
-                            if let Some(obs) = objects_opt {
-                                for ob_info in obs {
-                                    match &ob_info.hook_source {
-                                        WebHookSource::WeiXin => {
-                                            let wx = WeChatChannel { webhook_url: ob_info.url.clone()};
-                                            let _ = wx.send(&fail_msg.clone().unwrap_or_default()).await;
-                                        }
-                                        WebHookSource::DingDing => {
-                                        }
-                                        WebHookSource::FeiShu => {
-                                        }
-                                        WebHookSource::Jenkins => {
-                                        }
-                                        WebHookSource::Other => {
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn object_list(&self, app: AppKey) -> Vec<WebHookObject> {
-        self.webhook_object_map.get(&app).map(|x|x.clone()).unwrap_or_default()
-    }
-
-    pub fn event_list(&self, app: AppKey) -> Vec<EventInfo> {
-        self.notify_event_map.get(&app).map(|x|x.clone()).unwrap_or_default()
     }
 }
-
-
-
 
 trait NotificationChannel {
     async fn send(&self, message: &str) -> Result<(), String>;
@@ -156,30 +66,32 @@ impl Handler<WebhookManagerReq> for WebHookManager {
 
     fn handle(&mut self, msg: WebhookManagerReq, ctx: &mut Self::Context) -> Self::Result {
         match msg {
-            WebhookManagerReq::UpdateObject((app, object)) => {
-                let _ = self.update_webhook_object(app, object);
+            WebhookManagerReq::AddConfig(config_model) => {
+                if self.notify_object_map.get(&config_model.id).is_some() {
+                    return Err(anyhow!("添加配置失败，内部错误，相同配置的id已存在"));
+                }
+                self.notify_object_map.insert(config_model.id, config_model.clone());
+                Ok(WebhookManagerResult::ConfigInfo(Some(config_model)))
             }
-            WebhookManagerReq::RemoveObject((app, source)) => {
-                let _ = self.delete_webhook_object(app, source);
+            WebhookManagerReq::UpdateConfig(model) => {
+                if self.notify_object_map.get_mut(&model.id).is_some() {
+                    self.notify_object_map.remove(&model.id);
+                    self.notify_object_map.insert(model.id, model);
+                }
+               Ok(WebhookManagerResult::None)
             }
-            WebhookManagerReq::UpdateEvent((app, event, source)) => {
-                let _ = self.update_event_map(app, event, source);
+            WebhookManagerReq::RemoveConfig(id) => {
+                self.notify_object_map.remove(&id);
+                Ok(WebhookManagerResult::None)
             }
-            WebhookManagerReq::RemoveEvent((app, event, source)) => {
-                let _ = self.delete_event(app, event, source);
+            WebhookManagerReq::QueryConfig(id) => {
+                Ok(WebhookManagerResult::ConfigInfo(self.notify_object_map.get(&id).map(|x|x.clone())))
             }
-            WebhookManagerReq::QueryObject((app, source)) => {}
-            WebhookManagerReq::QueryEvent((app, event, object)) => {}
-            WebhookManagerReq::QueryObjectPage(app) => {
-                let vec = self.object_list(app);
-                return Ok(WebhookManagerResult::ObjectPageInfo(vec.len(), vec))
-            }
-            WebhookManagerReq::QueryEventPage(app) => {
-                let vec = self.event_list(app);
-                return Ok(WebhookManagerResult::EventPageInfo(vec.len(), vec))
+            WebhookManagerReq::QueryConfigPage(_) => {
+                let vec = self.notify_object_map.values().map(|x|x.clone()).collect::<Vec<_>>();
+                Ok(WebhookManagerResult::ConfigPageInfo((vec.len(), vec)))
             }
         }
-        Ok(WebhookManagerResult::None)
     }
 }
 
@@ -192,5 +104,6 @@ impl Inject for WebHookManager {
         _factory: BeanFactory,
         _ctx: &mut Self::Context,
     ) {
+        self.sequence_manager = factory_data.get_actor();
     }
 }

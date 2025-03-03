@@ -36,11 +36,11 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
                 web::resource("/job/task/latest-history")
                     .route(web::get().to(job_api::query_latest_task)),
             )
-            .service(web::resource("/webhook/object/list").route(web::get().to(webhook_api::query_object_list)))
+            /*.service(web::resource("/webhook/object/list").route(web::get().to(webhook_api::query_object_list)))
             .service(web::resource("/webhook/object/update").route(web::post().to(webhook_api::webhook_object_update)))
             .service(web::resource("/webhook/object/remove").route(web::post().to(webhook_api::webhook_object_remove)))
             .service(web::resource("/webhook/event/list").route(web::get().to(webhook_api::query_event_list)))
             .service(web::resource("/webhook/event/update").route(web::post().to(webhook_api::webhook_event_update)))
-            .service(web::resource("/webhook/event/remove").route(web::post().to(webhook_api::webhook_event_remove))),
+            .service(web::resource("/webhook/event/remove").route(web::post().to(webhook_api::webhook_event_remove)))*/,
     );
 }

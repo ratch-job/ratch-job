@@ -48,3 +48,5 @@ cron = "0.15.0"
 inner-mem-cache = "0.1.7"
 ratchjob-web-dist-wrap = "=0.1.1-alpha.2"
 mime_guess = { version = "2" }
+strum = "0.27"
+strum_macros = "0.27"

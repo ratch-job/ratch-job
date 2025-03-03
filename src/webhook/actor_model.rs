@@ -1,25 +1,20 @@
-use crate::app::model::AppKey;
-use crate::webhook::model::{EventInfo, NotifyEvent, WebHookObject, WebHookSource};
+use crate::webhook::model::{EventInfo, NotifyConfigModel, NotifyConfigModelOb, NotifyConfigPageQuery, NotifyEvent, NotifyObject, WebHookSource};
 use actix::Message;
+use crate::console::model::webhook_model;
 
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<WebhookManagerResult>")]
 pub enum WebhookManagerReq {
-    UpdateObject((AppKey, WebHookObject)),
-    RemoveObject((AppKey, WebHookSource)),
-    UpdateEvent((AppKey, NotifyEvent, WebHookSource)),
-    RemoveEvent((AppKey, NotifyEvent, WebHookSource)),
-    QueryObject((AppKey, WebHookSource)),
-    QueryEvent((AppKey, NotifyEvent, WebHookSource)),
-    QueryObjectPage(AppKey),
-    QueryEventPage(AppKey),
+    AddConfig(NotifyConfigModelOb),
+    UpdateConfig(NotifyConfigModelOb),
+    RemoveConfig(u64),
+    QueryConfig(u64),
+    QueryConfigPage(NotifyConfigPageQuery),
 }
 
 #[derive(Debug, Clone)]
 pub enum WebhookManagerResult {
     None,
-    ObjectInfo(Option<WebHookObject>),
-    EventInfo(Option<EventInfo>),
-    ObjectPageInfo(usize, Vec<WebHookObject>),
-    EventPageInfo(usize, Vec<EventInfo>),
+    ConfigInfo(Option<NotifyConfigModelOb>),
+    ConfigPageInfo((usize, Vec<NotifyConfigModelOb>)),
 }
