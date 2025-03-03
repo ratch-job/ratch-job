@@ -1,0 +1,38 @@
+# x86_64 base
+FROM quay.io/pypa/manylinux2014_x86_64 as base-amd64
+# x86_64 builder
+FROM --platform=$BUILDPLATFORM ghcr.io/rust-cross/rust-musl-cross:x86_64-musl as builder-amd64
+
+# aarch64 base
+FROM quay.io/pypa/manylinux2014_aarch64 as base-arm64
+# aarch64 cross compile builder
+FROM --platform=$BUILDPLATFORM ghcr.io/rust-cross/rust-musl-cross:aarch64-musl as builder-arm64
+
+ARG TARGETARCH
+FROM builder-$TARGETARCH as builder
+
+RUN echo $CARGO_BUILD_TARGET && \
+    echo $TARGETARCH && \
+    apt install -y openssh-client
+
+ENV USER root
+ENV PATH /root/.cargo/bin:$PATH
+
+ADD . /ratchjob/
+
+RUN cd /ratchjob && \
+    cargo build --release --target $CARGO_BUILD_TARGET && \
+    mv /ratchjob/target/$CARGO_BUILD_TARGET/release/ratchjob /usr/bin/ratchjob
+
+FROM alpine
+RUN apk update && apk add --no-cache tzdata
+ENV TZ=Asia/Shanghai
+RUN ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo "$TZ" > /etc/timezone
+ENV PATH /root/.cargo/bin:$PATH
+ENV USER root
+ENV RATCH_RUN_IN_DOCKER=true
+RUN mkdir /io
+COPY --from=builder /usr/bin/ratchjob /usr/bin/ratchjob
+WORKDIR /io
+ENTRYPOINT ["/usr/bin/ratchjob"]

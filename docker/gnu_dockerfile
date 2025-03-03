@@ -1,0 +1,29 @@
+# x86_64 builder
+FROM --platform=$BUILDPLATFORM rust:latest as builder-amd64
+
+# aarch64 cross compile builder
+FROM --platform=$BUILDPLATFORM ghcr.io/rust-cross/rust-musl-cross:aarch64-musl as builder-arm64
+
+ARG TARGETARCH
+FROM builder-$TARGETARCH as builder
+
+ARG TARGETARCH
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+
+WORKDIR /usr/src/ratchjob
+COPY . .
+RUN sh ./docker/build_gnu_docker.sh
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y tzdata && rm -rf /var/lib/apt/lists/*
+ENV TZ=Asia/Shanghai
+RUN ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
+
+COPY --from=builder /usr/bin/ratchjob /usr/bin/ratchjob
+ENV USER root
+ENV RATCH_RUN_IN_DOCKER=true
+RUN mkdir /io
+WORKDIR /io
+ENTRYPOINT ["/usr/bin/ratchjob"]
