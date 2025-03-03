@@ -114,6 +114,7 @@ impl AppInstance {
 pub struct AppInstanceDto {
     pub app_key: AppKey,
     pub instance_addr: Arc<String>,
+    pub last_modified_millis: u64,
 }
 
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
@@ -205,6 +206,28 @@ impl AppParam {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInstanceParam {
+    pub app_key: AppKey,
+    pub instance_addr: Arc<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppRouteRequest {
+    RegisterInstance(AppInstanceParam),
+    UnregisterInstance(AppInstanceParam),
+    GetAllInstanceAddrs,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppRouteResponse {
+    AllInstanceAddrs(Vec<AppInstanceDto>),
+    None,
+}
+
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<AppManagerResult>")]
 pub enum AppManagerReq {
@@ -212,15 +235,19 @@ pub enum AppManagerReq {
     RegisterAppInstance(AppKey, Arc<String>),
     UnregisterAppInstance(AppKey, Arc<String>),
     GetAppInstanceAddrs(AppKey),
+    GetAllInstanceAddrs,
     QueryApp(AppQueryParam),
+    AppRouteRequest(AppRouteRequest),
 }
 
 #[derive(Debug, Clone)]
 pub enum AppManagerResult {
     None,
     AppInfo(Option<AppInfoDto>),
-    InstanceAddrs(Arc<Vec<Arc<String>>>),
+    AppInstanceAddrs(Arc<Vec<Arc<String>>>),
     AppPageInfo(usize, Vec<AppInfoDto>),
+    AllInstanceAddrs(Vec<AppInstanceDto>),
+    AppRouteResponse(AppRouteResponse),
 }
 
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]

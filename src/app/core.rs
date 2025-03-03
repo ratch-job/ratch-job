@@ -1,7 +1,8 @@
 use crate::app::app_index::{AppIndex, AppQueryParam};
 use crate::app::model::{
-    AppInfo, AppInfoDto, AppInstance, AppKey, AppManagerRaftReq, AppManagerRaftResult,
-    AppManagerReq, AppManagerResult, AppParam, RegisterType,
+    AppInfo, AppInfoDto, AppInstance, AppInstanceDto, AppKey, AppManagerRaftReq,
+    AppManagerRaftResult, AppManagerReq, AppManagerResult, AppParam, AppRouteRequest,
+    AppRouteResponse, RegisterType,
 };
 use crate::common::byte_utils::id_to_bin;
 use crate::common::constant::{EMPTY_ARC_STR, JOB_TABLE_NAME};
@@ -193,6 +194,36 @@ impl AppManager {
             .map(|v| AppInfoDto::new_from(v, with_addrs))
     }
 
+    fn get_all_instances(&self) -> Vec<AppInstanceDto> {
+        let mut list = Vec::new();
+        for (key, app_info) in &self.app_map {
+            for (addr, instance) in &app_info.instance_map {
+                list.push(AppInstanceDto {
+                    app_key: key.clone(),
+                    instance_addr: addr.clone(),
+                    last_modified_millis: instance.last_modified_millis,
+                });
+            }
+        }
+        list
+    }
+
+    fn app_route_request(&mut self, req: AppRouteRequest) -> anyhow::Result<AppRouteResponse> {
+        match req {
+            AppRouteRequest::RegisterInstance(param) => {
+                self.register_app_instance(param.app_key, param.instance_addr);
+            }
+            AppRouteRequest::UnregisterInstance(param) => {
+                self.unregister_app_instance(param.app_key, param.instance_addr);
+            }
+            AppRouteRequest::GetAllInstanceAddrs => {
+                let list = self.get_all_instances();
+                return Ok(AppRouteResponse::AllInstanceAddrs(list));
+            }
+        }
+        Ok(AppRouteResponse::None)
+    }
+
     fn build_snapshot(&self, writer: Addr<SnapshotWriterActor>) -> anyhow::Result<()> {
         for (key, app_info) in &self.app_map {
             if app_info.tmp {
@@ -266,11 +297,20 @@ impl Handler<AppManagerReq> for AppManager {
             }
             AppManagerReq::GetAppInstanceAddrs(key) => {
                 let addrs = self.get_app_instance_addrs(key);
-                return Ok(AppManagerResult::InstanceAddrs(addrs));
+                return Ok(AppManagerResult::AppInstanceAddrs(addrs));
             }
             AppManagerReq::QueryApp(param) => {
                 let (size, list) = self.query_page_info(&param);
                 return Ok(AppManagerResult::AppPageInfo(size, list));
+            }
+            AppManagerReq::GetAllInstanceAddrs => {
+                let list = self.get_all_instances();
+                return Ok(AppManagerResult::AllInstanceAddrs(list));
+            }
+            AppManagerReq::AppRouteRequest(req) => {
+                return Ok(AppManagerResult::AppRouteResponse(
+                    self.app_route_request(req)?,
+                ));
             }
         }
         Ok(AppManagerResult::None)

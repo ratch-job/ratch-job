@@ -1,5 +1,7 @@
+use crate::app::model::AppRouteRequest;
 use crate::common::datetime_utils::now_millis;
-use crate::raft::cluster::model::{VoteChangeRequest, VoteInfo};
+use crate::raft::cluster::model::{RouterRequest, RouterResponse, VoteChangeRequest, VoteInfo};
+use crate::raft::cluster::router_request;
 use crate::raft::network::factory::RaftClusterRequestSender;
 use crate::schedule::core::ScheduleManager;
 use crate::schedule::model::actor_model::ScheduleManagerRaftReq;
@@ -163,6 +165,36 @@ impl ClusterNodeManager {
             });
         }
     }
+
+    async fn do_send_to_other_nodes(
+        req: RouterRequest,
+        addrs: Vec<Arc<String>>,
+        sender: Arc<RaftClusterRequestSender>,
+    ) -> anyhow::Result<()> {
+        for addr in addrs {
+            router_request(req.clone(), addr, &sender).await?;
+        }
+        Ok(())
+    }
+
+    fn send_to_other_nodes(&mut self, req: ToOtherRequest, ctx: &mut Context<Self>) {
+        let req = match req {
+            ToOtherRequest::AppRouteRequest(req) => RouterRequest::AppRouteRequest(req),
+        };
+        let mut addrs = Vec::with_capacity(self.all_nodes.len());
+        for node in self.all_nodes.values() {
+            if node.is_local {
+                continue;
+            }
+            addrs.push(node.addr.clone());
+        }
+        if let Some(cluster_sender) = self.cluster_sender.clone() {
+            Self::do_send_to_other_nodes(req, addrs, cluster_sender)
+                .into_actor(self)
+                .map(|_, _, _| {})
+                .spawn(ctx)
+        }
+    }
 }
 
 impl Actor for ClusterNodeManager {
@@ -186,6 +218,11 @@ impl Inject for ClusterNodeManager {
     }
 }
 
+#[derive(Debug)]
+pub enum ToOtherRequest {
+    AppRouteRequest(AppRouteRequest),
+}
+
 #[derive(Message, Debug)]
 #[rtype(result = "anyhow::Result<NodeManageResponse>")]
 pub enum NodeManageRequest {
@@ -194,7 +231,7 @@ pub enum NodeManageRequest {
     GetThisNode,
     GetAllNodes,
     GetNode(u64),
-    //SendToOtherNodes
+    SendToOtherNodes(ToOtherRequest),
 }
 
 pub enum NodeManageResponse {
@@ -237,6 +274,10 @@ impl Handler<NodeManageRequest> for ClusterNodeManager {
                 let vote_info = VoteInfo::new(voted_for, current_term);
                 self.last_vote = vote_info;
                 self.notify_vote_change();
+                Ok(NodeManageResponse::None)
+            }
+            NodeManageRequest::SendToOtherNodes(req) => {
+                self.send_to_other_nodes(req, ctx);
                 Ok(NodeManageResponse::None)
             }
         }

@@ -10,6 +10,14 @@ homepage = "https://github.com/ratch-job/ratch-job"
 documentation = "https://docs.rs/ratch-job/latest"
 readme = "README.md"
 keywords = ["ratch-job","ratchjob","xxl-job","xxljob"]
+exclude = [
+    ".github/*",
+    "cluster_example/*",
+    "doc/*",
+    "proto/*",
+    "tools/*",
+    "docker/*",
+]
 
 
 [[bin]]
