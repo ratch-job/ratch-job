@@ -1,10 +1,12 @@
 use crate::common::constant::EMPTY_ARC_STR;
 use crate::common::cron_utils::CronUtil;
+use crate::common::pb::data_object::JobDo;
 use crate::job::model::enum_type::{
     ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
 };
 use crate::task::model::task::JobTaskInfo;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -30,7 +32,7 @@ pub struct JobInfo {
     pub try_times: u32,
     pub version_id: u64,
     pub last_modified_millis: u64,
-    pub register_time: u64,
+    pub create_time: u64,
 }
 
 impl JobInfo {
@@ -77,6 +79,10 @@ impl JobInfo {
         if let Some(try_times) = job_param.try_times {
             self.try_times = try_times;
         }
+        if let Some(update_time) = job_param.update_time {
+            self.create_time = update_time;
+        }
+        self.version_id += 1;
     }
 
     pub fn check_valid(&self) -> anyhow::Result<()> {
@@ -106,6 +112,59 @@ impl JobInfo {
             false
         } else {
             true
+        }
+    }
+
+    pub fn to_do(&self) -> JobDo {
+        JobDo {
+            id: self.id,
+            enable: self.enable,
+            app_name: Cow::Borrowed(&self.app_name),
+            namespace: Cow::Borrowed(&self.namespace),
+            description: Cow::Borrowed(&self.description),
+            schedule_type: Cow::Borrowed(self.schedule_type.to_str()),
+            cron_value: Cow::Borrowed(&self.cron_value),
+            delay_second: self.delay_second,
+            interval_second: self.interval_second,
+            run_mode: Cow::Borrowed(self.run_mode.to_str()),
+            handle_name: Cow::Borrowed(&self.handle_name),
+            trigger_param: Cow::Borrowed(&self.trigger_param),
+            router_strategy: Cow::Borrowed(self.router_strategy.to_str()),
+            past_due_strategy: Cow::Borrowed(self.past_due_strategy.to_str()),
+            blocking_strategy: Cow::Borrowed(self.blocking_strategy.to_str()),
+            timeout_second: self.timeout_second,
+            try_times: self.try_times,
+            version_id: self.version_id,
+            last_modified_millis: self.last_modified_millis,
+            create_time: self.create_time,
+        }
+    }
+}
+
+impl<'a> From<JobDo<'a>> for JobInfo {
+    fn from(job_do: JobDo<'a>) -> Self {
+        JobInfo {
+            id: job_do.id,
+            enable: job_do.enable,
+            app_name: Arc::new(job_do.app_name.to_string()),
+            namespace: Arc::new(job_do.namespace.to_string()),
+            description: Arc::new(job_do.description.to_string()),
+            schedule_type: ScheduleType::from_str(&job_do.schedule_type),
+            cron_value: Arc::new(job_do.cron_value.to_string()),
+            delay_second: job_do.delay_second,
+            interval_second: job_do.interval_second,
+            run_mode: JobRunMode::from_str(&job_do.run_mode).unwrap_or(JobRunMode::Bean),
+            handle_name: Arc::new(job_do.handle_name.to_string()),
+            trigger_param: Arc::new(job_do.trigger_param.to_string()),
+            router_strategy: RouterStrategy::from_str(&job_do.router_strategy)
+                .unwrap_or(RouterStrategy::RoundRobin),
+            past_due_strategy: PastDueStrategy::from_str(&job_do.past_due_strategy),
+            blocking_strategy: ExecutorBlockStrategy::from_str(&job_do.blocking_strategy),
+            timeout_second: job_do.timeout_second,
+            try_times: job_do.try_times,
+            version_id: job_do.version_id,
+            last_modified_millis: job_do.last_modified_millis,
+            create_time: job_do.create_time,
         }
     }
 }
@@ -169,6 +228,7 @@ pub struct JobParam {
     pub blocking_strategy: Option<ExecutorBlockStrategy>,
     pub timeout_second: Option<u32>,
     pub try_times: Option<u32>,
+    pub update_time: Option<u64>,
 }
 
 impl From<JobParam> for JobInfo {
@@ -198,8 +258,8 @@ impl From<JobParam> for JobInfo {
             timeout_second: job_param.timeout_second.unwrap_or_default(),
             try_times: job_param.try_times.unwrap_or_default(),
             version_id: 0,
-            last_modified_millis: 0,
-            register_time: 0,
+            last_modified_millis: job_param.update_time.unwrap_or(0),
+            create_time: 0,
         }
     }
 }
@@ -259,7 +319,7 @@ impl JobInfoDto {
             try_times: job_info.try_times,
             version_id: job_info.version_id,
             last_modified_millis: job_info.last_modified_millis,
-            register_time: job_info.register_time,
+            register_time: job_info.create_time,
         }
     }
 }

@@ -1,6 +1,15 @@
+use crate::common::byte_utils::id_to_bin;
+use crate::common::constant::{JOB_TABLE_NAME, JOB_TASK_TABLE_NAME, SEQUENCE_TABLE_NAME};
+use crate::common::datetime_utils::now_millis;
+use crate::common::pb::data_object::{JobDo, JobTaskDo};
 use crate::job::job_index::JobQueryParam;
-use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
+use crate::job::model::actor_model::{
+    JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
+};
 use crate::job::model::job::{JobInfo, JobInfoDto, JobParam, JobTaskLogQueryParam, JobWrap};
+use crate::raft::store::model::SnapshotRecordDto;
+use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse};
+use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
 use crate::schedule::core::ScheduleManager;
 use crate::schedule::model::actor_model::ScheduleManagerReq;
 use crate::task::model::actor_model::TaskHistoryManagerReq;
@@ -8,6 +17,7 @@ use crate::task::model::task::JobTaskInfo;
 use crate::task::task_history::TaskHistoryManager;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
+use quick_protobuf::{BytesReader, Writer};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -15,7 +25,6 @@ use std::sync::Arc;
 pub struct JobManager {
     job_map: HashMap<u64, JobWrap>,
     schedule_manager: Option<Addr<ScheduleManager>>,
-    task_history_manager: Option<Addr<TaskHistoryManager>>,
     job_task_log_limit: usize,
 }
 
@@ -24,7 +33,6 @@ impl JobManager {
         JobManager {
             job_map: HashMap::new(),
             schedule_manager: None,
-            task_history_manager: None,
             job_task_log_limit: 200,
         }
     }
@@ -39,8 +47,11 @@ impl JobManager {
                 "CreateJob，The job already exists and is repeatedly created"
             ));
         }
-        let job_info: JobInfo = job_param.into();
+        let mut job_info: JobInfo = job_param.into();
         job_info.check_valid()?;
+        let now = now_millis();
+        job_info.last_modified_millis = now;
+        job_info.create_time = now;
         let value = Arc::new(job_info);
         self.job_map.insert(value.id, JobWrap::new(value.clone()));
         if let Some(schedule_manager) = self.schedule_manager.as_ref() {
@@ -78,9 +89,20 @@ impl JobManager {
         }
     }
 
+    fn do_update_job(&mut self, job: Arc<JobInfo>) {
+        if let Some(job_wrap) = self.job_map.get_mut(&job.id) {
+            job_wrap.job = job;
+        } else {
+            self.job_map.insert(job.id, JobWrap::new(job.clone()));
+            if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+                schedule_manager.do_send(ScheduleManagerReq::UpdateJob(job));
+            }
+        }
+    }
+
     fn update_job_task(&mut self, task_log: Arc<JobTaskInfo>) {
-        if let Some(task_history_manager) = self.task_history_manager.as_ref() {
-            task_history_manager.do_send(TaskHistoryManagerReq::UpdateTask(task_log.clone()));
+        if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+            schedule_manager.do_send(ScheduleManagerReq::UpdateTask(task_log.clone()));
         }
         if let Some(job_wrap) = self.job_map.get_mut(&task_log.job_id) {
             job_wrap.update_task_log(task_log, self.job_task_log_limit);
@@ -128,6 +150,65 @@ impl JobManager {
         }
         (index, rlist)
     }
+
+    fn build_snapshot(&self, writer: Addr<SnapshotWriterActor>) -> anyhow::Result<()> {
+        //任务
+        for (key, job_wrap) in &self.job_map {
+            let mut buf = Vec::new();
+            {
+                let mut writer = Writer::new(&mut buf);
+                let value_do = job_wrap.job.as_ref().to_do();
+                writer.write_message(&value_do)?;
+            }
+            let record = SnapshotRecordDto {
+                tree: JOB_TABLE_NAME.clone(),
+                key: id_to_bin(*key),
+                value: buf,
+                op_type: 0,
+            };
+            writer.do_send(SnapshotWriterRequest::Record(record));
+        }
+        //任务运行实例
+        for (_, job_wrap) in &self.job_map {
+            for (task_id, task_log) in job_wrap.task_log_map.iter() {
+                let mut buf = Vec::new();
+                {
+                    let mut writer = Writer::new(&mut buf);
+                    let value_do = task_log.as_ref().to_do();
+                    writer.write_message(&value_do)?;
+                }
+                let record = SnapshotRecordDto {
+                    tree: JOB_TASK_TABLE_NAME.clone(),
+                    key: id_to_bin(*task_id),
+                    value: buf,
+                    op_type: 0,
+                };
+                writer.do_send(SnapshotWriterRequest::Record(record));
+            }
+        }
+        Ok(())
+    }
+
+    fn load_snapshot_record(&mut self, record: SnapshotRecordDto) -> anyhow::Result<()> {
+        if record.tree.as_str() == JOB_TABLE_NAME.as_str() {
+            let mut reader = BytesReader::from_bytes(&record.value);
+            let value_do: JobDo = reader.read_message(&record.value)?;
+            let value = Arc::new(value_do.into());
+            self.do_update_job(value);
+        } else if record.tree.as_str() == JOB_TASK_TABLE_NAME.as_str() {
+            let mut reader = BytesReader::from_bytes(&record.value);
+            let value_do: JobTaskDo = reader.read_message(&record.value)?;
+            let value: Arc<JobTaskInfo> = Arc::new(value_do.into());
+            if let Some(job_wrap) = self.job_map.get_mut(&value.job_id) {
+                job_wrap.update_task_log(value, self.job_task_log_limit);
+            }
+        }
+        Ok(())
+    }
+
+    fn load_completed(&mut self, _ctx: &mut Context<Self>) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 impl Actor for JobManager {
@@ -148,7 +229,6 @@ impl Inject for JobManager {
         _ctx: &mut Self::Context,
     ) {
         self.schedule_manager = factory_data.get_actor();
-        self.task_history_manager = factory_data.get_actor();
     }
 }
 
@@ -157,16 +237,6 @@ impl Handler<JobManagerReq> for JobManager {
 
     fn handle(&mut self, msg: JobManagerReq, _ctx: &mut Self::Context) -> Self::Result {
         match msg {
-            JobManagerReq::AddJob(job_param) => {
-                let value = self.create_job(job_param)?;
-                return Ok(JobManagerResult::JobInfo(Some(value)));
-            }
-            JobManagerReq::UpdateJob(job_param) => {
-                self.update_job(job_param)?;
-            }
-            JobManagerReq::Remove(id) => {
-                self.remove_job(id);
-            }
             JobManagerReq::GetJob(id) => {
                 let job_info = if let Some(job_wrap) = self.job_map.get(&id) {
                     Some(job_wrap.job.clone())
@@ -188,5 +258,51 @@ impl Handler<JobManagerReq> for JobManager {
             }
         }
         Ok(JobManagerResult::None)
+    }
+}
+
+impl Handler<JobManagerRaftReq> for JobManager {
+    type Result = anyhow::Result<JobManagerRaftResult>;
+    fn handle(&mut self, msg: JobManagerRaftReq, _ctx: &mut Self::Context) -> Self::Result {
+        match msg {
+            JobManagerRaftReq::AddJob(job_param) => {
+                let value = self.create_job(job_param)?;
+                return Ok(JobManagerRaftResult::JobInfo(value));
+            }
+            JobManagerRaftReq::UpdateJob(job_param) => {
+                self.update_job(job_param)?;
+            }
+            JobManagerRaftReq::Remove(id) => {
+                self.remove_job(id);
+            }
+            JobManagerRaftReq::UpdateTask(task_info) => {
+                self.update_job_task(task_info);
+            }
+            JobManagerRaftReq::UpdateTaskList(tasks) => {
+                for tasks in tasks {
+                    self.update_job_task(tasks);
+                }
+            }
+        }
+        Ok(JobManagerRaftResult::None)
+    }
+}
+
+impl Handler<RaftApplyDataRequest> for JobManager {
+    type Result = anyhow::Result<RaftApplyDataResponse>;
+
+    fn handle(&mut self, msg: RaftApplyDataRequest, ctx: &mut Self::Context) -> Self::Result {
+        match msg {
+            RaftApplyDataRequest::BuildSnapshot(writer) => {
+                self.build_snapshot(writer)?;
+            }
+            RaftApplyDataRequest::LoadSnapshotRecord(record) => {
+                self.load_snapshot_record(record)?;
+            }
+            RaftApplyDataRequest::LoadCompleted => {
+                self.load_completed(ctx)?;
+            }
+        }
+        Ok(RaftApplyDataResponse::None)
     }
 }

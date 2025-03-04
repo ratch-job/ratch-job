@@ -1,8 +1,12 @@
 use crate::common::constant::SEQ_JOB_ID;
+use crate::common::datetime_utils::now_millis;
 use crate::common::share_data::ShareData;
-use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
+use crate::job::model::actor_model::{
+    JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
+};
 use crate::job::model::job::JobParam;
 use crate::openapi::xxljob::model::XxlApiResult;
+use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::sequence::{SequenceRequest, SequenceResult};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
@@ -19,12 +23,17 @@ async fn do_create_job(
         .await??
     {
         param.id = Some(id);
-        if let JobManagerResult::JobInfo(Some(job_info)) = share_data
-            .job_manager
-            .send(JobManagerReq::AddJob(param))
-            .await??
+        param.update_time = Some(now_millis());
+        if let ClientResponse::JobResp {
+            resp: JobManagerRaftResult::JobInfo(job),
+        } = share_data
+            .raft_request_route
+            .request(ClientRequest::JobReq {
+                req: JobManagerRaftReq::AddJob(param),
+            })
+            .await?
         {
-            Ok(HttpResponse::Ok().json(XxlApiResult::success(Some(job_info))))
+            Ok(HttpResponse::Ok().json(XxlApiResult::success(Some(job))))
         } else {
             Err(anyhow::anyhow!("create job result type error!"))
         }
@@ -48,12 +57,15 @@ pub(crate) async fn create_job(
 
 async fn do_update_job(
     share_data: Data<Arc<ShareData>>,
-    param: JobParam,
+    mut param: JobParam,
 ) -> anyhow::Result<HttpResponse> {
+    param.update_time = Some(now_millis());
     share_data
-        .job_manager
-        .send(JobManagerReq::AddJob(param))
-        .await??;
+        .raft_request_route
+        .request(ClientRequest::JobReq {
+            req: JobManagerRaftReq::UpdateJob(param),
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(XxlApiResult::success(Some(()))))
 }
 pub(crate) async fn update_job(

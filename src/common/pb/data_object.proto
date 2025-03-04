@@ -1,0 +1,48 @@
+// 用于生成 data_object.rs
+// pb-rs data_object.proto
+
+syntax = "proto3";
+
+package data_object;
+
+message JobDo {
+    uint64 id = 1;
+    bool enable = 2;
+    string app_name = 3;
+    string namespace = 4;
+    string description = 5;
+    string schedule_type = 6;
+    string cron_value = 7;
+    uint32 delay_second = 8;
+    uint32 interval_second = 9;
+    string run_mode = 10;
+    string handle_name = 11;
+    string trigger_param = 12;
+    string router_strategy = 13;
+    string past_due_strategy = 14;
+    string blocking_strategy = 15;
+    uint32 timeout_second = 16;
+    uint32 try_times = 17;
+    uint64 version_id = 18;
+    uint64 last_modified_millis = 19;
+    uint64 create_time = 20;
+}
+
+message JobTaskDo {
+    uint64 task_id = 1;
+    uint64 job_id = 2;
+    uint32 trigger_time = 3;
+    string instance_addr = 4;
+    string trigger_message = 5;
+    string status = 6;
+    uint32 finish_time = 7;
+    string callback_message = 8;
+}
+
+message AppInfoDo {
+    string app_name = 1;
+    string namespace = 2;
+    string label = 3;
+    string register_type = 4;
+    bool tmp = 5;
+}

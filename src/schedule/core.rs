@@ -1,18 +1,36 @@
+use crate::common::byte_utils::id_to_bin;
+use crate::common::constant::{
+    JOB_TASK_HISTORY_TABLE_NAME, JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME,
+};
 use crate::common::datetime_utils::{
     get_datetime_by_second, get_datetime_millis, get_local_offset, now_millis, now_second_u32,
 };
+use crate::common::pb::data_object::JobTaskDo;
+use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerReq};
 use crate::job::model::enum_type::ScheduleType;
-use crate::job::model::job::JobInfo;
-use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
+use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
+use crate::raft::cluster::route::RaftRequestRoute;
+use crate::raft::store::model::SnapshotRecordDto;
+use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse};
+use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
+use crate::raft::store::ClientRequest;
+use crate::schedule::job_task::JobTaskLogGroup;
+use crate::schedule::model::actor_model::{
+    ScheduleManagerRaftReq, ScheduleManagerRaftResult, ScheduleManagerReq, ScheduleManagerResult,
+};
 use crate::schedule::model::{JobRunState, TriggerInfo};
 use crate::task::core::TaskManager;
 use crate::task::model::actor_model::TaskManagerReq;
+use crate::task::model::enum_type::TaskStatusType;
+use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::prelude::*;
 use actix_web::cookie::time::macros::datetime;
 use anyhow::anyhow;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, Offset, TimeZone, Utc};
+use futures_util::TryFutureExt;
 use inner_mem_cache::TimeoutSet;
+use quick_protobuf::{BytesReader, Writer};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,6 +40,12 @@ pub struct ScheduleManager {
     active_time_set: TimeoutSet<TriggerInfo>,
     fixed_offset: FixedOffset,
     task_manager: Option<Addr<TaskManager>>,
+    raft_request_route: Option<Arc<RaftRequestRoute>>,
+    /// 运行中的任务实例
+    running_task: HashMap<u64, Arc<JobTaskInfo>>,
+    /// 任务实例历史记录
+    history_task: JobTaskLogGroup,
+    history_task_log_limit: usize,
 }
 
 impl Actor for ScheduleManager {
@@ -36,8 +60,14 @@ impl Actor for ScheduleManager {
 impl Inject for ScheduleManager {
     type Context = Context<Self>;
 
-    fn inject(&mut self, factory_data: FactoryData, factory: BeanFactory, ctx: &mut Self::Context) {
+    fn inject(
+        &mut self,
+        factory_data: FactoryData,
+        _factory: BeanFactory,
+        ctx: &mut Self::Context,
+    ) {
         self.task_manager = factory_data.get_actor();
+        self.raft_request_route = factory_data.get_bean();
     }
 }
 
@@ -53,6 +83,10 @@ impl ScheduleManager {
             active_time_set: TimeoutSet::new(),
             fixed_offset,
             task_manager: None,
+            raft_request_route: None,
+            running_task: Default::default(),
+            history_task: JobTaskLogGroup::new(),
+            history_task_log_limit: 10000,
         }
     }
 
@@ -155,6 +189,139 @@ impl ScheduleManager {
             },
         );
     }
+
+    fn task_callback(
+        &mut self,
+        params: Vec<TaskCallBackParam>,
+        ctx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let mut list = Vec::with_capacity(params.len());
+        for param in params {
+            if let Some(task_instance) = self.running_task.remove(&param.task_id) {
+                let mut task_instance = task_instance.as_ref().clone();
+                task_instance.finish_time = now_second_u32();
+                if param.success {
+                    task_instance.status = TaskStatusType::Success;
+                } else {
+                    task_instance.status = TaskStatusType::Error;
+                    if let Some(msg) = param.handle_msg {
+                        task_instance.callback_message = Arc::new(msg);
+                    }
+                }
+                list.push(Arc::new(task_instance));
+            }
+        }
+        let raft_request_route = self.raft_request_route.clone();
+        if let Some(raft_request_route) = raft_request_route {
+            Self::notify_update_task(raft_request_route, list)
+                .into_actor(self)
+                .map(|_, _, _| {})
+                .spawn(ctx);
+        }
+        Ok(())
+    }
+
+    async fn notify_update_task(
+        raft_request_route: Arc<RaftRequestRoute>,
+        tasks: Vec<Arc<JobTaskInfo>>,
+    ) -> anyhow::Result<()> {
+        raft_request_route
+            .request(ClientRequest::JobReq {
+                req: JobManagerRaftReq::UpdateTaskList(tasks),
+            })
+            .await?;
+        Ok(())
+    }
+
+    fn update_task_log(&mut self, task_log: Arc<JobTaskInfo>) {
+        self.history_task
+            .update_task_log(task_log.clone(), self.history_task_log_limit);
+        self.update_running_task(task_log);
+    }
+
+    fn update_running_task(&mut self, task_log: Arc<JobTaskInfo>) {
+        match task_log.status {
+            TaskStatusType::Init | TaskStatusType::Running => {
+                self.running_task.insert(task_log.task_id, task_log);
+            }
+            TaskStatusType::Error | TaskStatusType::Success => {
+                self.running_task.remove(&task_log.task_id);
+            }
+        }
+    }
+
+    fn query_latest_history_task_logs(
+        &self,
+        query_param: &JobTaskLogQueryParam,
+    ) -> (usize, Vec<Arc<JobTaskInfo>>) {
+        let mut rlist = Vec::new();
+        let end_index = query_param.offset + query_param.limit;
+        let mut index = 0;
+
+        for (_task_id, task_log) in self.history_task.task_log_map.iter().rev() {
+            if index >= query_param.offset && index < end_index {
+                rlist.push(task_log.clone());
+            }
+            index += 1;
+        }
+        (index, rlist)
+    }
+
+    fn build_snapshot(&self, writer: Addr<SnapshotWriterActor>) -> anyhow::Result<()> {
+        //运行实例历史记录
+        for (task_id, task_log) in self.history_task.task_log_map.iter() {
+            let mut buf = Vec::new();
+            {
+                let mut writer = Writer::new(&mut buf);
+                let value_do = task_log.as_ref().to_do();
+                writer.write_message(&value_do)?;
+            }
+            let record = SnapshotRecordDto {
+                tree: JOB_TASK_HISTORY_TABLE_NAME.clone(),
+                key: id_to_bin(*task_id),
+                value: buf,
+                op_type: 0,
+            };
+            writer.do_send(SnapshotWriterRequest::Record(record));
+        }
+        //运行中任务实例
+        for (task_id, task_log) in self.running_task.iter() {
+            let mut buf = Vec::new();
+            {
+                let mut writer = Writer::new(&mut buf);
+                let value_do = task_log.as_ref().to_do();
+                writer.write_message(&value_do)?;
+            }
+            let record = SnapshotRecordDto {
+                tree: JOB_TASK_RUNNING_TABLE_NAME.clone(),
+                key: id_to_bin(*task_id),
+                value: buf,
+                op_type: 0,
+            };
+            writer.do_send(SnapshotWriterRequest::Record(record));
+        }
+        Ok(())
+    }
+
+    fn load_snapshot_record(&mut self, record: SnapshotRecordDto) -> anyhow::Result<()> {
+        if record.tree.as_str() == JOB_TASK_HISTORY_TABLE_NAME.as_str() {
+            let mut reader = BytesReader::from_bytes(&record.value);
+            let value_do: JobTaskDo = reader.read_message(&record.value)?;
+            let value = Arc::new(value_do.into());
+            self.history_task
+                .update_task_log(value, self.history_task_log_limit);
+        } else if record.tree.as_str() == JOB_TASK_RUNNING_TABLE_NAME.as_str() {
+            let mut reader = BytesReader::from_bytes(&record.value);
+            let value_do: JobTaskDo = reader.read_message(&record.value)?;
+            let value: Arc<JobTaskInfo> = Arc::new(value_do.into());
+            self.running_task.insert(value.task_id, value);
+        }
+        Ok(())
+    }
+
+    fn load_completed(&mut self, _ctx: &mut Context<Self>) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 impl Handler<ScheduleManagerReq> for ScheduleManager {
@@ -169,7 +336,46 @@ impl Handler<ScheduleManagerReq> for ScheduleManager {
             ScheduleManagerReq::RemoveJob(job_id) => {
                 self.remove_job(job_id);
             }
+            ScheduleManagerReq::UpdateTask(task) => {
+                self.update_task_log(task);
+            }
+            ScheduleManagerReq::QueryJobTaskLog(param) => {
+                let (total, list) = self.query_latest_history_task_logs(&param);
+                return Ok(ScheduleManagerResult::JobTaskLogPageInfo(total, list));
+            }
         }
         Ok(ScheduleManagerResult::None)
+    }
+}
+
+impl Handler<ScheduleManagerRaftReq> for ScheduleManager {
+    type Result = anyhow::Result<ScheduleManagerRaftResult>;
+
+    fn handle(&mut self, msg: ScheduleManagerRaftReq, ctx: &mut Context<Self>) -> Self::Result {
+        match msg {
+            ScheduleManagerRaftReq::TaskCallBacks(params) => {
+                self.task_callback(params, ctx)?;
+            }
+        }
+        Ok(ScheduleManagerRaftResult::None)
+    }
+}
+
+impl Handler<RaftApplyDataRequest> for ScheduleManager {
+    type Result = anyhow::Result<RaftApplyDataResponse>;
+
+    fn handle(&mut self, msg: RaftApplyDataRequest, ctx: &mut Context<Self>) -> Self::Result {
+        match msg {
+            RaftApplyDataRequest::BuildSnapshot(writer) => {
+                self.build_snapshot(writer)?;
+            }
+            RaftApplyDataRequest::LoadSnapshotRecord(record) => {
+                self.load_snapshot_record(record)?;
+            }
+            RaftApplyDataRequest::LoadCompleted => {
+                self.load_completed(ctx)?;
+            }
+        }
+        Ok(RaftApplyDataResponse::None)
     }
 }

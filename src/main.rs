@@ -8,6 +8,9 @@ use ratchjob::cli::Commands;
 use ratchjob::common::app_config::AppConfig;
 use ratchjob::common::get_app_version;
 use ratchjob::common::share_data::ShareData;
+use ratchjob::grpc::handler::InvokerHandler;
+use ratchjob::grpc::ratch_server_proto::request_server::RequestServer;
+use ratchjob::grpc::server::RequestServerImpl;
 use ratchjob::openapi::openapi_config;
 use ratchjob::starter::{build_share_data, config_factory};
 use ratchjob::web_config::app_config;
@@ -15,6 +18,7 @@ use ratchjob::web_config::console_config;
 use std::error::Error;
 use std::ops::Deref;
 use std::sync::Arc;
+use tonic::transport::Server;
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -42,6 +46,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let grpc_addr = sys_config.get_grpc_cluster_addr();
     log::info!("http api server addr:{}", &http_addr);
     log::info!("grpc cluster server addr:{}", &grpc_addr);
+
+    let mut invoker = InvokerHandler::new(app_data.clone());
+    invoker.add_raft_handler(&app_data);
+
+    let grpc_app_data = app_data.clone();
+
+    tokio::spawn(async move {
+        let addr = grpc_addr.parse().unwrap();
+        let request_server = RequestServerImpl::new(grpc_app_data.clone(), invoker);
+        Server::builder()
+            .add_service(RequestServer::new(request_server))
+            .serve(addr)
+            .await
+            .unwrap();
+    });
 
     let app_console_data = app_data.clone();
 

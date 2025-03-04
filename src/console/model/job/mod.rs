@@ -1,3 +1,4 @@
+use crate::common::datetime_utils::now_millis;
 use crate::common::namespace_util::get_namespace_by_option;
 use crate::job::job_index::JobQueryParam;
 use crate::job::model::enum_type::{
@@ -57,6 +58,7 @@ impl JobInfoParam {
                 .map(|s| ExecutorBlockStrategy::from_str(&s)),
             timeout_second: self.timeout_second,
             try_times: self.try_times,
+            update_time: Some(now_millis()),
         }
     }
 }

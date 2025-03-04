@@ -3,6 +3,8 @@ use crate::common::constant::DEFAULT_XXL_NAMESPACE;
 use crate::common::share_data::ShareData;
 use crate::openapi::xxljob::model::server_request::{CallbackParam, RegistryParam};
 use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
+use crate::raft::store::ClientRequest;
+use crate::schedule::model::actor_model::ScheduleManagerRaftReq;
 use crate::task::model::actor_model::TaskManagerReq;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
@@ -66,11 +68,13 @@ pub(crate) async fn callback(
     web::Json(params): web::Json<Vec<CallbackParam>>,
 ) -> impl Responder {
     let id_list: Vec<u64> = params.iter().map(|p| p.log_id).collect();
-    if let Ok(Ok(_)) = share_data
-        .task_manager
-        .send(TaskManagerReq::TaskCallBacks(
-            params.into_iter().map(|p| p.into()).collect(),
-        ))
+    if let Ok(_) = share_data
+        .raft_request_route
+        .request(ClientRequest::ScheduleReq {
+            req: ScheduleManagerRaftReq::TaskCallBacks(
+                params.into_iter().map(|p| p.into()).collect(),
+            ),
+        })
         .await
     {
         log::info!("callback success,id list:{:?}", &id_list);
