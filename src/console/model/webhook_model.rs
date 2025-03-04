@@ -31,6 +31,7 @@ impl NotifyConfigAdd {
                         let config = HookConfig{
                             url: self.url.clone(),
                             password: self.password.clone(),
+                            r#type: WebHookSource::FeiShu.to_string()
                         };
                         ChannelConfig::Webhook(config)
                     }
@@ -46,6 +47,7 @@ impl NotifyConfigAdd {
                             email_addr: self.email.clone(),
                             username: self.username.clone(),
                             password: self.password.clone(),
+                            r#type: format!("{}", source)
                         })
                     }
                 };
@@ -57,7 +59,7 @@ impl NotifyConfigAdd {
         };
         let model = NotifyConfigModel{
             app_key: AppKey {
-                name: self.app_name.clone(),
+                app_name: self.app_name.clone(),
                 namespace: self.namespace.clone(),
             },
             name: self.name.clone(),
@@ -92,6 +94,7 @@ impl NotifyConfigUpdate {
                 let c = match source {
                     WebHookSource::FeiShu => {
                         let config = HookConfig{
+                            r#type: source.to_string(),
                             url: self.url.clone(),
                             password: self.password.clone(),
                         };
@@ -105,6 +108,7 @@ impl NotifyConfigUpdate {
                 let e = match source {
                     EmailType::Common => {
                         ChannelConfig::Email(EmailConfig{
+                            r#type: source.to_string(),
                             url: self.url.clone(),
                             email_addr: self.email.clone(),
                             username: self.username.clone(),
@@ -120,7 +124,7 @@ impl NotifyConfigUpdate {
         };
         let model = NotifyConfigModel{
             app_key: AppKey {
-                name: self.app_name.clone(),
+                app_name: self.app_name.clone(),
                 namespace: self.namespace.clone(),
             },
             name: self.name.clone(),
@@ -141,7 +145,7 @@ pub struct NotifyConfigQuery {
 impl NotifyConfigQuery {
     pub(crate) fn to_param(&self) -> NotifyConfigPageQuery {
         let query = NotifyConfigPageQuery{
-            app_key: AppKey{ name: self.app_name.clone(), namespace: self.namespace.clone() },
+            app_key: AppKey{ app_name: self.app_name.clone(), namespace: self.namespace.clone() },
             name: self.name.clone(),
         };
         query

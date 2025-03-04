@@ -77,6 +77,7 @@ pub enum ChannelConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EmailConfig {
+    pub r#type: String,
     pub url: String,
     pub email_addr: String,
     pub username: String,
@@ -85,6 +86,7 @@ pub struct EmailConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HookConfig {
+    pub r#type: String,
     pub url: String,
     pub password: String,
 }

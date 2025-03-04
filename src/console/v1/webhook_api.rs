@@ -1,16 +1,16 @@
-use std::collections::HashMap;
-use crate::common::model::{ApiResult, PageResult};
+use crate::common::constant::SEQ_NOTIFY_CONFIG_ID;
+use crate::common::model::ApiResult;
 use crate::common::share_data::ShareData;
+use crate::console::model::webhook_model::{NotifyConfigAdd, NotifyConfigQuery, NotifyConfigUpdate};
 use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
+use crate::sequence::{SequenceRequest, SequenceResult};
 use crate::webhook::actor_model::{WebhookManagerReq, WebhookManagerResult};
+use crate::webhook::model::{ChannelType, EmailType, NotifyConfigModelOb, WebHookSource};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
+use std::collections::HashMap;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
-use crate::common::constant::SEQ_JOB_ID;
-use crate::console::model::webhook_model::{NotifyConfigAdd, NotifyConfigQuery, NotifyConfigUpdate};
-use crate::sequence::{SequenceRequest, SequenceResult};
-use crate::webhook::model::{ChannelType, EmailType, NotifyConfigModelOb, WebHookSource};
 
 //选择下拉框借口
 pub(crate) async fn query_notify_channel(
@@ -58,7 +58,7 @@ pub(crate) async fn notify_config_add(
     };
     if let Ok(Ok(SequenceResult::NextId(id))) = share_data
         .sequence_manager
-        .send(SequenceRequest::GetNextId(SEQ_JOB_ID.clone()))
+        .send(SequenceRequest::GetNextId(SEQ_NOTIFY_CONFIG_ID.clone()))
         .await
     {
         if let Ok(Ok(WebhookManagerResult::ConfigInfo(Some(info)))) = share_data
@@ -89,7 +89,7 @@ pub(crate) async fn notify_config_update(
         Ok(oj) => {
             oj
         }
-        Err(e) => {
+        Err(_e) => {
             return HttpResponse::Ok().json(ApiResult::<()>::error(
                 ERROR_CODE_SYSTEM_ERROR.to_string(),
                 Some("notify_config_update error".to_string()),

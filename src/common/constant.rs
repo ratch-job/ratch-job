@@ -18,4 +18,6 @@ lazy_static::lazy_static! {
 
     pub static ref SEQ_NOTIFY_OBJECT_ID: Arc<String> =  Arc::new("object_id".to_string());
     pub static ref SEQ_NOTIFY_OBJEC_REL_ID: Arc<String> =  Arc::new("object_rel_id".to_string());
+
+    pub static ref SEQ_NOTIFY_CONFIG_ID: Arc<String> =  Arc::new("notify_config_id".to_string());
 }

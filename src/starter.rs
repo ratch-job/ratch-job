@@ -180,7 +180,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         raft: factory_data.get_bean().unwrap(),
         raft_store: factory_data.get_bean().unwrap(),
         raft_request_route: factory_data.get_bean().unwrap(),
-        webhook_manager: factory_data.get_bean().unwrap(),
+        webhook_manager: factory_data.get_actor().unwrap(),
         factory_data,
     });
     Ok(app_data)

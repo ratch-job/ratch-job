@@ -1,9 +1,14 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use actix::{Actor, ActorFutureExt, Addr, AsyncContext, Context, ContextFutureSpawner, Handler, WrapFuture};
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
+use lettre::{Message, SmtpTransport, Transport};
+use lettre::message::header::{From, Headers, To};
+use lettre::message::{header, Mailbox, Mailboxes};
+use lettre::transport::smtp::authentication::Credentials;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::app::model::AppKey;
@@ -13,7 +18,7 @@ use crate::job::core::JobManager;
 use crate::sequence::{SequenceManager, SequenceRequest, SequenceResult};
 use crate::task::request_client::XxlClient;
 use crate::webhook::actor_model::{WebhookManagerReq, WebhookManagerResult};
-use crate::webhook::model::{EventInfo, NotifyConfigModelOb, NotifyEvent, NotifyObject, WebHookSource};
+use crate::webhook::model::{EmailConfig, EmailType, EventInfo, HookConfig, NotifyConfigModelOb, NotifyEvent, NotifyObject, WebHookSource};
 
 #[bean(inject)]
 pub struct WebHookManager {
@@ -31,22 +36,48 @@ impl WebHookManager {
 }
 
 trait NotificationChannel {
-    async fn send(&self, message: &str) -> Result<(), String>;
+    async fn send(&self, title: &str, message: &str, received: Vec<String>) -> Result<()>;
 }
 
-struct WeChatChannel {
-    webhook_url: Arc<String>,
-}
-
-impl NotificationChannel for WeChatChannel {
-    async fn send(&self, message: &str) -> Result<(), String> {
-        let payload = format!(r#"{{"msgtype": "text", "text": {{"content": "{}"}}}}"#, message);
-        match HttpUtils::post_body(self.webhook_url.to_string(), payload, None, None).await {
-            Ok(_) => {
-                log::error!("WeChatChannel|send success!");
+impl NotificationChannel for HookConfig {
+    async fn send(&self, title: &str, message: &str, received: Vec<String>) -> Result<()> {
+        let source = WebHookSource::from_str(self.r#type.as_str()).map_err(|e|anyhow!(e))?;
+        match source {
+            WebHookSource::FeiShu => {
+                let payload = format!(r#"{{"msg_type": "text", "content": {{"text": "{}"}}}}"#, message);
+                match HttpUtils::post_body(self.url.to_string(), payload, None, None).await {
+                    Ok(_) => {
+                        log::error!("feishu|send success!");
+                    }
+                    Err(err) => {
+                        log::error!("feishu|send error:{}", &err);
+                    }
+                }
             }
-            Err(err) => {
-                log::error!("WeChatChannel|send error:{}", &err);
+        }
+        Ok(())
+    }
+}
+
+impl NotificationChannel for EmailConfig {
+    async fn send(&self, title: &str, message: &str, received: Vec<String>) -> Result<()> {
+        let email = EmailType::from_str(self.r#type.as_str()).map_err(|e|anyhow!(e))?;
+        match email {
+            EmailType::Common => {
+                let tos = received.into_iter().filter_map(|r|r.parse::<Mailbox>().ok()).collect::<Vec<_>>();
+                let mut email_builder = Message::builder()
+                    .from(self.email_addr.parse()?);
+                for b in tos {
+                    email_builder = email_builder.to(b);
+                }
+                let message = email_builder.subject(title)
+                    .body(message.to_string())?;
+                let creds = Credentials::new(self.email_addr.clone(), self.password.to_string());
+                let mailer = SmtpTransport::relay(&self.url)?
+                    .credentials(creds)
+                    .build();
+                // 发送邮件
+                mailer.send(&message)?;
             }
         }
         Ok(())

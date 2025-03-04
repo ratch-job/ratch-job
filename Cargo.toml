@@ -59,6 +59,7 @@ bytes = "1"
 byteorder = "1.4"
 strum = "0.27"
 strum_macros = "0.27"
+lettre = "0.11.14"
 
 [build-dependencies]
 #用于生成grpc代码，生成后注释掉避免编译额外依赖protoc
