@@ -21,7 +21,7 @@ use crate::schedule::model::actor_model::{
 };
 use crate::schedule::model::{JobRunState, TriggerInfo};
 use crate::task::core::TaskManager;
-use crate::task::model::actor_model::TaskManagerReq;
+use crate::task::model::actor_model::{TaskManagerReq, TriggerItem};
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::prelude::*;
@@ -124,9 +124,14 @@ impl ScheduleManager {
         if let Some(job_run_state) = self.job_run_state.get_mut(&job_id) {
             let change_schedule = job_run_state.update_job(job_info);
             if change_schedule {
-                if let Some(now_datetime) =
-                    get_datetime_by_second(now_second_u32() - 1, &self.fixed_offset)
-                {
+                let now_second = now_second_u32();
+                let reset_time = if job_run_state.pre_trigger_time == now_second {
+                    //从下一秒开始
+                    now_second
+                } else {
+                    now_second - 1
+                };
+                if let Some(now_datetime) = get_datetime_by_second(reset_time, &self.fixed_offset) {
                     let next_trigger_time =
                         job_run_state.calculate_first_trigger_time(&now_datetime);
                     job_run_state.next_trigger_time = next_trigger_time;
@@ -155,6 +160,7 @@ impl ScheduleManager {
     fn trigger_job(&mut self, seconds: u32) {
         if let Some(task_manager) = self.task_manager.clone() {
             let date_time = get_datetime_by_second(seconds, &self.fixed_offset).unwrap();
+            let mut trigger_list = Vec::new();
             for item in self.active_time_set.timeout(seconds as u64) {
                 if let Some(job) = self.job_run_state.get(&item.job_id) {
                     if job.version != item.version {
@@ -170,25 +176,21 @@ impl ScheduleManager {
                         &job.source_job.handle_name
                     );
                     */
-                    task_manager.do_send(TaskManagerReq::TriggerTask(
-                        item.trigger_time,
-                        job.source_job.clone(),
-                    ));
+                    trigger_list.push(TriggerItem::new(item.trigger_time, job.source_job.clone()));
                     let next_trigger_time = job.calculate_next_trigger_time(&date_time);
                     if next_trigger_time > 0 {
                         self.active_job(item.job_id, next_trigger_time, job.version);
-                        self.update_job_trigger_time(
-                            item.job_id,
-                            item.trigger_time,
-                            next_trigger_time,
-                        );
                     } else {
                         log::info!("job next trigger is none,id:{}", &item.job_id);
                     }
+                    self.update_job_trigger_time(item.job_id, item.trigger_time, next_trigger_time);
                 } else {
-                    log::info!("job not exist,id:{}", &item.job_id);
+                    log::info!("ScheduleManager|job run state not exist,job id:{}", &item.job_id);
                 }
             }
+            task_manager.do_send(TaskManagerReq::TriggerTaskList(trigger_list));
+        } else {
+            log::error!("ScheduleManager|task manager is none");
         }
     }
     fn heartbeat(&mut self, ctx: &mut Context<Self>) {

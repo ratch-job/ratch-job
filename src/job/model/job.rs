@@ -1,3 +1,4 @@
+use crate::app::model::AppKey;
 use crate::common::constant::EMPTY_ARC_STR;
 use crate::common::cron_utils::CronUtil;
 use crate::common::pb::data_object::JobDo;
@@ -98,6 +99,13 @@ impl JobInfo {
             Err(anyhow::anyhow!("cron_value is invalid!"))
         } else {
             Ok(())
+        }
+    }
+
+    pub fn build_app_key(&self) -> AppKey {
+        AppKey {
+            namespace: self.namespace.clone(),
+            app_name: self.app_name.clone(),
         }
     }
 

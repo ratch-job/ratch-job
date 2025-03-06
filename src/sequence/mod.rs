@@ -6,7 +6,7 @@ use crate::raft::cluster::route::{RaftAddrRouter, RaftRequestRoute};
 use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::raft::RatchRaft;
 use crate::sequence::core::SequenceDbManager;
-use crate::sequence::model::{SeqGroup, SequenceRaftReq, SequenceRaftResult};
+use crate::sequence::model::{SeqGroup, SeqRange, SequenceRaftReq, SequenceRaftResult};
 use actix::prelude::*;
 use async_raft_ext::raft::ClientWriteRequest;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
@@ -17,7 +17,6 @@ use std::sync::{Arc, Weak};
 
 ///
 /// 序号管理器
-/// TODO: 先只是基于内存的简单实现，后续为基于raft做持久化
 #[derive(Clone)]
 #[bean(inject)]
 pub struct SequenceManager {
@@ -79,6 +78,14 @@ impl SequenceManager {
                     Err(anyhow::anyhow!("SequenceManager|raft_router is none"))
                 }
             }
+            SequenceMiddleState::GetDirectRange(key, step) => {
+                if let Some(raft_router) = raft_router {
+                    let (start, len) = Self::get_next_range(&raft_router, key, step).await?;
+                    Ok(SequenceBeforeResult::DirectRange { start, len })
+                } else {
+                    Err(anyhow::anyhow!("SequenceManager|raft_router is none"))
+                }
+            }
             SequenceMiddleState::FillIgnore => Ok(SequenceBeforeResult::FillIgnore),
         }
     }
@@ -133,6 +140,9 @@ impl SequenceManager {
                 Ok(SequenceResult::None)
             }
             SequenceBeforeResult::FillIgnore => Ok(SequenceResult::None),
+            SequenceBeforeResult::DirectRange { start, len } => {
+                Ok(SequenceResult::Range(SeqRange::new(start, len)))
+            }
         }
     }
 }
@@ -163,10 +173,12 @@ impl Inject for SequenceManager {
 pub enum SequenceRequest {
     GetNextId(Arc<String>),
     FillRange(Arc<String>),
+    GetDirectRange(Arc<String>, u64),
 }
 
 pub enum SequenceResult {
     NextId(u64),
+    Range(SeqRange),
     None,
 }
 
@@ -175,6 +187,7 @@ pub enum SequenceResult {
 pub enum SequenceMiddleState {
     NextId(Arc<String>, Option<u64>, bool),
     FillRange(Arc<String>, u64),
+    GetDirectRange(Arc<String>, u64),
     FillIgnore,
 }
 pub enum SequenceBeforeResult {
@@ -186,6 +199,10 @@ pub enum SequenceBeforeResult {
     },
     FillRange {
         key: Arc<String>,
+        start: u64,
+        len: u64,
+    },
+    DirectRange {
         start: u64,
         len: u64,
     },
@@ -212,6 +229,9 @@ impl Handler<SequenceRequest> for SequenceManager {
                 } else {
                     SequenceMiddleState::FillIgnore
                 }
+            }
+            SequenceRequest::GetDirectRange(key, len) => {
+                SequenceMiddleState::GetDirectRange(key, len)
             }
         };
         let raft_router = self.raft_router.clone();

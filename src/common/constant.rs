@@ -15,4 +15,8 @@ lazy_static::lazy_static! {
 
     pub static ref SEQ_JOB_ID: Arc<String> =  Arc::new("job_id".to_string());
     pub static ref SEQ_TASK_ID: Arc<String> =  Arc::new("task_id".to_string());
+
+
+    // error info
+    pub static ref ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR: Arc<String> =  Arc::new("Not found the application instance address".to_string());
 }
