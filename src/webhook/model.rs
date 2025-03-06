@@ -54,7 +54,6 @@ pub struct NotifyConfigModel {
 }
 
 #[derive(Debug, Clone, EnumString, Deserialize, Serialize, EnumIter, strum_macros::Display, Default)]
-#[strum(serialize_all = "camelCase")]
 pub enum ChannelType {
     WebHook(WebHookSource),
     Email(EmailType),

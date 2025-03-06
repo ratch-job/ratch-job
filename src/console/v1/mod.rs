@@ -41,6 +41,6 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
             .service(web::resource("/webhook/config/update").route(web::post().to(webhook_api::notify_config_update)))
             .service(web::resource("/webhook/config/remove").route(web::get().to(webhook_api::notify_config_remove)))
             .service(web::resource("/webhook/config/list").route(web::post().to(webhook_api::query_config_page)))
-            .service(web::resource("/webhook/config/info").route(web::post().to(webhook_api::query_config_info))),
+            .service(web::resource("/webhook/config/info").route(web::get().to(webhook_api::query_config_info))),
     );
 }

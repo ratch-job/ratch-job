@@ -6,7 +6,7 @@ use crate::app::model::AppKey;
 use crate::webhook::model::{ChannelConfig, ChannelType, EmailConfig, EmailType, HookConfig, NotifyConfigModel, NotifyConfigModelOb, NotifyConfigPageQuery, NotifyEvent, NotifyObject, WebHookSource};
 use crate::webhook::model::ChannelType::{Email, WebHook};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct NotifyConfigAdd {
     pub app_name: Arc<String>,
     pub namespace: Arc<String>,
