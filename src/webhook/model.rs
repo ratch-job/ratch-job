@@ -33,7 +33,6 @@ struct NotifyConfigTable {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NotifyConfigPageQuery {
     pub app_key: AppKey,
-    pub name: String,
 }
 
 

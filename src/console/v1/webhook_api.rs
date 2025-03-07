@@ -1,7 +1,7 @@
 use crate::common::constant::SEQ_NOTIFY_CONFIG_ID;
-use crate::common::model::ApiResult;
+use crate::common::model::{ApiResult, PageResult};
 use crate::common::share_data::ShareData;
-use crate::console::model::webhook_model::{NotifyConfigAdd, NotifyConfigQuery, NotifyConfigUpdate};
+use crate::console::model::webhook_model::{NotifyConfigAdd, NotifyConfigInfo, NotifyConfigQuery, NotifyConfigRemove, NotifyConfigUpdate};
 use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
 use crate::sequence::{SequenceRequest, SequenceResult};
 use crate::webhook::actor_model::{WebhookManagerReq, WebhookManagerResult};
@@ -112,12 +112,12 @@ pub(crate) async fn notify_config_update(
 
 pub(crate) async fn notify_config_remove(
     share_data: Data<Arc<ShareData>>,
-    web::Json(request): web::Json<u64>,
+    web::Json(request): web::Json<NotifyConfigRemove>,
 ) -> impl Responder {
     let param = request;
     if let Ok(Ok(WebhookManagerResult::None)) = share_data
         .webhook_manager
-        .send(WebhookManagerReq::RemoveConfig(param))
+        .send(WebhookManagerReq::RemoveConfig(param.id))
         .await
     {
         HttpResponse::Ok().json(ApiResult::success(Some(())))
@@ -131,12 +131,12 @@ pub(crate) async fn notify_config_remove(
 
 pub(crate) async fn query_config_info(
     share_data: Data<Arc<ShareData>>,
-    web::Query(request): web::Query<u64>,
+    web::Query(request): web::Query<NotifyConfigInfo>,
 ) -> impl Responder {
     let param = request;
     if let Ok(Ok(WebhookManagerResult::ConfigInfo(info))) = share_data
         .webhook_manager
-        .send(WebhookManagerReq::QueryConfig(param))
+        .send(WebhookManagerReq::QueryConfig(param.id))
         .await
     {
         HttpResponse::Ok().json(ApiResult::success(info))
@@ -152,13 +152,12 @@ pub(crate) async fn query_config_page(
     share_data: Data<Arc<ShareData>>,
     web::Query(request): web::Query<NotifyConfigQuery>,
 ) -> impl Responder {
-    let param = request.to_param();
-    if let Ok(Ok(WebhookManagerResult::ConfigInfo(info))) = share_data
+    if let Ok(Ok(WebhookManagerResult::ConfigPageInfo((total, vec)))) = share_data
         .webhook_manager
-        .send(WebhookManagerReq::QueryConfigPage(param))
+        .send(WebhookManagerReq::QueryConfigPage(request.to_param()))
         .await
     {
-        HttpResponse::Ok().json(ApiResult::success(info))
+        HttpResponse::Ok().json(ApiResult::success(Some(PageResult { total_count: total, list: vec })))
     } else {
         HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
