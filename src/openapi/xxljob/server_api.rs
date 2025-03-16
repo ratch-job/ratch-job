@@ -1,5 +1,6 @@
-use crate::app::model::{AppKey, AppManagerReq};
+use crate::app::model::{AppInstanceParam, AppKey, AppManagerRaftReq, AppManagerReq};
 use crate::common::constant::DEFAULT_XXL_NAMESPACE;
+use crate::common::datetime_utils::now_second_u32;
 use crate::common::share_data::ShareData;
 use crate::openapi::xxljob::model::server_request::{CallbackParam, RegistryParam};
 use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
@@ -18,12 +19,16 @@ pub(crate) async fn register(
     let app_name = param.registry_key;
     let instance_addr = param.registry_value;
     let app_key = AppKey::new(app_name.clone(), DEFAULT_XXL_NAMESPACE.clone());
-    if let Ok(Ok(_)) = share_data
-        .app_manager
-        .send(AppManagerReq::RegisterAppInstance(
-            app_key,
-            instance_addr.clone(),
-        ))
+    let app_param = AppInstanceParam {
+        app_key,
+        instance_addr: instance_addr.clone(),
+        last_modified_time: now_second_u32(),
+    };
+    if let Ok(_) = share_data
+        .raft_request_route
+        .request(ClientRequest::AppReq {
+            req: AppManagerRaftReq::RegisterInstance(app_param),
+        })
         .await
     {
         HttpResponse::Ok().json(xxl_api_empty_success())
@@ -44,12 +49,16 @@ pub(crate) async fn unregister(
     let app_name = param.registry_key;
     let instance_addr = param.registry_value;
     let app_key = AppKey::new(app_name.clone(), DEFAULT_XXL_NAMESPACE.clone());
-    if let Ok(Ok(_)) = share_data
-        .app_manager
-        .send(AppManagerReq::UnregisterAppInstance(
-            app_key,
-            instance_addr.clone(),
-        ))
+    let app_param = AppInstanceParam {
+        app_key,
+        instance_addr: instance_addr.clone(),
+        last_modified_time: now_second_u32(),
+    };
+    if let Ok(_) = share_data
+        .raft_request_route
+        .request(ClientRequest::AppReq {
+            req: AppManagerRaftReq::UnregisterInstance(app_param),
+        })
         .await
     {
         HttpResponse::Ok().json(xxl_api_empty_success())

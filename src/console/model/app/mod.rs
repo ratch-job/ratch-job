@@ -1,5 +1,6 @@
 use crate::app::app_index::AppQueryParam;
 use crate::app::model::{AppParam, RegisterType};
+use crate::common::datetime_utils::now_second_u32;
 use crate::common::namespace_util::get_namespace_by_option;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -22,6 +23,7 @@ impl AppInfoParam {
             label: self.label,
             register_type: self.register_type.map(|s| RegisterType::from_str(&s)),
             instance_addrs: self.instance_addrs,
+            last_modified_time: now_second_u32(),
         }
     }
 }

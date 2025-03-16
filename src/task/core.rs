@@ -404,8 +404,18 @@ impl Handler<TaskManagerReq> for TaskManager {
             TaskManagerReq::AddAppInstance(app_key, instance_addr) => {
                 self.add_app_instance(app_key, instance_addr);
             }
+            TaskManagerReq::AddAppInstances(app_instance_keys) => {
+                for keys in app_instance_keys {
+                    self.add_app_instance(keys.build_app_key(), keys.addr);
+                }
+            }
             TaskManagerReq::RemoveAppInstance(app_key, instance_addr) => {
                 self.remove_app_instance(app_key, instance_addr);
+            }
+            TaskManagerReq::RemoveAppInstances(app_instance_keys) => {
+                for keys in app_instance_keys {
+                    self.remove_app_instance(keys.build_app_key(), keys.addr);
+                }
             }
             TaskManagerReq::TriggerTask(trigger_time, job) => {
                 self.trigger_task(trigger_time, job, ctx)?;

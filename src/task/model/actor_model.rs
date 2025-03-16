@@ -1,4 +1,4 @@
-use crate::app::model::AppKey;
+use crate::app::model::{AppInstanceKey, AppKey};
 use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::Message;
@@ -23,7 +23,9 @@ impl TriggerItem {
 #[rtype(result = "anyhow::Result<TaskManagerResult>")]
 pub enum TaskManagerReq {
     AddAppInstance(AppKey, Arc<String>),
+    AddAppInstances(Vec<AppInstanceKey>),
     RemoveAppInstance(AppKey, Arc<String>),
+    RemoveAppInstances(Vec<AppInstanceKey>),
     TriggerTask(u32, Arc<JobInfo>),
     TriggerTaskList(Vec<TriggerItem>),
 }

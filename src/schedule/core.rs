@@ -185,7 +185,10 @@ impl ScheduleManager {
                     }
                     self.update_job_trigger_time(item.job_id, item.trigger_time, next_trigger_time);
                 } else {
-                    log::info!("ScheduleManager|job run state not exist,job id:{}", &item.job_id);
+                    log::info!(
+                        "ScheduleManager|job run state not exist,job id:{}",
+                        &item.job_id
+                    );
                 }
             }
             task_manager.do_send(TaskManagerReq::TriggerTaskList(trigger_list));
