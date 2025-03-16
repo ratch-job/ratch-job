@@ -13,7 +13,6 @@ services:
       - ./data:/io:rw
     environment:
       - RATCH_HTTP_API_PORT=8725
-      - RATCH_HTTP_CONSOLE_PORT=8825
       - RATCH_XXL_DEFAULT_ACCESS_TOKEN=default_token
       - DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH=/xxl-job-admin
     restart: always

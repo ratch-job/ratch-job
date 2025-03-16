@@ -1,0 +1,73 @@
+# 集群部署样例,数据目录: ./data1 ./data2 ./data3
+version: '3.8' # 指定版本号
+
+services: # 所有需要启动的服务
+  ratch-job-master: # 主节点
+    image: qingpan/ratchjob:stable
+    container_name: ratch-job-master
+    environment: # 环境变量
+      - RUST_LOG=warn
+      - RATCH_XXL_DEFAULT_ACCESS_TOKEN=default_token
+      - DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH=/xxl-job-admin
+      - RATCH_HTTP_API_PORT=8725
+      - RATCH_DATA_DIR=db
+      - RATCH_RAFT_NODE_ID=1
+      - RATCH_RAFT_NODE_ADDR=ratch-job-master:8925
+      - RATCH_RAFT_AUTO_INIT=true
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data1:/io:rw
+    ports: # 宿主机和容器的端口映射关系
+      # 左边宿主机端口:右边容器端口
+      - "8725:8725" 
+      - "8825:8825" 
+      - "8925:8925" 
+    networks: # 配置容器连接的网络，引用顶级networks下的条目
+      - ratchjob
+    restart: always
+  ratch-job-slave1: # 从节点
+    image: qingpan/ratchjob:stable
+    container_name: ratch-job-slave1
+    environment: # 环境变量
+      - RUST_LOG=warn
+      - RATCH_XXL_DEFAULT_ACCESS_TOKEN=default_token
+      - DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH=/xxl-job-admin
+      - RATCH_HTTP_API_PORT=8725
+      - RATCH_DATA_DIR=db
+      - RATCH_RAFT_NODE_ID=2
+      - RATCH_RAFT_NODE_ADDR=ratch-job-slave1:8925
+      - RATCH_RAFT_JOIN_ADDR=ratch-job-master:8925
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data2:/io:rw
+    networks: 
+      - ratchjob
+    restart: always
+    depends_on:
+      - ratch-job-master
+  ratch-job-slave2: # 从节点
+    image: qingpan/ratchjob:stable
+    container_name: ratch-job-slave2
+    environment: # 环境变量
+      - RUST_LOG=warn
+      - RATCH_XXL_DEFAULT_ACCESS_TOKEN=default_token
+      - DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH=/xxl-job-admin
+      - RATCH_HTTP_API_PORT=8725
+      - RATCH_DATA_DIR=db
+      - RATCH_RAFT_NODE_ID=3
+      - RATCH_RAFT_NODE_ADDR=ratch-job-slave2:8925
+      - RATCH_RAFT_JOIN_ADDR=ratch-job-master:8925
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data3:/io:rw
+    networks: 
+      - ratchjob
+    restart: always
+    depends_on:
+      - ratch-job-master 
+      - ratch-job-slave1
+# 定义网络，可以多个，如果不声明，默认会创建一个网络名称为“工程名称_default”的bridge网络
+networks:
+  ratchjob: # 一个具体网络的条目名称
+    name: ratchjob # 网络名称，默认为“工程名称_网络条目名称”
+    driver: bridge # 网络模式，默认为bridge

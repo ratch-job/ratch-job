@@ -72,7 +72,6 @@ services:
       - ./data:/io:rw
     environment:
       - RATCH_HTTP_API_PORT=8725
-      - RATCH_HTTP_CONSOLE_PORT=8825
       - RATCH_XXL_DEFAULT_ACCESS_TOKEN=default_token
       - DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH=/xxl-job-admin
     restart: always
@@ -114,8 +113,8 @@ cargo run --release
 |--|--|--|--|--|
 |RUST_LOG|日志等级:debug,info,warn,error;所有http,grpc请求都会打info日志,如果不观注可以设置为error减少日志量|info|error|0.3.0|
 |RATCH_HTTP_API_PORT|http open api端口|8725|8725|0.1.x|
-|RATCH_HTTP_CONSOLE_PORT|独立控制台端口|8825|8825|0.1.x|
-|RATCH_GRPC_CLUSTER_PORT|grpc端口(用于raft集群通信)|8925|8925|0.1.x|
+|RATCH_HTTP_CONSOLE_PORT|独立控制台端口|OpenApi+100|8825|0.1.x|
+|RATCH_GRPC_CLUSTER_PORT|grpc端口(用于raft集群通信)|OpenApi+200|8925|0.1.x|
 |RATCH_DATA_DIR|本地数据库文件夹, 会在系统运行时自动创建|linux,MacOS默认为~/.local/share/ratchjob/ratch_db;windows,docker默认为ratch_db|ratch_db|0.1.1|
 |DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH|自定义xxl-job api路径|/xxl-job-admin|/xxl-job-admin|0.1.x|
 |RATCH_XXL_DEFAULT_ACCESS_TOKEN|xxl-job全局token|default_token|default_token|0.1.x|
