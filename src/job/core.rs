@@ -18,12 +18,12 @@ use crate::task::task_history::TaskHistoryManager;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use quick_protobuf::{BytesReader, Writer};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 #[bean(inject)]
 pub struct JobManager {
-    job_map: HashMap<u64, JobWrap>,
+    job_map: BTreeMap<u64, JobWrap>,
     schedule_manager: Option<Addr<ScheduleManager>>,
     job_task_log_limit: usize,
 }
@@ -31,7 +31,7 @@ pub struct JobManager {
 impl JobManager {
     pub fn new() -> Self {
         JobManager {
-            job_map: HashMap::new(),
+            job_map: BTreeMap::new(),
             schedule_manager: None,
             job_task_log_limit: 200,
         }
@@ -213,7 +213,7 @@ impl JobManager {
 impl Actor for JobManager {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
+    fn started(&mut self, _ctx: &mut Self::Context) {
         log::info!("JobManager started");
     }
 }
