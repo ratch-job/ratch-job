@@ -1,6 +1,9 @@
+use crate::app::model::AppKey;
 use crate::common::constant::EMPTY_ARC_STR;
 use crate::common::pb::data_object::JobTaskDo;
 use crate::job::model::job::JobInfo;
+use crate::task::model::actor_model::TriggerItem;
+use crate::task::model::app_instance::InstanceAddrSelectResult;
 use crate::task::model::enum_type::TaskStatusType;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -69,4 +72,11 @@ pub struct TaskCallBackParam {
     pub task_date_time: i64,
     pub success: bool,
     pub handle_msg: Option<String>,
+}
+
+pub struct TaskWrap {
+    pub task: JobTaskInfo,
+    pub job_info: Arc<JobInfo>,
+    pub select_result: InstanceAddrSelectResult,
+    pub app_addrs: Vec<Arc<String>>,
 }

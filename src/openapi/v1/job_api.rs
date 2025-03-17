@@ -1,6 +1,9 @@
 use crate::common::constant::SEQ_JOB_ID;
 use crate::common::datetime_utils::now_millis;
+use crate::common::model::{ApiResult, PageResult};
 use crate::common::share_data::ShareData;
+use crate::console::model::job::JobQueryListRequest;
+use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
 };
@@ -50,7 +53,10 @@ pub(crate) async fn create_job(
         Err(e) => {
             let error_msg = format!("create_job error,{}", e);
             log::error!("{}", &error_msg);
-            HttpResponse::Ok().json(XxlApiResult::<()>::fail(Some(error_msg)))
+            HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some(error_msg),
+            ))
         }
     }
 }
@@ -77,7 +83,10 @@ pub(crate) async fn update_job(
         Err(e) => {
             let error_msg = format!("update_job error,{}", e);
             log::error!("{}", &error_msg);
-            HttpResponse::Ok().json(XxlApiResult::<()>::fail(Some(error_msg)))
+            HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some(error_msg),
+            ))
         }
     }
 }
@@ -90,10 +99,32 @@ pub(crate) async fn get_job_info(
     if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) =
         share_data.job_manager.send(JobManagerReq::GetJob(id)).await
     {
-        HttpResponse::Ok().json(XxlApiResult::success(Some(job_info)))
+        HttpResponse::Ok().json(ApiResult::success(Some(job_info)))
     } else {
         let error_msg = format!("get_job_info error,id:{}", id);
         log::error!("{}", &error_msg);
-        HttpResponse::Ok().json(XxlApiResult::<()>::fail(Some(error_msg)))
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some(error_msg),
+        ))
+    }
+}
+
+pub(crate) async fn query_job_list(
+    share_data: Data<Arc<ShareData>>,
+    web::Query(request): web::Query<JobQueryListRequest>,
+) -> impl Responder {
+    let param = request.to_param();
+    if let Ok(Ok(JobManagerResult::JobPageInfo(total_count, list))) = share_data
+        .job_manager
+        .send(JobManagerReq::QueryJob(param))
+        .await
+    {
+        HttpResponse::Ok().json(ApiResult::success(Some(PageResult { total_count, list })))
+    } else {
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("query_job_list error".to_string()),
+        ))
     }
 }

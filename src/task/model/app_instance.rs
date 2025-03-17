@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub enum InstanceAddrSelectResult {
+    Fixed(Arc<String>),
     Selected(Arc<String>),
     ALL(Vec<Arc<String>>),
     Empty,

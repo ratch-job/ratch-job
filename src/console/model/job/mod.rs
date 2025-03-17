@@ -65,6 +65,13 @@ impl JobInfoParam {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct TriggerJobParam {
+    pub job_id: Option<u64>,
+    pub instance_addr: Option<Arc<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct JobQueryListRequest {
     pub namespace: Option<Arc<String>>,
     pub app_name: Option<Arc<String>>,

@@ -1,7 +1,6 @@
 pub mod v1;
 pub mod xxljob;
 
-use crate::common::app_config::AppConfig;
 use crate::openapi::v1::v1_api_config;
 use crate::web_config::about_info;
 use actix_web::web;

@@ -1,5 +1,10 @@
+use crate::app::model::AppRouteRequest;
 use crate::common::datetime_utils::now_millis;
+use crate::raft::cluster::model::{RouterRequest, RouterResponse, VoteChangeRequest, VoteInfo};
+use crate::raft::cluster::router_request;
 use crate::raft::network::factory::RaftClusterRequestSender;
+use crate::schedule::core::ScheduleManager;
+use crate::schedule::model::actor_model::ScheduleManagerRaftReq;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::{BTreeMap, HashSet};
@@ -60,7 +65,9 @@ pub struct ClusterNodeManager {
     local_id: u64,
     all_nodes: BTreeMap<u64, ClusterInnerNode>,
     cluster_sender: Option<Arc<RaftClusterRequestSender>>,
+    schedule_manager: Option<Addr<ScheduleManager>>,
     first_init: bool,
+    last_vote: VoteInfo,
 }
 
 impl ClusterNodeManager {
@@ -69,7 +76,9 @@ impl ClusterNodeManager {
             local_id,
             all_nodes: BTreeMap::new(),
             cluster_sender: None,
+            schedule_manager: None,
             first_init: false,
+            last_vote: VoteInfo::default(),
         }
     }
 
@@ -146,6 +155,46 @@ impl ClusterNodeManager {
             self.all_nodes.values().cloned().map(|e| e.into()).collect()
         }
     }
+
+    fn notify_vote_change(&self) {
+        let local_is_master = self.local_id == self.last_vote.voted_for;
+        if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+            schedule_manager.do_send(VoteChangeRequest::VoteChange {
+                vote_info: self.last_vote.clone(),
+                local_is_master,
+            });
+        }
+    }
+
+    async fn do_send_to_other_nodes(
+        req: RouterRequest,
+        addrs: Vec<Arc<String>>,
+        sender: Arc<RaftClusterRequestSender>,
+    ) -> anyhow::Result<()> {
+        for addr in addrs {
+            router_request(req.clone(), addr, &sender).await?;
+        }
+        Ok(())
+    }
+
+    fn send_to_other_nodes(&mut self, req: ToOtherRequest, ctx: &mut Context<Self>) {
+        let req = match req {
+            ToOtherRequest::AppRouteRequest(req) => RouterRequest::AppRouteRequest(req),
+        };
+        let mut addrs = Vec::with_capacity(self.all_nodes.len());
+        for node in self.all_nodes.values() {
+            if node.is_local {
+                continue;
+            }
+            addrs.push(node.addr.clone());
+        }
+        if let Some(cluster_sender) = self.cluster_sender.clone() {
+            Self::do_send_to_other_nodes(req, addrs, cluster_sender)
+                .into_actor(self)
+                .map(|_, _, _| {})
+                .spawn(ctx)
+        }
+    }
 }
 
 impl Actor for ClusterNodeManager {
@@ -165,17 +214,24 @@ impl Inject for ClusterNodeManager {
         _ctx: &mut Self::Context,
     ) {
         self.cluster_sender = factory_data.get_bean();
+        self.schedule_manager = factory_data.get_actor();
     }
+}
+
+#[derive(Debug)]
+pub enum ToOtherRequest {
+    AppRouteRequest(AppRouteRequest),
 }
 
 #[derive(Message, Debug)]
 #[rtype(result = "anyhow::Result<NodeManageResponse>")]
 pub enum NodeManageRequest {
     UpdateNodes(Vec<(u64, Arc<String>)>),
+    UpdateVoted { current_term: u64, voted_for: u64 },
     GetThisNode,
     GetAllNodes,
     GetNode(u64),
-    //SendToOtherNodes
+    SendToOtherNodes(ToOtherRequest),
 }
 
 pub enum NodeManageResponse {
@@ -204,6 +260,25 @@ impl Handler<NodeManageRequest> for ClusterNodeManager {
             NodeManageRequest::GetNode(node_id) => {
                 let node = self.all_nodes.get(&node_id).map(|e| e.to_owned().into());
                 Ok(NodeManageResponse::Node(node))
+            }
+            NodeManageRequest::UpdateVoted {
+                voted_for,
+                current_term,
+            } => {
+                log::info!(
+                    "UpdateVoted,local node_id:{},voted_for:{},{}",
+                    &self.local_id,
+                    &voted_for,
+                    &current_term
+                );
+                let vote_info = VoteInfo::new(voted_for, current_term);
+                self.last_vote = vote_info;
+                self.notify_vote_change();
+                Ok(NodeManageResponse::None)
+            }
+            NodeManageRequest::SendToOtherNodes(req) => {
+                self.send_to_other_nodes(req, ctx);
+                Ok(NodeManageResponse::None)
             }
         }
     }

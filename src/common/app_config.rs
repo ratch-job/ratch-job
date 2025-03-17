@@ -38,11 +38,11 @@ impl AppConfig {
         let http_console_port = std::env::var("RATCH_HTTP_CONSOLE_PORT")
             .unwrap_or_default()
             .parse()
-            .unwrap_or(8825);
+            .unwrap_or(http_api_port + 100);
         let grpc_cluster_port = std::env::var("RATCH_GRPC_CLUSTER_PORT")
             .unwrap_or_default()
             .parse()
-            .unwrap_or(8925);
+            .unwrap_or(http_api_port + 200);
         let http_workers = std::env::var("RATCH_HTTP_WORKERS")
             .unwrap_or("".to_owned())
             .parse()

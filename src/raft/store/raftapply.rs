@@ -217,8 +217,10 @@ impl StateApplyManager {
 
     /// raft数据加载完成通知
     fn load_complete(&mut self, _ctx: &mut Context<Self>) {
+        if let Some(data_wrap) = self.data_wrap.as_ref() {
+            data_wrap.load_complete().ok();
+        }
         log::info!("raft data load finished.");
-        if let Some(data_wrap) = self.data_wrap.as_ref() {}
     }
 
     /// 批量处理请求，一般是由主节点到从节点，不需要返回值

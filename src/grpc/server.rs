@@ -33,7 +33,7 @@ impl request_server::Request for RequestServerImpl {
         let result = self.invoker.handle(payload, meta).await;
         match result {
             Ok(result) => Ok(tonic::Response::new(Response {
-                code: 200,
+                code: 0,
                 data: Some(result.payload),
                 message: "".to_string(),
             })),
