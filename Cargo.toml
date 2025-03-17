@@ -1,6 +1,6 @@
 [package]
 name = "ratchjob"
-version = "0.1.1-beta.2"
+version = "0.1.1"
 edition = "2021"
 authors = ["heqingpan <heqingpan@126.com>"]
 license = "Apache-2.0"
@@ -54,7 +54,7 @@ clap = { version = "4.5", features = ["derive"] }
 dotenv = "0.15"
 cron = "0.15.0"
 inner-mem-cache = "0.1.7"
-ratchjob-web-dist-wrap = "=0.1.1-alpha.2"
+ratchjob-web-dist-wrap = "=0.1.1-beta.1"
 mime_guess = { version = "2" }
 tonic = "0.12.3"
 prost = "0.13.5"
