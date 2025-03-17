@@ -113,6 +113,9 @@ impl TaskManager {
         let mut notify_task_list = Vec::with_capacity(trigger_items.len());
         for item in trigger_items {
             let mut task_instance = JobTaskInfo::from_job(item.trigger_time, &item.job_info);
+            if !item.fix_addr.is_empty() {
+                task_instance.instance_addr = item.fix_addr;
+            }
             task_instance.task_id = start_id;
             start_id += 1;
             task_instance.status = TaskStatusType::Init;
@@ -200,6 +203,18 @@ impl TaskManager {
             let mut param = JobRunParam::from_job_info(task_info.task_id, &task_wrap.job_info);
             param.log_date_time = Some(task_info.trigger_time as u64 * 1000);
             match task_wrap.select_result {
+                InstanceAddrSelectResult::Fixed(addr) => {
+                    if let Err(err) =
+                        Self::do_run_task(addr, &param, &client, &xxl_request_header).await
+                    {
+                        task_info.status = TaskStatusType::Error;
+                        task_info.trigger_message = Arc::new(err.to_string());
+                        task_info.finish_time = now_second_u32();
+                        log::error!("run task error:{}", err);
+                    } else {
+                        task_info.status = TaskStatusType::Running;
+                    }
+                }
                 InstanceAddrSelectResult::Selected(addr) => {
                     if let Err(err) =
                         Self::do_run_task(addr, &param, &client, &xxl_request_header).await
@@ -329,6 +344,16 @@ impl TaskManager {
             .await
             .ok();
         match select_instance {
+            InstanceAddrSelectResult::Fixed(addr) => {
+                match Self::do_run_task(addr, &param, &client, &xxl_request_header).await {
+                    Err(err) => {
+                        task_instance.trigger_message = Arc::new(err.to_string());
+                        task_instance.status = TaskStatusType::Error;
+                        task_instance.finish_time = now_second_u32();
+                    }
+                    _ => {}
+                }
+            }
             InstanceAddrSelectResult::Selected(addr) => {
                 match Self::do_run_task(addr, &param, &client, &xxl_request_header).await {
                     Err(err) => {
