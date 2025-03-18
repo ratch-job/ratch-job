@@ -216,14 +216,21 @@ impl TaskManager {
                     }
                 }
                 InstanceAddrSelectResult::Selected(addr) => {
-                    if let Err(err) =
-                        Self::do_run_task(addr, &param, &client, &xxl_request_header).await
+                    let try_times = std::cmp::min(task_wrap.job_info.try_times, 10u32);
+                    if let Err(err) = Self::try_run_task(
+                        addr,
+                        task_wrap.app_addrs,
+                        &param,
+                        &client,
+                        &xxl_request_header,
+                        try_times,
+                    )
+                    .await
                     {
-                        //todo 重试
                         task_info.status = TaskStatusType::Error;
                         task_info.trigger_message = Arc::new(err.to_string());
                         task_info.finish_time = now_second_u32();
-                        log::error!("run task error:{}", err);
+                        log::error!("run task error,try_times:{},err:{}", try_times, err);
                     } else {
                         task_info.status = TaskStatusType::Running;
                     }
@@ -246,146 +253,48 @@ impl TaskManager {
         Ok(())
     }
 
-    fn trigger_task(
-        &mut self,
-        trigger_time: u32,
-        job_info: Arc<JobInfo>,
-        ctx: &mut Context<Self>,
+    async fn try_run_task(
+        instance_addr: Arc<String>,
+        all_addr: Vec<Arc<String>>,
+        param: &JobRunParam,
+        client: &reqwest::Client,
+        xxl_request_header: &HashMap<String, String>,
+        try_times: u32,
     ) -> anyhow::Result<()> {
-        if self.sequence_manager.is_none()
-            || self.job_manager.is_none()
-            || self.raft_request_route.is_none()
-        {
-            return Err(anyhow::anyhow!("sequence_manager or job_manager is none"));
-        }
-        let sequence_manager = self.sequence_manager.clone().unwrap();
-        let job_manager = self.job_manager.clone().unwrap();
-        let raft_request_route = self.raft_request_route.clone().unwrap();
-        let app_key = AppKey::new(job_info.app_name.clone(), job_info.namespace.clone());
-        if let Some(app_instance_group) = self.app_instance_group.get_mut(&app_key) {
-            let select = app_instance_group.select_instance(&job_info.router_strategy, job_info.id);
-            Self::run_task(
-                trigger_time,
-                job_info,
-                select,
-                app_instance_group.instance_keys.clone(),
-                self.xxl_request_header.clone(),
-                sequence_manager,
-                job_manager,
-                raft_request_route,
-            )
-            .into_actor(self)
-            .map(|mut task_info, act, _ctx| {
-                if task_info.status == TaskStatusType::Running {
-                    log::info!(
-                        "run task Running,job_id:{},task_id:{}",
-                        &task_info.job_id,
-                        &task_info.task_id
-                    );
-                } else if task_info.status == TaskStatusType::Error {
-                    log::error!(
-                        "run task error,job_id:{},task_id:{}",
-                        &task_info.job_id,
-                        &task_info.task_id
-                    );
-                    task_info.finish_time = now_second_u32();
-                    act.job_manager
-                        .as_ref()
-                        .unwrap()
-                        .do_send(JobManagerReq::UpdateTask(Arc::new(task_info)));
+        let mut times = try_times;
+        let mut index = 0;
+        if times > 0 {
+            for (i, addr) in all_addr.iter().enumerate() {
+                if addr == &instance_addr {
+                    index = i;
+                    break;
                 }
-            })
-            .spawn(ctx);
+            }
+        }
+        let mut current_addr = instance_addr;
+        while times >= 0 {
+            if let Err(err) =
+                Self::do_run_task(current_addr.clone(), param, client, xxl_request_header).await
+            {
+                if times == 0 || all_addr.is_empty() {
+                    return Err(err);
+                }
+                //获取下一个地址
+                index += 1;
+                current_addr = if index == all_addr.len() {
+                    all_addr[0].clone()
+                } else {
+                    all_addr[index].clone()
+                };
+                log::warn!("try run task error,last times:{},err:{}", times, err);
+                times -= 1;
+            } else {
+                return Ok(());
+            }
         }
         Ok(())
     }
 
-    async fn run_task(
-        trigger_time: u32,
-        job_info: Arc<JobInfo>,
-        select_instance: InstanceAddrSelectResult,
-        addrs: Vec<Arc<String>>,
-        xxl_request_header: HashMap<String, String>,
-        sequence_manager: Addr<SequenceManager>,
-        job_manager: Addr<JobManager>,
-        raft_request_route: Arc<RaftRequestRoute>,
-    ) -> JobTaskInfo {
-        let mut task_instance = JobTaskInfo::from_job(trigger_time, &job_info);
-        let client = reqwest::Client::new();
-        let task_id = if let Ok(Ok(SequenceResult::NextId(task_id))) = sequence_manager
-            .send(SequenceRequest::GetNextId(SEQ_TASK_ID.clone()))
-            .await
-        {
-            task_id
-        } else {
-            log::error!("get task id error!");
-            task_instance.status = TaskStatusType::Error;
-            task_instance.finish_time = now_second_u32();
-            task_instance.trigger_message = Arc::new("get task id error!".to_string());
-            raft_request_route
-                .request(ClientRequest::JobReq {
-                    req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone())),
-                })
-                .await
-                .ok();
-            return task_instance;
-        };
-        task_instance.task_id = task_id;
-        let mut param = JobRunParam::from_job_info(task_id, &job_info);
-        param.log_date_time = Some(trigger_time as u64 * 1000);
-        task_instance.status = TaskStatusType::Running;
-        if let InstanceAddrSelectResult::Selected(addr) = &select_instance {
-            task_instance.instance_addr = addr.clone();
-        }
-        raft_request_route
-            .request(ClientRequest::JobReq {
-                req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone())),
-            })
-            .await
-            .ok();
-        match select_instance {
-            InstanceAddrSelectResult::Fixed(addr) => {
-                match Self::do_run_task(addr, &param, &client, &xxl_request_header).await {
-                    Err(err) => {
-                        task_instance.trigger_message = Arc::new(err.to_string());
-                        task_instance.status = TaskStatusType::Error;
-                        task_instance.finish_time = now_second_u32();
-                    }
-                    _ => {}
-                }
-            }
-            InstanceAddrSelectResult::Selected(addr) => {
-                match Self::do_run_task(addr, &param, &client, &xxl_request_header).await {
-                    Err(err) => {
-                        //todo 重试
-                        task_instance.trigger_message = Arc::new(err.to_string());
-                        task_instance.status = TaskStatusType::Error;
-                        task_instance.finish_time = now_second_u32();
-                    }
-                    _ => {}
-                }
-            }
-            InstanceAddrSelectResult::ALL(addrs) => {
-                for addr in addrs {
-                    Self::do_run_task(addr, &param, &client, &xxl_request_header)
-                        .await
-                        .ok();
-                }
-            }
-            InstanceAddrSelectResult::Empty => {
-                task_instance.status = TaskStatusType::Error;
-                task_instance.trigger_message = Arc::new("no instance selected".to_string());
-                task_instance.finish_time = now_second_u32();
-            }
-        }
-        raft_request_route
-            .request(ClientRequest::JobReq {
-                req: JobManagerRaftReq::UpdateTask(Arc::new(task_instance.clone())),
-            })
-            .await
-            .ok();
-        task_instance
-    }
     async fn do_run_task(
         instance_addr: Arc<String>,
         param: &JobRunParam,
@@ -441,9 +350,6 @@ impl Handler<TaskManagerReq> for TaskManager {
                 for keys in app_instance_keys {
                     self.remove_app_instance(keys.build_app_key(), keys.addr);
                 }
-            }
-            TaskManagerReq::TriggerTask(trigger_time, job) => {
-                self.trigger_task(trigger_time, job, ctx)?;
             }
             TaskManagerReq::TriggerTaskList(trigger_list) => {
                 self.trigger_task_list(trigger_list, ctx)?;

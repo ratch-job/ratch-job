@@ -51,7 +51,6 @@ pub enum TaskManagerReq {
     AddAppInstances(Vec<AppInstanceKey>),
     RemoveAppInstance(AppKey, Arc<String>),
     RemoveAppInstances(Vec<AppInstanceKey>),
-    TriggerTask(u32, Arc<JobInfo>),
     TriggerTaskList(Vec<TriggerItem>),
 }
 
