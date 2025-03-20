@@ -14,6 +14,12 @@ pub enum RegisterType {
     Manual,
 }
 
+impl Default for RegisterType {
+    fn default() -> Self {
+        RegisterType::Auto
+    }
+}
+
 impl RegisterType {
     pub fn from_str(s: &str) -> RegisterType {
         match s {
@@ -31,7 +37,7 @@ impl RegisterType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AppInfo {
     pub app_name: Arc<String>,
     pub namespace: Arc<String>,
@@ -97,7 +103,7 @@ impl<'a> From<AppInfoDo<'a>> for AppInfo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AppInstance {
     pub addr: Arc<String>,
     pub healthy: bool,

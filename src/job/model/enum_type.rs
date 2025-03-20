@@ -10,6 +10,12 @@ pub enum ScheduleType {
     None,
 }
 
+impl Default for ScheduleType {
+    fn default() -> Self {
+        ScheduleType::None
+    }
+}
+
 impl ScheduleType {
     pub fn from_str(glue_type: &str) -> ScheduleType {
         match glue_type {
@@ -40,6 +46,12 @@ pub enum JobRunMode {
     GluePhp,
     GlueNodejs,
     GluePowerShell,
+}
+
+impl Default for JobRunMode {
+    fn default() -> Self {
+        JobRunMode::Bean
+    }
 }
 
 impl JobRunMode {
@@ -86,6 +98,12 @@ pub enum RouterStrategy {
     ShardingBroadcast,
 }
 
+impl Default for RouterStrategy {
+    fn default() -> Self {
+        RouterStrategy::RoundRobin
+    }
+}
+
 impl RouterStrategy {
     pub fn from_str(glue_type: &str) -> Option<RouterStrategy> {
         match glue_type {
@@ -119,6 +137,12 @@ pub enum PastDueStrategy {
     Execute,
 }
 
+impl Default for PastDueStrategy {
+    fn default() -> Self {
+        PastDueStrategy::Default
+    }
+}
+
 impl PastDueStrategy {
     pub fn from_str(glue_type: &str) -> PastDueStrategy {
         match glue_type {
@@ -145,6 +169,12 @@ pub enum ExecutorBlockStrategy {
     DiscardLater,
     CoverEarly,
     Other,
+}
+
+impl Default for ExecutorBlockStrategy {
+    fn default() -> Self {
+        ExecutorBlockStrategy::SerialExecution
+    }
 }
 
 impl ExecutorBlockStrategy {

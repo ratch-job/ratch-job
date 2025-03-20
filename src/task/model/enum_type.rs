@@ -9,6 +9,12 @@ pub enum TaskStatusType {
     Success,
 }
 
+impl Default for TaskStatusType {
+    fn default() -> Self {
+        TaskStatusType::Init
+    }
+}
+
 impl TaskStatusType {
     pub fn from_str(status_type: &str) -> TaskStatusType {
         match status_type {
