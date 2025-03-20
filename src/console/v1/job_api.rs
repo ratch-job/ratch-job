@@ -191,6 +191,7 @@ pub(crate) async fn trigger_job(
         param.instance_addr.unwrap_or(EMPTY_ARC_STR.clone()),
         EMPTY_ARC_STR.clone(),
     );
+    log::info!("trigger_job task_item:{:?}", &task_item);
     if let Ok(Ok(_)) = share_data
         .task_manager
         .send(TaskManagerReq::TriggerTaskList(vec![task_item]))

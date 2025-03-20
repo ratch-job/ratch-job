@@ -28,6 +28,11 @@ message JobDo {
     uint64 create_time = 20;
 }
 
+message TaskTryLogDo {
+    uint32 execution_time = 1;
+    string addr = 2;
+}
+
 message JobTaskDo {
     uint64 task_id = 1;
     uint64 job_id = 2;
@@ -37,7 +42,12 @@ message JobTaskDo {
     string status = 6;
     uint32 finish_time = 7;
     string callback_message = 8;
+    uint32 execution_time = 9;
+    string trigger_from = 10;
+    uint32 try_times = 11;
+    repeated TaskTryLogDo try_logs = 12;
 }
+
 
 message AppInstanceDo {
     string addr = 1;

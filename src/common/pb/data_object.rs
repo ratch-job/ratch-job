@@ -124,6 +124,42 @@ impl<'a> MessageWrite for JobDo<'a> {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
+pub struct TaskTryLogDo<'a> {
+    pub execution_time: u32,
+    pub addr: Cow<'a, str>,
+}
+
+impl<'a> MessageRead<'a> for TaskTryLogDo<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.execution_time = r.read_uint32(bytes)?,
+                Ok(18) => msg.addr = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for TaskTryLogDo<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.execution_time == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.execution_time) as u64) }
+        + if self.addr == "" { 0 } else { 1 + sizeof_len((&self.addr).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.execution_time != 0u32 { w.write_with_tag(8, |w| w.write_uint32(*&self.execution_time))?; }
+        if self.addr != "" { w.write_with_tag(18, |w| w.write_string(&**&self.addr))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct JobTaskDo<'a> {
     pub task_id: u64,
     pub job_id: u64,
@@ -133,6 +169,10 @@ pub struct JobTaskDo<'a> {
     pub status: Cow<'a, str>,
     pub finish_time: u32,
     pub callback_message: Cow<'a, str>,
+    pub execution_time: u32,
+    pub trigger_from: Cow<'a, str>,
+    pub try_times: u32,
+    pub try_logs: Vec<data_object::TaskTryLogDo<'a>>,
 }
 
 impl<'a> MessageRead<'a> for JobTaskDo<'a> {
@@ -148,6 +188,10 @@ impl<'a> MessageRead<'a> for JobTaskDo<'a> {
                 Ok(50) => msg.status = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(56) => msg.finish_time = r.read_uint32(bytes)?,
                 Ok(66) => msg.callback_message = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(72) => msg.execution_time = r.read_uint32(bytes)?,
+                Ok(82) => msg.trigger_from = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(88) => msg.try_times = r.read_uint32(bytes)?,
+                Ok(98) => msg.try_logs.push(r.read_message::<data_object::TaskTryLogDo>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -167,6 +211,10 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
         + if self.status == "" { 0 } else { 1 + sizeof_len((&self.status).len()) }
         + if self.finish_time == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.finish_time) as u64) }
         + if self.callback_message == "" { 0 } else { 1 + sizeof_len((&self.callback_message).len()) }
+        + if self.execution_time == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.execution_time) as u64) }
+        + if self.trigger_from == "" { 0 } else { 1 + sizeof_len((&self.trigger_from).len()) }
+        + if self.try_times == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.try_times) as u64) }
+        + self.try_logs.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -178,6 +226,10 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
         if self.status != "" { w.write_with_tag(50, |w| w.write_string(&**&self.status))?; }
         if self.finish_time != 0u32 { w.write_with_tag(56, |w| w.write_uint32(*&self.finish_time))?; }
         if self.callback_message != "" { w.write_with_tag(66, |w| w.write_string(&**&self.callback_message))?; }
+        if self.execution_time != 0u32 { w.write_with_tag(72, |w| w.write_uint32(*&self.execution_time))?; }
+        if self.trigger_from != "" { w.write_with_tag(82, |w| w.write_string(&**&self.trigger_from))?; }
+        if self.try_times != 0u32 { w.write_with_tag(88, |w| w.write_uint32(*&self.try_times))?; }
+        for s in &self.try_logs { w.write_with_tag(98, |w| w.write_message(s))?; }
         Ok(())
     }
 }

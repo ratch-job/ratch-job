@@ -1,22 +1,36 @@
 use crate::app::model::{AppInstanceKey, AppKey};
-use crate::common::constant::EMPTY_ARC_STR;
+use crate::common::constant::{EMPTY_ARC_STR, TRIGGER_FROM_SYSTEM};
 use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::Message;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
-pub enum TriggerSource {
+pub enum TriggerSourceType {
     System,
     User(Arc<String>),
+}
+
+impl TriggerSourceType {
+    pub fn get_source_from(&self) -> Arc<String> {
+        match self {
+            TriggerSourceType::System => TRIGGER_FROM_SYSTEM.clone(),
+            TriggerSourceType::User(user) => user.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TriggerSourceInfo {
+    pub fix_addr: Arc<String>,
+    pub source_type: TriggerSourceType,
 }
 
 #[derive(Debug, Clone)]
 pub struct TriggerItem {
     pub trigger_time: u32,
     pub job_info: Arc<JobInfo>,
-    pub fix_addr: Arc<String>,
-    pub trigger_source: TriggerSource,
+    pub trigger_source: TriggerSourceInfo,
 }
 
 impl TriggerItem {
@@ -24,8 +38,10 @@ impl TriggerItem {
         TriggerItem {
             trigger_time,
             job_info,
-            fix_addr: EMPTY_ARC_STR.clone(),
-            trigger_source: TriggerSource::System,
+            trigger_source: TriggerSourceInfo {
+                fix_addr: EMPTY_ARC_STR.clone(),
+                source_type: TriggerSourceType::System,
+            },
         }
     }
 
@@ -38,8 +54,10 @@ impl TriggerItem {
         TriggerItem {
             trigger_time,
             job_info,
-            fix_addr,
-            trigger_source: TriggerSource::User(user_name),
+            trigger_source: TriggerSourceInfo {
+                fix_addr,
+                source_type: TriggerSourceType::User(user_name),
+            },
         }
     }
 }

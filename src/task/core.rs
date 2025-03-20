@@ -10,7 +10,9 @@ use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::ClientRequest;
 use crate::sequence::model::SeqRange;
 use crate::sequence::{SequenceManager, SequenceRequest, SequenceResult};
-use crate::task::model::actor_model::{TaskManagerReq, TaskManagerResult, TriggerItem};
+use crate::task::model::actor_model::{
+    TaskManagerReq, TaskManagerResult, TriggerItem, TriggerSourceInfo, TriggerSourceType,
+};
 use crate::task::model::app_instance::{AppInstanceStateGroup, InstanceAddrSelectResult};
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobRunParam;
@@ -106,21 +108,22 @@ impl TaskManager {
         trigger_items: Vec<TriggerItem>,
         raft_request_route: Arc<RaftRequestRoute>,
         sequence_manager: Addr<SequenceManager>,
-    ) -> anyhow::Result<Vec<(JobTaskInfo, Arc<JobInfo>)>> {
+    ) -> anyhow::Result<Vec<(JobTaskInfo, Arc<JobInfo>, TriggerSourceInfo)>> {
         let range = Self::fetch_task_ids(sequence_manager, trigger_items.len() as u64).await?;
         let mut start_id = range.start;
         let mut task_list = Vec::with_capacity(trigger_items.len());
         let mut notify_task_list = Vec::with_capacity(trigger_items.len());
         for item in trigger_items {
             let mut task_instance = JobTaskInfo::from_job(item.trigger_time, &item.job_info);
-            if !item.fix_addr.is_empty() {
-                task_instance.instance_addr = item.fix_addr;
+            if let TriggerSourceType::User(_) = &item.trigger_source.source_type {
+                task_instance.try_times = 0;
             }
             task_instance.task_id = start_id;
             start_id += 1;
             task_instance.status = TaskStatusType::Init;
+            task_instance.trigger_from = item.trigger_source.source_type.get_source_from();
             notify_task_list.push(Arc::new(task_instance.clone()));
-            task_list.push((task_instance, item.job_info))
+            task_list.push((task_instance, item.job_info, item.trigger_source))
         }
         Self::notify_update_task(&raft_request_route, notify_task_list).await?;
         Ok(task_list)
@@ -157,16 +160,20 @@ impl TaskManager {
 
     fn build_task_wrap(
         &mut self,
-        tasks: Vec<(JobTaskInfo, Arc<JobInfo>)>,
+        tasks: Vec<(JobTaskInfo, Arc<JobInfo>, TriggerSourceInfo)>,
     ) -> (Vec<TaskWrap>, Vec<Arc<JobTaskInfo>>) {
         let mut task_list = Vec::with_capacity(tasks.len());
         let mut ignore_task_list = Vec::new();
         let now_second = now_second_u32();
-        for (mut task, job_info) in tasks {
+        for (mut task, job_info, trigger_source) in tasks {
+            task.execution_time = now_second;
             let app_key = job_info.build_app_key();
             if let Some(app_instance_group) = self.app_instance_group.get_mut(&app_key) {
-                let select =
-                    app_instance_group.select_instance(&job_info.router_strategy, job_info.id);
+                let select = if trigger_source.fix_addr.is_empty() {
+                    app_instance_group.select_instance(&job_info.router_strategy, job_info.id)
+                } else {
+                    InstanceAddrSelectResult::Fixed(trigger_source.fix_addr.clone())
+                };
                 if let &InstanceAddrSelectResult::Empty = &select {
                     task.status = TaskStatusType::Error;
                     task.finish_time = now_second;
@@ -178,6 +185,7 @@ impl TaskManager {
                         job_info,
                         select_result: select,
                         app_addrs: app_instance_group.instance_keys.clone(),
+                        trigger_source,
                     };
                     task_list.push(wrap);
                 }
@@ -204,6 +212,7 @@ impl TaskManager {
             param.log_date_time = Some(task_info.trigger_time as u64 * 1000);
             match task_wrap.select_result {
                 InstanceAddrSelectResult::Fixed(addr) => {
+                    task_info.instance_addr = addr.clone();
                     if let Err(err) =
                         Self::do_run_task(addr, &param, &client, &xxl_request_header).await
                     {
@@ -216,21 +225,17 @@ impl TaskManager {
                     }
                 }
                 InstanceAddrSelectResult::Selected(addr) => {
-                    let try_times = std::cmp::min(task_wrap.job_info.try_times, 10u32);
-                    if let Err(err) = Self::try_run_task(
-                        addr,
-                        task_wrap.app_addrs,
-                        &param,
-                        &client,
-                        &xxl_request_header,
-                        try_times,
-                    )
-                    .await
+                    task_info.instance_addr = addr.clone();
+                    //let try_times = std::cmp::max(std::cmp::min(task_wrap.job_info.try_times, 5u32),1u32);
+                    //if let Err(err) = Self::try_run_task( addr, task_wrap.app_addrs, &param, &client, &xxl_request_header, try_times).await
+                    if let Err(err) =
+                        Self::do_run_task(addr, &param, &client, &xxl_request_header).await
                     {
                         task_info.status = TaskStatusType::Error;
                         task_info.trigger_message = Arc::new(err.to_string());
                         task_info.finish_time = now_second_u32();
-                        log::error!("run task error,try_times:{},err:{}", try_times, err);
+                        //log::error!("run task error,try_times:{},err:{}", try_times, err);
+                        log::error!("run task error,err:{}", err);
                     } else {
                         task_info.status = TaskStatusType::Running;
                     }
@@ -253,6 +258,7 @@ impl TaskManager {
         Ok(())
     }
 
+    /*
     async fn try_run_task(
         instance_addr: Arc<String>,
         all_addr: Vec<Arc<String>>,
@@ -294,6 +300,7 @@ impl TaskManager {
         }
         Ok(())
     }
+     */
 
     async fn do_run_task(
         instance_addr: Arc<String>,
