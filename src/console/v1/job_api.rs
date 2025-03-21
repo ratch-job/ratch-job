@@ -1,8 +1,10 @@
-use crate::common::constant::SEQ_JOB_ID;
-use crate::common::datetime_utils::now_millis;
+use crate::common::constant::{EMPTY_ARC_STR, SEQ_JOB_ID};
+use crate::common::datetime_utils::{now_millis, now_second_u32};
 use crate::common::model::{ApiResult, PageResult};
 use crate::common::share_data::ShareData;
-use crate::console::model::job::{JobInfoParam, JobQueryListRequest, JobTaskLogQueryListRequest};
+use crate::console::model::job::{
+    JobInfoParam, JobQueryListRequest, JobTaskLogQueryListRequest, TriggerJobParam,
+};
 use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
@@ -11,7 +13,9 @@ use crate::job::model::job::JobParam;
 use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
 use crate::sequence::{SequenceRequest, SequenceResult};
-use crate::task::model::actor_model::{TaskHistoryManagerReq, TaskHistoryManagerResult};
+use crate::task::model::actor_model::{
+    TaskHistoryManagerReq, TaskHistoryManagerResult, TaskManagerReq, TriggerItem,
+};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
@@ -156,6 +160,47 @@ pub(crate) async fn remove_job(
         HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("remove_job error".to_string()),
+        ))
+    }
+}
+
+pub(crate) async fn trigger_job(
+    share_data: Data<Arc<ShareData>>,
+    web::Json(param): web::Json<TriggerJobParam>,
+) -> impl Responder {
+    let id = param.job_id.unwrap_or_default();
+    if id == 0 {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("trigger_job error,the job id is invalid".to_string()),
+        ));
+    }
+    let job_info = if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) =
+        share_data.job_manager.send(JobManagerReq::GetJob(id)).await
+    {
+        job_info
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("query_job_info error".to_string()),
+        ));
+    };
+    let task_item = TriggerItem::new_with_user(
+        now_second_u32(),
+        job_info,
+        param.instance_addr.unwrap_or(EMPTY_ARC_STR.clone()),
+        EMPTY_ARC_STR.clone(),
+    );
+    if let Ok(Ok(_)) = share_data
+        .task_manager
+        .send(TaskManagerReq::TriggerTaskList(vec![task_item]))
+        .await
+    {
+        HttpResponse::Ok().json(ApiResult::success(Some(())))
+    } else {
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("trigger_job error".to_string()),
         ))
     }
 }

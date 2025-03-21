@@ -94,8 +94,8 @@ impl SeqGroup {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct SeqRange {
-    start: u64,
-    len: u64,
+    pub(crate) start: u64,
+    pub(crate) len: u64,
     current_index: u64,
 }
 

@@ -184,12 +184,53 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
+pub struct AppInstanceDo<'a> {
+    pub addr: Cow<'a, str>,
+    pub last_modified_time: u32,
+    pub token: Cow<'a, str>,
+}
+
+impl<'a> MessageRead<'a> for AppInstanceDo<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.addr = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(16) => msg.last_modified_time = r.read_uint32(bytes)?,
+                Ok(26) => msg.token = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for AppInstanceDo<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.addr == "" { 0 } else { 1 + sizeof_len((&self.addr).len()) }
+        + if self.last_modified_time == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.last_modified_time) as u64) }
+        + if self.token == "" { 0 } else { 1 + sizeof_len((&self.token).len()) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.addr != "" { w.write_with_tag(10, |w| w.write_string(&**&self.addr))?; }
+        if self.last_modified_time != 0u32 { w.write_with_tag(16, |w| w.write_uint32(*&self.last_modified_time))?; }
+        if self.token != "" { w.write_with_tag(26, |w| w.write_string(&**&self.token))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct AppInfoDo<'a> {
     pub app_name: Cow<'a, str>,
     pub namespace: Cow<'a, str>,
     pub label: Cow<'a, str>,
     pub register_type: Cow<'a, str>,
     pub tmp: bool,
+    pub instances: Vec<data_object::AppInstanceDo<'a>>,
 }
 
 impl<'a> MessageRead<'a> for AppInfoDo<'a> {
@@ -202,6 +243,7 @@ impl<'a> MessageRead<'a> for AppInfoDo<'a> {
                 Ok(26) => msg.label = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(34) => msg.register_type = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(40) => msg.tmp = r.read_bool(bytes)?,
+                Ok(50) => msg.instances.push(r.read_message::<data_object::AppInstanceDo>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -218,6 +260,7 @@ impl<'a> MessageWrite for AppInfoDo<'a> {
         + if self.label == "" { 0 } else { 1 + sizeof_len((&self.label).len()) }
         + if self.register_type == "" { 0 } else { 1 + sizeof_len((&self.register_type).len()) }
         + if self.tmp == false { 0 } else { 1 + sizeof_varint(*(&self.tmp) as u64) }
+        + self.instances.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -226,6 +269,7 @@ impl<'a> MessageWrite for AppInfoDo<'a> {
         if self.label != "" { w.write_with_tag(26, |w| w.write_string(&**&self.label))?; }
         if self.register_type != "" { w.write_with_tag(34, |w| w.write_string(&**&self.register_type))?; }
         if self.tmp != false { w.write_with_tag(40, |w| w.write_bool(*&self.tmp))?; }
+        for s in &self.instances { w.write_with_tag(50, |w| w.write_message(s))?; }
         Ok(())
     }
 }

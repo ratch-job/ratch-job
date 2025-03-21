@@ -1,0 +1,18 @@
+# 集群部署样例,数据目录: ./data
+version: '3.8'
+
+services:
+  ratchjob:
+    image: qingpan/ratchjob:latest
+    container_name: ratchjob
+    ports:
+      - "8725:8725"
+      - "8825:8825"
+      - "8925:8925"
+    volumes:
+      - ./data:/io:rw
+    environment:
+      - RATCH_HTTP_API_PORT=8725
+      - RATCH_XXL_DEFAULT_ACCESS_TOKEN=default_token
+      - DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH=/xxl-job-admin
+    restart: always

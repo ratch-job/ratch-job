@@ -65,14 +65,13 @@ impl JobManager {
         if id == 0 {
             return Err(anyhow::anyhow!("UpdateJob JobParam.id==0 is invalid!"));
         }
-        if let Some(job_wrap) = self.job_map.get(&id) {
+        if let Some(job_wrap) = self.job_map.get_mut(&id) {
             let job_info = &job_wrap.job;
             let mut new_job = job_info.as_ref().clone();
             new_job.update_param(job_param);
             job_info.check_valid()?;
             let value = Arc::new(new_job);
-            self.job_map
-                .insert(job_info.id, JobWrap::new(value.clone()));
+            job_wrap.job = value.clone();
             if let Some(schedule_manager) = self.schedule_manager.as_ref() {
                 schedule_manager.do_send(ScheduleManagerReq::UpdateJob(value.clone()));
             }

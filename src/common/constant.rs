@@ -21,4 +21,7 @@ lazy_static::lazy_static! {
     pub static ref SEQ_NOTIFY_OBJEC_REL_ID: Arc<String> =  Arc::new("object_rel_id".to_string());
 
     pub static ref SEQ_NOTIFY_CONFIG_ID: Arc<String> =  Arc::new("notify_config_id".to_string());
+
+    // error info
+    pub static ref ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR: Arc<String> =  Arc::new("Not found the application instance address".to_string());
 }

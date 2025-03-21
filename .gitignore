@@ -3,3 +3,4 @@ Cargo.lock
 .idea/
 .env
 /ratch_db
+cluster_example/

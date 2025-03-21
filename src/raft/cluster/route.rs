@@ -2,6 +2,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use super::model::{RouteAddr, RouterRequest, RouterResponse};
 use crate::grpc::handler::RAFT_ROUTE_REQUEST;
+use crate::raft::cluster::router_request;
 use crate::raft::store::core::Store;
 use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::raft::RatchRaft;
@@ -83,11 +84,7 @@ impl RaftRequestRoute {
             }
             RouteAddr::Remote(_, addr) => {
                 let req: RouterRequest = req.into();
-                let request = serde_json::to_vec(&req).unwrap_or_default();
-                let payload = PayloadUtils::build_payload(RAFT_ROUTE_REQUEST, request);
-                let resp_payload = self.cluster_sender.send_request(addr, payload).await?;
-                let body_vec = resp_payload.body.unwrap_or_default().value;
-                let router_resp: RouterResponse = serde_json::from_slice(&body_vec)?;
+                let router_resp = router_request(req, addr, &self.cluster_sender).await?;
                 let resp: ClientResponse = router_resp.try_into()?;
                 Ok(resp)
             }

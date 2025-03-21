@@ -1,6 +1,6 @@
 use crate::app::app_index::AppQueryParam;
-use crate::common::datetime_utils::now_millis;
-use crate::common::pb::data_object::AppInfoDo;
+use crate::common::datetime_utils::now_second_u32;
+use crate::common::pb::data_object::{AppInfoDo, AppInstanceDo};
 use actix::Message;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -64,24 +64,34 @@ impl AppInfo {
     }
 
     pub fn to_do(&self) -> AppInfoDo {
+        let mut instances = vec![];
+        for (_, instance) in self.instance_map.iter() {
+            instances.push(instance.to_do());
+        }
         AppInfoDo {
             app_name: Cow::Borrowed(&self.app_name),
             namespace: Cow::Borrowed(&self.namespace),
             label: Cow::Borrowed(&self.label),
             register_type: Cow::Borrowed(self.register_type.to_str()),
             tmp: self.tmp,
+            instances,
         }
     }
 }
 
 impl<'a> From<AppInfoDo<'a>> for AppInfo {
     fn from(record: AppInfoDo<'a>) -> Self {
+        let mut instance_map = HashMap::new();
+        for item in record.instances {
+            let instance: AppInstance = item.into();
+            instance_map.insert(instance.addr.clone(), instance);
+        }
         AppInfo {
             app_name: Arc::new(record.app_name.to_string()),
             namespace: Arc::new(record.namespace.to_string()),
             label: Arc::new(record.label.to_string()),
             register_type: RegisterType::from_str(&record.register_type),
-            instance_map: HashMap::new(),
+            instance_map,
             tmp: record.tmp,
         }
     }
@@ -92,21 +102,59 @@ pub struct AppInstance {
     pub addr: Arc<String>,
     pub healthy: bool,
     pub enable: bool,
-    pub last_modified_millis: u64,
-    pub register_time: u64,
+    pub last_modified_time: u32,
+    pub register_time: u32,
 }
 
 impl AppInstance {
     pub fn new(addr: Arc<String>) -> Self {
-        let now = now_millis();
+        let now = now_second_u32();
         AppInstance {
             addr,
             healthy: true,
             enable: true,
-            last_modified_millis: now,
+            last_modified_time: now,
             register_time: now,
         }
     }
+
+    pub fn new_with_time(addr: Arc<String>, last_time: u32) -> Self {
+        AppInstance {
+            addr,
+            healthy: true,
+            enable: true,
+            last_modified_time: last_time,
+            register_time: last_time,
+        }
+    }
+
+    pub fn to_do(&self) -> AppInstanceDo {
+        AppInstanceDo {
+            addr: Cow::Borrowed(&self.addr),
+            last_modified_time: self.last_modified_time,
+            token: Cow::Borrowed(""),
+        }
+    }
+}
+
+impl<'a> From<AppInstanceDo<'a>> for AppInstance {
+    fn from(record: AppInstanceDo<'a>) -> Self {
+        AppInstance {
+            addr: Arc::new(record.addr.to_string()),
+            healthy: true,
+            enable: true,
+            last_modified_time: record.last_modified_time,
+            register_time: record.last_modified_time,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInstanceDto {
+    pub app_key: AppKey,
+    pub instance_addr: Arc<String>,
+    pub last_modified_time: u32,
 }
 
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
@@ -151,6 +199,51 @@ impl From<&str> for AppKey {
     }
 }
 
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInstanceKey {
+    pub app_name: Arc<String>,
+    pub namespace: Arc<String>,
+    pub addr: Arc<String>,
+}
+
+impl AppInstanceKey {
+    pub fn new(app_name: Arc<String>, namespace: Arc<String>, addr: Arc<String>) -> Self {
+        AppInstanceKey {
+            app_name,
+            namespace,
+            addr,
+        }
+    }
+
+    pub fn new_with_app_key(app_key: AppKey, addr: Arc<String>) -> Self {
+        AppInstanceKey::new(app_key.app_name, app_key.namespace, addr)
+    }
+
+    pub fn build_app_key(&self) -> AppKey {
+        AppKey::new(self.app_name.clone(), self.namespace.clone())
+    }
+
+    pub fn build_key(&self) -> String {
+        format!("{}\x02{}\x02{}", self.namespace, self.app_name, self.addr)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct InstanceTimeoutInfo {
+    pub app_instance_key: AppInstanceKey,
+    pub timeout: u32,
+}
+
+impl InstanceTimeoutInfo {
+    pub fn new(app_instance_key: AppInstanceKey, timeout: u32) -> Self {
+        Self {
+            app_instance_key,
+            timeout,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfoDto {
@@ -190,6 +283,7 @@ pub struct AppParam {
     pub label: Option<Arc<String>>,
     pub register_type: Option<RegisterType>,
     pub instance_addrs: Option<Vec<Arc<String>>>,
+    pub last_modified_time: u32,
 }
 
 impl AppParam {
@@ -198,22 +292,50 @@ impl AppParam {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInstanceParam {
+    pub app_key: AppKey,
+    pub instance_addr: Arc<String>,
+    pub last_modified_time: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppRouteRequest {
+    RegisterInstance(AppInstanceParam),
+    UnregisterInstance(AppInstanceParam),
+    GetAllInstanceAddrs,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppRouteResponse {
+    AllInstanceAddrs(Vec<AppInstanceDto>),
+    None,
+}
+
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<AppManagerResult>")]
 pub enum AppManagerReq {
     GetApp(AppKey),
+    #[deprecated]
     RegisterAppInstance(AppKey, Arc<String>),
     UnregisterAppInstance(AppKey, Arc<String>),
     GetAppInstanceAddrs(AppKey),
+    GetAllInstanceAddrs,
     QueryApp(AppQueryParam),
+    AppRouteRequest(AppRouteRequest),
 }
 
 #[derive(Debug, Clone)]
 pub enum AppManagerResult {
     None,
     AppInfo(Option<AppInfoDto>),
-    InstanceAddrs(Arc<Vec<Arc<String>>>),
+    AppInstanceAddrs(Arc<Vec<Arc<String>>>),
     AppPageInfo(usize, Vec<AppInfoDto>),
+    AllInstanceAddrs(Vec<AppInstanceDto>),
+    AppRouteResponse(AppRouteResponse),
 }
 
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]
@@ -221,6 +343,8 @@ pub enum AppManagerResult {
 pub enum AppManagerRaftReq {
     UpdateApp(AppParam),
     RemoveApp(AppKey),
+    RegisterInstance(AppInstanceParam),
+    UnregisterInstance(AppInstanceParam),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

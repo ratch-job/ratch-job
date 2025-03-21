@@ -70,10 +70,12 @@ impl JobRunState {
             self.delay_second = source_job.delay_second;
         }
         self.source_job = source_job;
-        if self.version == u32::MAX {
-            self.version = 0;
-        } else {
-            self.version += 1;
+        if change_schedule {
+            if self.version == u32::MAX {
+                self.version = 0;
+            } else {
+                self.version += 1;
+            }
         }
         change_schedule
     }

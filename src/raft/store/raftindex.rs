@@ -198,6 +198,15 @@ impl RaftIndexManager {
         }
     }
 
+    fn notify_voted(&self, current_term: u64, voted_for: u64) {
+        if let Some(cluster_node_manage) = &self.cluster_node_manage {
+            cluster_node_manage.do_send(NodeManageRequest::UpdateVoted {
+                voted_for,
+                current_term,
+            });
+        }
+    }
+
     fn inner_is_empty_error() -> anyhow::Error {
         anyhow::anyhow!("inner is empty")
     }
@@ -362,6 +371,7 @@ impl RaftIndexManager {
             inner.raft_index.current_term = current_term;
             inner.raft_index.voted_for = voted_for;
             let index_info = inner.raft_index.clone();
+            self.notify_voted(current_term, voted_for);
             self.write_index(ctx, index_info, false)
         } else {
             Err(Self::inner_is_empty_error())
@@ -389,6 +399,9 @@ impl Inject for RaftIndexManager {
     ) {
         self.cluster_node_manage = factory_data.get_actor();
         self.do_notify_membership(false);
+        if let Some(inner) = &self.inner {
+            self.notify_voted(inner.raft_index.current_term, inner.raft_index.voted_for);
+        }
     }
 }
 

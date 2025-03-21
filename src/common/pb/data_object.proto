@@ -39,12 +39,19 @@ message JobTaskDo {
     string callback_message = 8;
 }
 
+message AppInstanceDo {
+    string addr = 1;
+    uint32 last_modified_time= 2;
+    string token= 3;
+}
+
 message AppInfoDo {
     string app_name = 1;
     string namespace = 2;
     string label = 3;
     string register_type = 4;
     bool tmp = 5;
+    repeated AppInstanceDo instances= 6;
 }
 
 message NotifyConfigDo {

@@ -26,6 +26,7 @@ pub struct RaftDataHandler {
 impl RaftDataHandler {
     /// 构建raft快照
     pub async fn build_snapshot(&self, writer: Addr<SnapshotWriterActor>) -> anyhow::Result<()> {
+        log::info!("RaftDataHandler|build_snapshot");
         self.sequence_db
             .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
             .await??;
@@ -67,6 +68,19 @@ impl RaftDataHandler {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    pub fn load_complete(&self) -> anyhow::Result<()> {
+        log::info!("RaftDataHandler|load_complete");
+        self.sequence_db
+            .do_send(RaftApplyDataRequest::LoadCompleted);
+        self.app_manager
+            .do_send(RaftApplyDataRequest::LoadCompleted);
+        self.job_manager
+            .do_send(RaftApplyDataRequest::LoadCompleted);
+        self.schedule_manager
+            .do_send(RaftApplyDataRequest::LoadCompleted);
         Ok(())
     }
 
