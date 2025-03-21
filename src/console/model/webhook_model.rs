@@ -1,13 +1,14 @@
-use std::str::FromStr;
-use std::sync::Arc;
+use crate::app::model::AppKey;
+use crate::webhook::model::ChannelType::{Email, WebHook};
+use crate::webhook::model::{ChannelConfig, ChannelType, EmailConfig, EmailType, HookConfig, NotifyConfigModel, NotifyConfigModelOb, NotifyConfigPageQuery, WebHookSource};
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
-use crate::app::model::AppKey;
-use crate::webhook::model::{ChannelConfig, ChannelType, EmailConfig, EmailType, HookConfig, NotifyConfigModel, NotifyConfigModelOb, NotifyConfigPageQuery, NotifyEvent, NotifyObject, WebHookSource};
-use crate::webhook::model::ChannelType::{Email, WebHook};
+use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct NotifyConfigAdd {
+    pub enable: bool,
     pub app_name: Arc<String>,
     pub namespace: Arc<String>,
     pub name: String, //配置的名称
@@ -58,6 +59,7 @@ impl NotifyConfigAdd {
             }
         };
         let model = NotifyConfigModel{
+            enable: self.enable,
             app_key: AppKey {
                 app_name: self.app_name.clone(),
                 namespace: self.namespace.clone(),
@@ -73,6 +75,7 @@ impl NotifyConfigAdd {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NotifyConfigUpdate {
     pub id: u64,
+    pub enable: bool,
     pub app_name: Arc<String>,
     pub namespace: Arc<String>,
     pub name: String, //配置的名称
@@ -123,6 +126,7 @@ impl NotifyConfigUpdate {
             }
         };
         let model = NotifyConfigModel{
+            enable: self.enable,
             app_key: AppKey {
                 app_name: self.app_name.clone(),
                 namespace: self.namespace.clone(),

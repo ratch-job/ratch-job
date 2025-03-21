@@ -12,6 +12,7 @@ use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::schedule::core::ScheduleManager;
 use crate::sequence::core::SequenceDbManager;
 use actix::prelude::*;
+use crate::webhook::core::WebHookManager;
 
 #[derive(Clone)]
 pub struct RaftDataHandler {
@@ -19,6 +20,7 @@ pub struct RaftDataHandler {
     pub app_manager: Addr<AppManager>,
     pub job_manager: Addr<JobManager>,
     pub schedule_manager: Addr<ScheduleManager>,
+    pub webhook_manager: Addr<WebHookManager>,
 }
 
 impl RaftDataHandler {
@@ -103,6 +105,9 @@ impl RaftDataHandler {
             ClientRequest::ScheduleReq { req } => {
                 self.schedule_manager.send(req).await.ok();
             }
+            ClientRequest::NotifyConfigReq { req } => {
+                self.webhook_manager.send(req).await.ok();
+            }
         }
         Ok(())
     }
@@ -142,6 +147,10 @@ impl RaftDataHandler {
                 let r = self.schedule_manager.send(req).await??;
                 Ok(ClientResponse::ScheduleReq { resp: r })
             }
+            ClientRequest::NotifyConfigReq { req} => {
+                let r = self.webhook_manager.send(req).await??;
+                Ok(ClientResponse::NotifyConfigResp { resp: r })
+            }
         }
     }
 
@@ -173,6 +182,9 @@ impl RaftDataHandler {
             }
             ClientRequest::ScheduleReq { req } => {
                 self.schedule_manager.do_send(req);
+            }
+            ClientRequest::NotifyConfigReq { req } => {
+                self.webhook_manager.do_send(req);
             }
         }
         Ok(())

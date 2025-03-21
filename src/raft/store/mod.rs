@@ -7,6 +7,7 @@ use async_raft_ext::raft::{Entry, EntryPayload};
 use async_raft_ext::{AppData, AppDataResponse};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use crate::webhook::actor_model::{WebhookManagerRaftReq, WebhookManagerRaftResult};
 
 pub mod core;
 pub mod log;
@@ -27,6 +28,7 @@ pub enum ClientRequest {
     SequenceReq { req: SequenceRaftReq },
     JobReq { req: JobManagerRaftReq },
     ScheduleReq { req: ScheduleManagerRaftReq },
+    NotifyConfigReq{req: WebhookManagerRaftReq}
 }
 
 impl AppData for ClientRequest {}
@@ -39,6 +41,7 @@ pub enum ClientResponse {
     SequenceResp { resp: SequenceRaftResult },
     JobResp { resp: JobManagerRaftResult },
     ScheduleReq { resp: ScheduleManagerRaftResult },
+    NotifyConfigResp{resp: WebhookManagerRaftResult}
 }
 
 impl Default for ClientResponse {

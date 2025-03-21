@@ -12,6 +12,7 @@ lazy_static::lazy_static! {
     pub static ref JOB_TASK_TABLE_NAME: Arc<String> =  Arc::new("T_JOB_TASK".to_string());
     pub static ref JOB_TASK_RUNNING_TABLE_NAME: Arc<String> =  Arc::new("T_JOB_TASK_RUNNING".to_string());
     pub static ref JOB_TASK_HISTORY_TABLE_NAME: Arc<String> =  Arc::new("T_JOB_TASK_HISTORY".to_string());
+    pub static ref JOB_NOTIFY_NOTIFY_TABLE_NAME: Arc<String> =  Arc::new("T_NOTIFY_CONFIG".to_string());
 
     pub static ref SEQ_JOB_ID: Arc<String> =  Arc::new("job_id".to_string());
     pub static ref SEQ_TASK_ID: Arc<String> =  Arc::new("task_id".to_string());

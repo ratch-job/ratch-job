@@ -46,3 +46,21 @@ message AppInfoDo {
     string register_type = 4;
     bool tmp = 5;
 }
+
+message NotifyConfigDo {
+    uint64 id = 1;
+    bool enable = 2;
+    string app_name = 3;
+    string namespace = 4;
+    string name = 5;
+    string channel_type = 6;
+    string channel_sub_type = 7;
+    string url = 8;
+    string email = 9;
+    string username = 10;
+    string password = 11;
+    string token = 12;
+    uint64 version_id = 13;
+    uint64 last_modified_millis = 14;
+    uint64 create_time = 15;
+}

@@ -31,6 +31,7 @@ use bean_factory::{BeanDefinition, BeanFactory, FactoryData};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
+use crate::webhook;
 
 pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<FactoryData> {
     std::fs::create_dir_all(app_config.local_db_dir.as_str())?;
@@ -60,8 +61,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_from_obj(
         TaskHistoryManager::new().start(),
     ));
+    let webhook_manager = WebHookManager::new().start();
     factory.register(BeanDefinition::actor_with_inject_from_obj(
-        WebHookManager::new().start(),
+        webhook_manager.clone(),
     ));
     let sequence_db_addr = SequenceDbManager::new().start();
     factory.register(BeanDefinition::actor_from_obj(sequence_db_addr.clone()));
@@ -106,6 +108,7 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
         app_manager,
         job_manager,
         schedule_manager,
+        webhook_manager,
     });
     factory.register(BeanDefinition::from_obj(raft_data_wrap.clone()));
     let raft = build_raft(&app_config, store.clone(), cluster_sender.clone()).await?;

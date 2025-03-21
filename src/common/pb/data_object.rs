@@ -230,3 +230,91 @@ impl<'a> MessageWrite for AppInfoDo<'a> {
     }
 }
 
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct NotifyConfigDo<'a> {
+    pub id: u64,
+    pub enable: bool,
+    pub app_name: Cow<'a, str>,
+    pub namespace: Cow<'a, str>,
+    pub name: Cow<'a, str>,
+    pub channel_type: Cow<'a, str>,
+    pub channel_sub_type: Cow<'a, str>,
+    pub url: Cow<'a, str>,
+    pub email: Cow<'a, str>,
+    pub username: Cow<'a, str>,
+    pub password: Cow<'a, str>,
+    pub token: Cow<'a, str>,
+    pub version_id: u64,
+    pub last_modified_millis: u64,
+    pub create_time: u64,
+}
+
+impl<'a> MessageRead<'a> for NotifyConfigDo<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.id = r.read_uint64(bytes)?,
+                Ok(16) => msg.enable = r.read_bool(bytes)?,
+                Ok(26) => msg.app_name = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(34) => msg.namespace = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(42) => msg.name = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(50) => msg.channel_type = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(58) => msg.channel_sub_type = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(66) => msg.url = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(74) => msg.email = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(82) => msg.username = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(90) => msg.password = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(98) => msg.token = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(104) => msg.version_id = r.read_uint64(bytes)?,
+                Ok(112) => msg.last_modified_millis = r.read_uint64(bytes)?,
+                Ok(120) => msg.create_time = r.read_uint64(bytes)?,
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for NotifyConfigDo<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.id == 0u64 { 0 } else { 1 + sizeof_varint(*(&self.id) as u64) }
+        + if self.enable == false { 0 } else { 1 + sizeof_varint(*(&self.enable) as u64) }
+        + if self.app_name == "" { 0 } else { 1 + sizeof_len((&self.app_name).len()) }
+        + if self.namespace == "" { 0 } else { 1 + sizeof_len((&self.namespace).len()) }
+        + if self.name == "" { 0 } else { 1 + sizeof_len((&self.name).len()) }
+        + if self.channel_type == "" { 0 } else { 1 + sizeof_len((&self.channel_type).len()) }
+        + if self.channel_sub_type == "" { 0 } else { 1 + sizeof_len((&self.channel_sub_type).len()) }
+        + if self.url == "" { 0 } else { 1 + sizeof_len((&self.url).len()) }
+        + if self.email == "" { 0 } else { 1 + sizeof_len((&self.email).len()) }
+        + if self.username == "" { 0 } else { 1 + sizeof_len((&self.username).len()) }
+        + if self.password == "" { 0 } else { 1 + sizeof_len((&self.password).len()) }
+        + if self.token == "" { 0 } else { 1 + sizeof_len((&self.token).len()) }
+        + if self.version_id == 0u64 { 0 } else { 1 + sizeof_varint(*(&self.version_id) as u64) }
+        + if self.last_modified_millis == 0u64 { 0 } else { 1 + sizeof_varint(*(&self.last_modified_millis) as u64) }
+        + if self.create_time == 0u64 { 0 } else { 1 + sizeof_varint(*(&self.create_time) as u64) }
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.id != 0u64 { w.write_with_tag(8, |w| w.write_uint64(*&self.id))?; }
+        if self.enable != false { w.write_with_tag(16, |w| w.write_bool(*&self.enable))?; }
+        if self.app_name != "" { w.write_with_tag(26, |w| w.write_string(&**&self.app_name))?; }
+        if self.namespace != "" { w.write_with_tag(34, |w| w.write_string(&**&self.namespace))?; }
+        if self.name != "" { w.write_with_tag(42, |w| w.write_string(&**&self.name))?; }
+        if self.channel_type != "" { w.write_with_tag(50, |w| w.write_string(&**&self.channel_type))?; }
+        if self.channel_sub_type != "" { w.write_with_tag(58, |w| w.write_string(&**&self.channel_sub_type))?; }
+        if self.url != "" { w.write_with_tag(66, |w| w.write_string(&**&self.url))?; }
+        if self.email != "" { w.write_with_tag(74, |w| w.write_string(&**&self.email))?; }
+        if self.username != "" { w.write_with_tag(82, |w| w.write_string(&**&self.username))?; }
+        if self.password != "" { w.write_with_tag(90, |w| w.write_string(&**&self.password))?; }
+        if self.token != "" { w.write_with_tag(98, |w| w.write_string(&**&self.token))?; }
+        if self.version_id != 0u64 { w.write_with_tag(104, |w| w.write_uint64(*&self.version_id))?; }
+        if self.last_modified_millis != 0u64 { w.write_with_tag(112, |w| w.write_uint64(*&self.last_modified_millis))?; }
+        if self.create_time != 0u64 { w.write_with_tag(120, |w| w.write_uint64(*&self.create_time))?; }
+        Ok(())
+    }
+}
+

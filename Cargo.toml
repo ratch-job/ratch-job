@@ -39,6 +39,8 @@ async-trait = "0.1"
 if-addrs = "0.13.3"
 futures-util = "0.3.29"
 rand = "0.8.5"
+strum = "0.27.1"
+strum_macros = "0.27.1"
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os="windows"))'.dependencies]
 fs2 = "0.4.3"
 dirs = "5.0"
@@ -57,9 +59,8 @@ binrw = "0.13.3"
 binrw_derive = "0.13.3"
 bytes = "1"
 byteorder = "1.4"
-strum = "0.27"
-strum_macros = "0.27"
 lettre = "0.11.14"
+num_enum = "0.7.3"
 
 [build-dependencies]
 #用于生成grpc代码，生成后注释掉避免编译额外依赖protoc
