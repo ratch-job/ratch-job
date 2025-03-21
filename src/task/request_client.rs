@@ -34,6 +34,7 @@ impl<'a> XxlClient<'a> {
                 Ok(())
             }
             Err(e) => {
+                #[cfg(feature = "debug")]
                 log::error!("XxlClient|run error:{}", &e);
                 Err(e)
             }
@@ -47,7 +48,7 @@ impl<'a> XxlClient<'a> {
         } else {
             format!("{}/{}", self.addr, &sub_url)
         };
-        match HttpUtils::request(
+        let resp = HttpUtils::request(
             &self.client,
             "POST",
             &url,
@@ -55,35 +56,20 @@ impl<'a> XxlClient<'a> {
             Some(&self.headers),
             Some(3000),
         )
-        .await
-        {
-            Ok(resp) => {
-                if let Ok(v) = Self::convert(&resp) {
-                    if v.is_success() {
-                        registry_success = true;
-                    }
-                }
-                if !registry_success {
-                    log::error!(
-                        "call response error:,url:{},resp:{}",
-                        &url,
-                        resp.get_lossy_string_body()
-                    );
-                }
-            }
-            Err(err) => {
-                log::error!("call response error:{},url:{}", err, &url);
+        .await?;
+        if let Ok(v) = Self::convert(&resp) {
+            if v.is_success() {
+                registry_success = true;
+                return Ok(());
+            } else {
+                return Err(anyhow::anyhow!(
+                    "call response error:,url:{},resp:{}",
+                    &url,
+                    resp.get_lossy_string_body()
+                ));
             }
         }
-        if !registry_success {
-            Err(anyhow::anyhow!(
-                "call failed,url:{},body:{}",
-                &url,
-                String::from_utf8_lossy(&body)
-            ))
-        } else {
-            Ok(())
-        }
+        Err(anyhow::anyhow!("call response error:,url:{}", &url))
     }
 
     fn convert(resp: &ResponseWrap) -> anyhow::Result<XxlApiResult<String>> {

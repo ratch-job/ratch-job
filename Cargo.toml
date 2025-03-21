@@ -24,6 +24,10 @@ exclude = [
 name = "ratchjob"
 path = "src/main.rs"
 
+[features]
+default = []
+debug=[]
+
 [dependencies]
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"

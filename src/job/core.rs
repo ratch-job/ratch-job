@@ -108,6 +108,17 @@ impl JobManager {
         }
     }
 
+    fn update_job_task_list(&mut self, task_logs: Vec<Arc<JobTaskInfo>>) {
+        for task_log in task_logs.iter() {
+            if let Some(job_wrap) = self.job_map.get_mut(&task_log.job_id) {
+                job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit);
+            }
+        }
+        if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+            schedule_manager.do_send(ScheduleManagerReq::UpdateTaskList(task_logs));
+        }
+    }
+
     fn query_jobs(&self, query_param: &JobQueryParam) -> (usize, Vec<JobInfoDto>) {
         let mut rlist = Vec::new();
         let end_index = query_param.offset + query_param.limit;
@@ -278,9 +289,7 @@ impl Handler<JobManagerRaftReq> for JobManager {
                 self.update_job_task(task_info);
             }
             JobManagerRaftReq::UpdateTaskList(tasks) => {
-                for tasks in tasks {
-                    self.update_job_task(tasks);
-                }
+                self.update_job_task_list(tasks);
             }
         }
         Ok(JobManagerRaftResult::None)

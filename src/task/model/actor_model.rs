@@ -26,6 +26,15 @@ pub struct TriggerSourceInfo {
     pub source_type: TriggerSourceType,
 }
 
+impl Default for TriggerSourceInfo {
+    fn default() -> Self {
+        TriggerSourceInfo {
+            fix_addr: EMPTY_ARC_STR.clone(),
+            source_type: TriggerSourceType::System,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TriggerItem {
     pub trigger_time: u32,
@@ -62,6 +71,13 @@ impl TriggerItem {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RetryTaskItem {
+    pub trigger_time: u32,
+    pub task_info: JobTaskInfo,
+    pub job_info: Option<Arc<JobInfo>>,
+}
+
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<TaskManagerResult>")]
 pub enum TaskManagerReq {
@@ -70,6 +86,7 @@ pub enum TaskManagerReq {
     RemoveAppInstance(AppKey, Arc<String>),
     RemoveAppInstances(Vec<AppInstanceKey>),
     TriggerTaskList(Vec<TriggerItem>),
+    RetryTaskList(Vec<RetryTaskItem>),
 }
 
 pub enum TaskManagerResult {

@@ -31,6 +31,8 @@ pub struct JobTaskInfo {
     pub trigger_from: Arc<String>,
     pub try_times: u32,
     pub try_logs: Vec<TaskTryLog>,
+    pub retry_interval: u32,
+    pub retry_count: u32,
 }
 
 impl JobTaskInfo {
@@ -48,6 +50,32 @@ impl JobTaskInfo {
             trigger_from: EMPTY_ARC_STR.clone(),
             try_times: job.try_times,
             try_logs: vec![],
+            retry_interval: 0,
+            retry_count: 0,
+        }
+    }
+
+    pub fn can_retry(&self) -> bool {
+        self.try_times > self.retry_count && self.status == TaskStatusType::Fail
+    }
+
+    pub fn push_next_try(&mut self) {
+        self.retry_count += 1;
+        self.try_logs.push(TaskTryLog {
+            execution_time: self.execution_time,
+            addr: self.instance_addr.clone(),
+        });
+        self.execution_time = 0;
+        self.instance_addr = EMPTY_ARC_STR.clone();
+        self.status = TaskStatusType::Running;
+    }
+
+    pub fn get_retry_interval(&self) -> u32 {
+        if self.retry_interval > 0 {
+            self.retry_interval
+        } else {
+            //默认间隔10秒
+            10
         }
     }
 
@@ -72,6 +100,8 @@ impl JobTaskInfo {
                     addr: Cow::Borrowed(&log.addr),
                 })
                 .collect(),
+            retry_interval: self.retry_interval,
+            retry_count: self.retry_count,
         }
     }
 }
@@ -98,6 +128,8 @@ impl<'a> From<JobTaskDo<'a>> for JobTaskInfo {
                     addr: Arc::new(log.addr.to_string()),
                 })
                 .collect(),
+            retry_interval: task_do.retry_interval,
+            retry_count: task_do.retry_count,
         }
     }
 }

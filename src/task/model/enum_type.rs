@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum TaskStatusType {
     Init,
     Running,
-    Error,
+    Fail,
     Success,
 }
 
@@ -20,7 +20,7 @@ impl TaskStatusType {
         match status_type {
             "INIT" => TaskStatusType::Init,
             "RUNNING" => TaskStatusType::Running,
-            "ERROR" => TaskStatusType::Error,
+            "FAIL" => TaskStatusType::Fail,
             "SUCCESS" => TaskStatusType::Success,
             _ => TaskStatusType::Init,
         }
@@ -30,7 +30,7 @@ impl TaskStatusType {
         match self {
             TaskStatusType::Init => "INIT",
             TaskStatusType::Running => "RUNNING",
-            TaskStatusType::Error => "ERROR",
+            TaskStatusType::Fail => "FAIL",
             TaskStatusType::Success => "SUCCESS",
         }
     }

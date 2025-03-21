@@ -173,6 +173,8 @@ pub struct JobTaskDo<'a> {
     pub trigger_from: Cow<'a, str>,
     pub try_times: u32,
     pub try_logs: Vec<data_object::TaskTryLogDo<'a>>,
+    pub retry_interval: u32,
+    pub retry_count: u32,
 }
 
 impl<'a> MessageRead<'a> for JobTaskDo<'a> {
@@ -192,6 +194,8 @@ impl<'a> MessageRead<'a> for JobTaskDo<'a> {
                 Ok(82) => msg.trigger_from = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(88) => msg.try_times = r.read_uint32(bytes)?,
                 Ok(98) => msg.try_logs.push(r.read_message::<data_object::TaskTryLogDo>(bytes)?),
+                Ok(104) => msg.retry_interval = r.read_uint32(bytes)?,
+                Ok(112) => msg.retry_count = r.read_uint32(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -215,6 +219,8 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
         + if self.trigger_from == "" { 0 } else { 1 + sizeof_len((&self.trigger_from).len()) }
         + if self.try_times == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.try_times) as u64) }
         + self.try_logs.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
+        + if self.retry_interval == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.retry_interval) as u64) }
+        + if self.retry_count == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.retry_count) as u64) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -230,6 +236,8 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
         if self.trigger_from != "" { w.write_with_tag(82, |w| w.write_string(&**&self.trigger_from))?; }
         if self.try_times != 0u32 { w.write_with_tag(88, |w| w.write_uint32(*&self.try_times))?; }
         for s in &self.try_logs { w.write_with_tag(98, |w| w.write_message(s))?; }
+        if self.retry_interval != 0u32 { w.write_with_tag(104, |w| w.write_uint32(*&self.retry_interval))?; }
+        if self.retry_count != 0u32 { w.write_with_tag(112, |w| w.write_uint32(*&self.retry_count))?; }
         Ok(())
     }
 }

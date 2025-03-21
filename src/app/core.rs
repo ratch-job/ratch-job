@@ -112,12 +112,15 @@ impl AppManager {
         instance_key: Arc<String>,
         last_modified_time: u32,
     ) {
-        let timeout = last_modified_time + self.instance_timeout;
+        let check_time = now_second_u32() - self.instance_timeout;
+        if check_time >= last_modified_time {
+            return;
+        }
         self.app_instance_timeout.add(
-            timeout as u64,
+            last_modified_time as u64,
             InstanceTimeoutInfo::new(
                 AppInstanceKey::new_with_app_key(key.clone(), instance_key.clone()),
-                timeout,
+                last_modified_time,
             ),
         );
         if let Some(task_manager) = self.task_manager.as_ref() {
@@ -132,9 +135,16 @@ impl AppManager {
                 instance.enable = true;
                 instance.healthy = true;
             } else {
-                app_info
-                    .instance_map
-                    .insert(instance_key.clone(), AppInstance::new(instance_key));
+                log::info!(
+                    "register_app_instance|add instance:{:?},{},{}",
+                    &key,
+                    &instance_key,
+                    last_modified_time
+                );
+                app_info.instance_map.insert(
+                    instance_key.clone(),
+                    AppInstance::new_with_time(instance_key, last_modified_time),
+                );
             }
         } else {
             self.app_index
@@ -146,6 +156,12 @@ impl AppManager {
                 RegisterType::Auto,
                 true,
             );
+            log::info!(
+                "register_app_instance|add instance:{:?},{},{}",
+                &key,
+                &instance_key,
+                last_modified_time
+            );
             app_info.instance_map.insert(
                 instance_key.clone(),
                 AppInstance::new_with_time(instance_key, last_modified_time),
@@ -154,10 +170,10 @@ impl AppManager {
         }
     }
 
-    fn check_instance_timeout(&mut self, now: u32) {
+    fn check_instance_timeout(&mut self) {
         let mut remove_list = vec![];
-        let timeout_time = now - self.instance_timeout;
-        for item in self.app_instance_timeout.timeout(now as u64) {
+        let timeout_time = now_second_u32() - self.instance_timeout;
+        for item in self.app_instance_timeout.timeout(timeout_time as u64) {
             let app_key = item.app_instance_key.build_app_key();
             if let Some(app_info) = self.app_map.get_mut(&app_key) {
                 let mut can_remove = false;
@@ -165,6 +181,11 @@ impl AppManager {
                     can_remove = instance.last_modified_time <= timeout_time;
                 }
                 if can_remove {
+                    log::info!(
+                        "check_instance_timeout|remove instance:{:?},{}",
+                        &app_key,
+                        &item.app_instance_key.addr
+                    );
                     app_info.instance_map.remove(&item.app_instance_key.addr);
                     remove_list.push(item.app_instance_key);
                 }
@@ -179,13 +200,12 @@ impl AppManager {
 
     fn heartbeat(&mut self, ctx: &mut Context<Self>) {
         ctx.run_later(std::time::Duration::from_secs(10), move |act, ctx| {
-            act.check_instance_timeout(now_second_u32());
+            act.check_instance_timeout();
             act.heartbeat(ctx);
         });
     }
 
     fn unregister_app_instance(&mut self, key: AppKey, instance_key: Arc<String>) {
-        //log::info!("unregister_app_instance, {:?} {:?}", key, instance_key);
         if let Some(task_manager) = self.task_manager.as_ref() {
             task_manager.do_send(TaskManagerReq::RemoveAppInstance(
                 key.clone(),
@@ -297,18 +317,20 @@ impl AppManager {
     /// 数据加载完成后，维护应用实例生效、超时信息
     fn load_completed(&mut self, _ctx: &mut Context<Self>) -> anyhow::Result<()> {
         let now = now_second_u32();
+        let start_time = now - self.instance_timeout;
         let mut add_keys = vec![];
         for (app_key, app_info) in self.app_map.iter() {
             for (instance_key, instance) in app_info.instance_map.iter() {
-                let timeout = instance.last_modified_time + self.instance_timeout;
-                if timeout > now {
-                    self.app_instance_timeout.add(
-                        timeout as u64,
-                        InstanceTimeoutInfo::new(
-                            AppInstanceKey::new_with_app_key(app_key.clone(), instance_key.clone()),
-                            now + self.instance_timeout,
-                        ),
-                    );
+                let timeout = instance.last_modified_time;
+                self.app_instance_timeout.add(
+                    timeout as u64,
+                    InstanceTimeoutInfo::new(
+                        AppInstanceKey::new_with_app_key(app_key.clone(), instance_key.clone()),
+                        timeout,
+                    ),
+                );
+                if timeout > start_time {
+                    log::info!("load_completed|add instance:{}", instance_key);
                     add_keys.push(AppInstanceKey::new_with_app_key(
                         app_key.clone(),
                         instance_key.clone(),
@@ -316,7 +338,7 @@ impl AppManager {
                 }
             }
         }
-        self.check_instance_timeout(now);
+        self.check_instance_timeout();
         if let Some(task_manager) = self.task_manager.as_ref() {
             if !add_keys.is_empty() {
                 task_manager.do_send(TaskManagerReq::AddAppInstances(add_keys));
@@ -354,7 +376,8 @@ impl Handler<AppManagerReq> for AppManager {
     fn handle(&mut self, msg: AppManagerReq, _ctx: &mut Context<Self>) -> Self::Result {
         match msg {
             AppManagerReq::RegisterAppInstance(key, addr) => {
-                self.register_app_instance(key, addr, now_second_u32());
+                log::warn!("AppManager|RegisterAppInstance, {:?},addr:{}", key, addr);
+                //self.register_app_instance(key, addr, now_second_u32());
             }
             AppManagerReq::GetApp(key) => {
                 return Ok(AppManagerResult::AppInfo(self.get_app_info(&key, true)));

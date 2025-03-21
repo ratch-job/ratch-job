@@ -46,6 +46,8 @@ message JobTaskDo {
     string trigger_from = 10;
     uint32 try_times = 11;
     repeated TaskTryLogDo try_logs = 12;
+    uint32 retry_interval = 13;
+    uint32 retry_count = 14;
 }
 
 

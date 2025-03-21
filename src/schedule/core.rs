@@ -21,7 +21,7 @@ use crate::schedule::model::actor_model::{
 };
 use crate::schedule::model::{JobRunState, TriggerInfo};
 use crate::task::core::TaskManager;
-use crate::task::model::actor_model::{TaskManagerReq, TriggerItem};
+use crate::task::model::actor_model::{RetryTaskItem, TaskManagerReq, TriggerItem};
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::prelude::*;
@@ -44,6 +44,8 @@ pub struct ScheduleManager {
     raft_request_route: Option<Arc<RaftRequestRoute>>,
     /// 运行中的任务实例
     running_task: HashMap<u64, Arc<JobTaskInfo>>,
+    /// 失败重试集
+    retry_set: TimeoutSet<u64>,
     /// 任务实例历史记录
     history_task: JobTaskLogGroup,
     history_task_log_limit: usize,
@@ -51,6 +53,8 @@ pub struct ScheduleManager {
     local_is_master: bool,
     app_start_second: u32,
     last_trigger_time: u32,
+    last_retry_time: u32,
+    running_heartbeat: bool,
 }
 
 impl Actor for ScheduleManager {
@@ -95,6 +99,9 @@ impl ScheduleManager {
             local_is_master: false,
             app_start_second: now_second_u32(),
             last_trigger_time: 0,
+            last_retry_time: 0,
+            retry_set: TimeoutSet::new(),
+            running_heartbeat: false,
         }
     }
 
@@ -105,6 +112,13 @@ impl ScheduleManager {
         }
         self.active_time_set
             .add(time as u64, TriggerInfo::new(job_id, time, version));
+    }
+
+    fn active_retry_task(&mut self, task_id: u64, time: u32) {
+        if !self.local_is_master {
+            return;
+        }
+        self.retry_set.add(time as u64, task_id);
     }
 
     fn update_job_trigger_time(&mut self, job_id: u64, last_time: u32, next_time: u32) {
@@ -196,12 +210,45 @@ impl ScheduleManager {
             log::error!("ScheduleManager|task manager is none");
         }
     }
+
+    fn trigger_retry_job(&mut self, seconds: u32) {
+        if let Some(task_manager) = self.task_manager.clone() {
+            let mut retry_items = Vec::new();
+            let mut tasks = Vec::new();
+            for task_id in self.retry_set.timeout(seconds as u64) {
+                if let Some(old_task) = self.running_task.get(&task_id) {
+                    if old_task.can_retry() {
+                        tasks.push((
+                            old_task.as_ref().clone(),
+                            self.job_run_state
+                                .get(&old_task.job_id)
+                                .map(|e| e.source_job.clone()),
+                        ));
+                    }
+                }
+            }
+            for (mut task, job) in tasks {
+                task.push_next_try();
+                let item = RetryTaskItem {
+                    trigger_time: seconds,
+                    task_info: task,
+                    job_info: job,
+                };
+                retry_items.push(item);
+            }
+            task_manager.do_send(TaskManagerReq::RetryTaskList(retry_items));
+        }
+    }
+
     fn heartbeat(&mut self, ctx: &mut Context<Self>) {
         // 前期只支持主节点发起调度
         if !self.local_is_master {
+            self.running_heartbeat = false;
             return;
         }
+
         self.trigger_job(now_second_u32());
+        self.trigger_retry_job(now_second_u32());
         let later_millis = 1000 - now_millis() % 1000;
         ctx.run_later(
             std::time::Duration::from_millis(later_millis),
@@ -224,7 +271,7 @@ impl ScheduleManager {
                 if param.success {
                     task_instance.status = TaskStatusType::Success;
                 } else {
-                    task_instance.status = TaskStatusType::Error;
+                    task_instance.status = TaskStatusType::Fail;
                     if let Some(msg) = param.handle_msg {
                         task_instance.callback_message = Arc::new(msg);
                     }
@@ -255,23 +302,34 @@ impl ScheduleManager {
     }
 
     fn update_task_log(&mut self, task_log: Arc<JobTaskInfo>) {
+        let task_log = self.update_running_task(task_log);
         self.history_task
-            .update_task_log(task_log.clone(), self.history_task_log_limit);
-        self.update_running_task(task_log);
+            .update_task_log(task_log, self.history_task_log_limit);
     }
 
-    fn update_running_task(&mut self, task_log: Arc<JobTaskInfo>) {
+    fn update_running_task(&mut self, task_log: Arc<JobTaskInfo>) -> Arc<JobTaskInfo> {
         if self.last_trigger_time < task_log.trigger_time {
             self.last_trigger_time = task_log.trigger_time;
         }
-        match task_log.status {
+        match &task_log.status {
             TaskStatusType::Init | TaskStatusType::Running => {
-                self.running_task.insert(task_log.task_id, task_log);
+                self.running_task.insert(task_log.task_id, task_log.clone());
             }
-            TaskStatusType::Error | TaskStatusType::Success => {
+            TaskStatusType::Success => {
                 self.running_task.remove(&task_log.task_id);
             }
-        }
+            TaskStatusType::Fail => {
+                if task_log.can_retry() {
+                    self.active_retry_task(
+                        task_log.task_id,
+                        now_second_u32() + task_log.get_retry_interval(),
+                    );
+                } else {
+                    self.running_task.remove(&task_log.task_id);
+                }
+            }
+        };
+        task_log
     }
 
     fn query_latest_history_task_logs(
@@ -354,20 +412,25 @@ impl ScheduleManager {
             self.local_is_master = local_is_master;
             if !last_local_is_master && local_is_master {
                 self.init_run_job();
-                self.heartbeat(ctx);
+                if !self.running_heartbeat {
+                    self.running_heartbeat = true;
+                    self.heartbeat(ctx);
+                }
             }
             if !local_is_master {
                 // 从节点清理任务
                 self.active_time_set.clear();
+                self.retry_set.clear();
             }
         }
     }
 
     fn init_run_job(&mut self) {
         // 初始化任务调度
+        let now = now_second_u32();
         let start_second = std::cmp::min(
             std::cmp::max(self.last_trigger_time, self.app_start_second),
-            now_second_u32() - 1,
+            now - 1,
         );
         let mut active_jobs: Vec<(u64, u32, u32)> = Vec::new();
         if let Some(now_datetime) = get_datetime_by_second(start_second, &self.fixed_offset) {
@@ -377,6 +440,16 @@ impl ScheduleManager {
                     job_run_state.next_trigger_time = next_trigger_time;
                     active_jobs.push((job_run_state.id, next_trigger_time, job_run_state.version));
                 }
+            }
+            let mut active_list = Vec::new();
+            for task in self.running_task.values() {
+                if !task.can_retry() {
+                    continue;
+                }
+                active_list.push((task.task_id, now + task.get_retry_interval()));
+            }
+            for (task_id, time) in active_list {
+                self.active_retry_task(task_id, time);
             }
         }
         for (job_id, next_trigger_time, version) in active_jobs {
@@ -399,6 +472,11 @@ impl Handler<ScheduleManagerReq> for ScheduleManager {
             }
             ScheduleManagerReq::UpdateTask(task) => {
                 self.update_task_log(task);
+            }
+            ScheduleManagerReq::UpdateTaskList(task_list) => {
+                for task in task_list {
+                    self.update_task_log(task);
+                }
             }
             ScheduleManagerReq::QueryJobTaskLog(param) => {
                 let (total, list) = self.query_latest_history_task_logs(&param);

@@ -10,6 +10,7 @@ pub enum ScheduleManagerReq {
     UpdateJob(Arc<JobInfo>),
     RemoveJob(u64),
     UpdateTask(Arc<JobTaskInfo>),
+    UpdateTaskList(Vec<Arc<JobTaskInfo>>),
     QueryJobTaskLog(JobTaskLogQueryParam),
 }
 

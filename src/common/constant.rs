@@ -20,4 +20,5 @@ lazy_static::lazy_static! {
 
     // error info
     pub static ref ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR: Arc<String> =  Arc::new("Not found the application instance address".to_string());
+    pub static ref ERR_MSG_JOB_DISABLE: Arc<String> =  Arc::new("The job is disable".to_string());
 }

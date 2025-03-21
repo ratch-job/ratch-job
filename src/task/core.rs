@@ -1,6 +1,8 @@
 use crate::app::model::AppKey;
 use crate::common::app_config::AppConfig;
-use crate::common::constant::{ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR, SEQ_TASK_ID};
+use crate::common::constant::{
+    ERR_MSG_JOB_DISABLE, ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR, SEQ_TASK_ID,
+};
 use crate::common::datetime_utils::now_second_u32;
 use crate::common::get_app_version;
 use crate::job::core::JobManager;
@@ -11,7 +13,8 @@ use crate::raft::store::ClientRequest;
 use crate::sequence::model::SeqRange;
 use crate::sequence::{SequenceManager, SequenceRequest, SequenceResult};
 use crate::task::model::actor_model::{
-    TaskManagerReq, TaskManagerResult, TriggerItem, TriggerSourceInfo, TriggerSourceType,
+    RetryTaskItem, TaskManagerReq, TaskManagerResult, TriggerItem, TriggerSourceInfo,
+    TriggerSourceType,
 };
 use crate::task::model::app_instance::{AppInstanceStateGroup, InstanceAddrSelectResult};
 use crate::task::model::enum_type::TaskStatusType;
@@ -104,6 +107,25 @@ impl TaskManager {
         Ok(())
     }
 
+    fn retry_task_list(
+        &mut self,
+        retry_items: Vec<RetryTaskItem>,
+        ctx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let (task_list, notify_task_list) = self.build_retry_task_wrap(retry_items);
+        let raft_request_route = self.raft_request_route.clone().unwrap();
+        let xxl_request_header = self.xxl_request_header.clone();
+        async move {
+            Self::notify_update_task(&raft_request_route, notify_task_list).await?;
+            Self::run_task_list(task_list, xxl_request_header, raft_request_route).await?;
+            Ok(())
+        }
+        .into_actor(self)
+        .map(|_: anyhow::Result<()>, _, _| ())
+        .spawn(ctx);
+        Ok(())
+    }
+
     async fn init_tasks(
         trigger_items: Vec<TriggerItem>,
         raft_request_route: Arc<RaftRequestRoute>,
@@ -175,7 +197,7 @@ impl TaskManager {
                     InstanceAddrSelectResult::Fixed(trigger_source.fix_addr.clone())
                 };
                 if let &InstanceAddrSelectResult::Empty = &select {
-                    task.status = TaskStatusType::Error;
+                    task.status = TaskStatusType::Fail;
                     task.finish_time = now_second;
                     task.trigger_message = ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR.clone();
                     ignore_task_list.push(Arc::new(task));
@@ -190,7 +212,56 @@ impl TaskManager {
                     task_list.push(wrap);
                 }
             } else {
-                task.status = TaskStatusType::Error;
+                task.status = TaskStatusType::Fail;
+                task.finish_time = now_second;
+                task.trigger_message = ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR.clone();
+                ignore_task_list.push(Arc::new(task));
+            }
+        }
+        (task_list, ignore_task_list)
+    }
+
+    fn build_retry_task_wrap(
+        &mut self,
+        tasks: Vec<RetryTaskItem>,
+    ) -> (Vec<TaskWrap>, Vec<Arc<JobTaskInfo>>) {
+        let mut task_list = Vec::with_capacity(tasks.len());
+        let mut ignore_task_list = Vec::new();
+        let now_second = now_second_u32();
+        for item in tasks {
+            let mut task = item.task_info;
+            let job_info = if let Some(v) = item.job_info {
+                v
+            } else {
+                task.status = TaskStatusType::Fail;
+                task.retry_count = task.try_times;
+                task.finish_time = now_second;
+                task.trigger_message = ERR_MSG_JOB_DISABLE.clone();
+                ignore_task_list.push(Arc::new(task));
+                continue;
+            };
+            task.execution_time = now_second;
+            let app_key = job_info.build_app_key();
+            if let Some(app_instance_group) = self.app_instance_group.get_mut(&app_key) {
+                let select =
+                    app_instance_group.select_instance(&job_info.router_strategy, job_info.id);
+                if let &InstanceAddrSelectResult::Empty = &select {
+                    task.status = TaskStatusType::Fail;
+                    task.finish_time = now_second;
+                    task.trigger_message = ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR.clone();
+                    ignore_task_list.push(Arc::new(task));
+                } else {
+                    let wrap = TaskWrap {
+                        task,
+                        job_info,
+                        select_result: select,
+                        app_addrs: app_instance_group.instance_keys.clone(),
+                        trigger_source: Default::default(),
+                    };
+                    task_list.push(wrap);
+                }
+            } else {
+                task.status = TaskStatusType::Fail;
                 task.finish_time = now_second;
                 task.trigger_message = ERR_MSG_NOT_FOUND_APP_INSTANCE_ADDR.clone();
                 ignore_task_list.push(Arc::new(task));
@@ -216,7 +287,7 @@ impl TaskManager {
                     if let Err(err) =
                         Self::do_run_task(addr, &param, &client, &xxl_request_header).await
                     {
-                        task_info.status = TaskStatusType::Error;
+                        task_info.status = TaskStatusType::Fail;
                         task_info.trigger_message = Arc::new(err.to_string());
                         task_info.finish_time = now_second_u32();
                         log::error!("run task error:{}", err);
@@ -231,7 +302,7 @@ impl TaskManager {
                     if let Err(err) =
                         Self::do_run_task(addr, &param, &client, &xxl_request_header).await
                     {
-                        task_info.status = TaskStatusType::Error;
+                        task_info.status = TaskStatusType::Fail;
                         task_info.trigger_message = Arc::new(err.to_string());
                         task_info.finish_time = now_second_u32();
                         //log::error!("run task error,try_times:{},err:{}", try_times, err);
@@ -360,6 +431,9 @@ impl Handler<TaskManagerReq> for TaskManager {
             }
             TaskManagerReq::TriggerTaskList(trigger_list) => {
                 self.trigger_task_list(trigger_list, ctx)?;
+            }
+            TaskManagerReq::RetryTaskList(retry_list) => {
+                self.retry_task_list(retry_list, ctx)?;
             }
         }
         Ok(TaskManagerResult::None)
