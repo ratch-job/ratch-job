@@ -72,10 +72,11 @@ impl TriggerItem {
 }
 
 #[derive(Debug, Clone)]
-pub struct RetryTaskItem {
+pub struct RedoTaskItem {
     pub trigger_time: u32,
     pub task_info: JobTaskInfo,
     pub job_info: Option<Arc<JobInfo>>,
+    pub fail_reason: Arc<String>,
 }
 
 #[derive(Debug, Message)]
@@ -86,7 +87,7 @@ pub enum TaskManagerReq {
     RemoveAppInstance(AppKey, Arc<String>),
     RemoveAppInstances(Vec<AppInstanceKey>),
     TriggerTaskList(Vec<TriggerItem>),
-    RetryTaskList(Vec<RetryTaskItem>),
+    RedoTaskList(Vec<RedoTaskItem>),
 }
 
 pub enum TaskManagerResult {

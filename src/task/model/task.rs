@@ -1,8 +1,7 @@
-use crate::app::model::AppKey;
 use crate::common::constant::EMPTY_ARC_STR;
 use crate::common::pb::data_object::{JobTaskDo, TaskTryLogDo};
 use crate::job::model::job::JobInfo;
-use crate::task::model::actor_model::{TriggerItem, TriggerSourceInfo};
+use crate::task::model::actor_model::TriggerSourceInfo;
 use crate::task::model::app_instance::InstanceAddrSelectResult;
 use crate::task::model::enum_type::TaskStatusType;
 use serde::{Deserialize, Serialize};
@@ -33,6 +32,7 @@ pub struct JobTaskInfo {
     pub try_logs: Vec<TaskTryLog>,
     pub retry_interval: u32,
     pub retry_count: u32,
+    pub timeout_second: u32,
 }
 
 impl JobTaskInfo {
@@ -50,13 +50,14 @@ impl JobTaskInfo {
             trigger_from: EMPTY_ARC_STR.clone(),
             try_times: job.try_times,
             try_logs: vec![],
-            retry_interval: 0,
+            retry_interval: job.interval_second,
             retry_count: 0,
+            timeout_second: job.timeout_second,
         }
     }
 
     pub fn can_retry(&self) -> bool {
-        self.try_times > self.retry_count && self.status == TaskStatusType::Fail
+        self.try_times > self.retry_count
     }
 
     pub fn push_next_try(&mut self) {
@@ -76,6 +77,14 @@ impl JobTaskInfo {
         } else {
             //默认间隔10秒
             10
+        }
+    }
+
+    pub fn get_timeout_second(&self, default_value: u32) -> u32 {
+        if self.timeout_second > 0 {
+            self.timeout_second
+        } else {
+            default_value
         }
     }
 
@@ -102,6 +111,7 @@ impl JobTaskInfo {
                 .collect(),
             retry_interval: self.retry_interval,
             retry_count: self.retry_count,
+            timeout_second: self.timeout_second,
         }
     }
 }
@@ -130,6 +140,7 @@ impl<'a> From<JobTaskDo<'a>> for JobTaskInfo {
                 .collect(),
             retry_interval: task_do.retry_interval,
             retry_count: task_do.retry_count,
+            timeout_second: task_do.timeout_second,
         }
     }
 }

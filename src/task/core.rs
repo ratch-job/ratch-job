@@ -13,7 +13,7 @@ use crate::raft::store::ClientRequest;
 use crate::sequence::model::SeqRange;
 use crate::sequence::{SequenceManager, SequenceRequest, SequenceResult};
 use crate::task::model::actor_model::{
-    RetryTaskItem, TaskManagerReq, TaskManagerResult, TriggerItem, TriggerSourceInfo,
+    RedoTaskItem, TaskManagerReq, TaskManagerResult, TriggerItem, TriggerSourceInfo,
     TriggerSourceType,
 };
 use crate::task::model::app_instance::{AppInstanceStateGroup, InstanceAddrSelectResult};
@@ -107,12 +107,17 @@ impl TaskManager {
         Ok(())
     }
 
-    fn retry_task_list(
+    fn redo_task_list(
         &mut self,
-        retry_items: Vec<RetryTaskItem>,
+        retry_items: Vec<RedoTaskItem>,
         ctx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         let (task_list, notify_task_list) = self.build_retry_task_wrap(retry_items);
+        log::info!(
+            "redo_task_list|after build,task_count:{},notify_count:{}",
+            task_list.len(),
+            notify_task_list.len()
+        );
         let raft_request_route = self.raft_request_route.clone().unwrap();
         let xxl_request_header = self.xxl_request_header.clone();
         async move {
@@ -223,7 +228,7 @@ impl TaskManager {
 
     fn build_retry_task_wrap(
         &mut self,
-        tasks: Vec<RetryTaskItem>,
+        tasks: Vec<RedoTaskItem>,
     ) -> (Vec<TaskWrap>, Vec<Arc<JobTaskInfo>>) {
         let mut task_list = Vec::with_capacity(tasks.len());
         let mut ignore_task_list = Vec::new();
@@ -236,7 +241,11 @@ impl TaskManager {
                 task.status = TaskStatusType::Fail;
                 task.retry_count = task.try_times;
                 task.finish_time = now_second;
-                task.trigger_message = ERR_MSG_JOB_DISABLE.clone();
+                if item.fail_reason.is_empty() {
+                    task.trigger_message = ERR_MSG_JOB_DISABLE.clone();
+                } else {
+                    task.trigger_message = item.fail_reason;
+                }
                 ignore_task_list.push(Arc::new(task));
                 continue;
             };
@@ -432,8 +441,8 @@ impl Handler<TaskManagerReq> for TaskManager {
             TaskManagerReq::TriggerTaskList(trigger_list) => {
                 self.trigger_task_list(trigger_list, ctx)?;
             }
-            TaskManagerReq::RetryTaskList(retry_list) => {
-                self.retry_task_list(retry_list, ctx)?;
+            TaskManagerReq::RedoTaskList(retry_list) => {
+                self.redo_task_list(retry_list, ctx)?;
             }
         }
         Ok(TaskManagerResult::None)

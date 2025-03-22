@@ -123,3 +123,22 @@ impl TriggerInfo {
         }
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RedoType {
+    Retry,
+    Timeout,
+    Redo,
+}
+
+#[derive(Clone, Debug)]
+pub struct RedoInfo {
+    pub task_id: u64,
+    pub redo_type: RedoType,
+}
+
+impl RedoInfo {
+    pub fn new(task_id: u64, redo_type: RedoType) -> Self {
+        RedoInfo { task_id, redo_type }
+    }
+}

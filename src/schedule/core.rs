@@ -1,6 +1,7 @@
 use crate::common::byte_utils::id_to_bin;
 use crate::common::constant::{
-    JOB_TASK_HISTORY_TABLE_NAME, JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME,
+    EMPTY_ARC_STR, ERR_MSG_TASK_TIMEOUT, JOB_TASK_HISTORY_TABLE_NAME, JOB_TASK_RUNNING_TABLE_NAME,
+    JOB_TASK_TABLE_NAME,
 };
 use crate::common::datetime_utils::{
     get_datetime_by_second, get_datetime_millis, get_local_offset, now_millis, now_second_u32,
@@ -19,9 +20,9 @@ use crate::schedule::job_task::JobTaskLogGroup;
 use crate::schedule::model::actor_model::{
     ScheduleManagerRaftReq, ScheduleManagerRaftResult, ScheduleManagerReq, ScheduleManagerResult,
 };
-use crate::schedule::model::{JobRunState, TriggerInfo};
+use crate::schedule::model::{JobRunState, RedoInfo, RedoType, TriggerInfo};
 use crate::task::core::TaskManager;
-use crate::task::model::actor_model::{RetryTaskItem, TaskManagerReq, TriggerItem};
+use crate::task::model::actor_model::{RedoTaskItem, TaskManagerReq, TriggerItem};
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::prelude::*;
@@ -45,7 +46,7 @@ pub struct ScheduleManager {
     /// 运行中的任务实例
     running_task: HashMap<u64, Arc<JobTaskInfo>>,
     /// 失败重试集
-    retry_set: TimeoutSet<u64>,
+    redo_set: TimeoutSet<RedoInfo>,
     /// 任务实例历史记录
     history_task: JobTaskLogGroup,
     history_task_log_limit: usize,
@@ -55,6 +56,7 @@ pub struct ScheduleManager {
     last_trigger_time: u32,
     last_retry_time: u32,
     running_heartbeat: bool,
+    default_timeout_second: u32,
 }
 
 impl Actor for ScheduleManager {
@@ -100,8 +102,9 @@ impl ScheduleManager {
             app_start_second: now_second_u32(),
             last_trigger_time: 0,
             last_retry_time: 0,
-            retry_set: TimeoutSet::new(),
+            redo_set: TimeoutSet::new(),
             running_heartbeat: false,
+            default_timeout_second: 24 * 60 * 60, // 默认24小时
         }
     }
 
@@ -114,11 +117,12 @@ impl ScheduleManager {
             .add(time as u64, TriggerInfo::new(job_id, time, version));
     }
 
-    fn active_retry_task(&mut self, task_id: u64, time: u32) {
+    fn active_retry_task(&mut self, task_id: u64, time: u32, redo_type: RedoType) {
         if !self.local_is_master {
             return;
         }
-        self.retry_set.add(time as u64, task_id);
+        self.redo_set
+            .add(time as u64, RedoInfo::new(task_id, redo_type));
     }
 
     fn update_job_trigger_time(&mut self, job_id: u64, last_time: u32, next_time: u32) {
@@ -211,32 +215,71 @@ impl ScheduleManager {
         }
     }
 
-    fn trigger_retry_job(&mut self, seconds: u32) {
+    fn trigger_redo_job(&mut self, seconds: u32) {
         if let Some(task_manager) = self.task_manager.clone() {
             let mut retry_items = Vec::new();
             let mut tasks = Vec::new();
-            for task_id in self.retry_set.timeout(seconds as u64) {
+            for redo_info in self.redo_set.timeout(seconds as u64) {
+                let task_id = redo_info.task_id;
                 if let Some(old_task) = self.running_task.get(&task_id) {
-                    if old_task.can_retry() {
-                        tasks.push((
-                            old_task.as_ref().clone(),
-                            self.job_run_state
-                                .get(&old_task.job_id)
-                                .map(|e| e.source_job.clone()),
-                        ));
+                    match &redo_info.redo_type {
+                        RedoType::Retry => {
+                            if !old_task.can_retry() {
+                                continue;
+                            }
+                        }
+                        RedoType::Timeout => {
+                            if old_task.status != TaskStatusType::Running {
+                                continue;
+                            }
+                        }
+                        RedoType::Redo => {
+                            if old_task.status != TaskStatusType::Init {
+                                continue;
+                            }
+                        }
                     }
+                    let job = self
+                        .job_run_state
+                        .get(&old_task.job_id)
+                        .map(|e| e.source_job.clone());
+                    log::info!(
+                        "ScheduleManager|redo task,id:{},{:?},job is none:{}",
+                        task_id,
+                        &redo_info.redo_type,
+                        job.is_none()
+                    );
+                    tasks.push((old_task.as_ref().clone(), redo_info.redo_type, job));
                 }
             }
-            for (mut task, job) in tasks {
-                task.push_next_try();
-                let item = RetryTaskItem {
+            if tasks.is_empty() {
+                return;
+            }
+            log::info!("ScheduleManager|redo task count:{}", tasks.len());
+            for (mut task, redo_type, mut job) in tasks {
+                let fail_reason = match redo_type {
+                    RedoType::Retry | RedoType::Timeout => {
+                        if task.can_retry() {
+                            task.push_next_try();
+                            self.running_task
+                                .insert(task.task_id, Arc::new(task.clone()));
+                            EMPTY_ARC_STR.clone()
+                        } else {
+                            job = None;
+                            ERR_MSG_TASK_TIMEOUT.clone()
+                        }
+                    }
+                    RedoType::Redo => EMPTY_ARC_STR.clone(),
+                };
+                let item = RedoTaskItem {
                     trigger_time: seconds,
                     task_info: task,
                     job_info: job,
+                    fail_reason,
                 };
                 retry_items.push(item);
             }
-            task_manager.do_send(TaskManagerReq::RetryTaskList(retry_items));
+            task_manager.do_send(TaskManagerReq::RedoTaskList(retry_items));
         }
     }
 
@@ -246,9 +289,9 @@ impl ScheduleManager {
             self.running_heartbeat = false;
             return;
         }
-
-        self.trigger_job(now_second_u32());
-        self.trigger_retry_job(now_second_u32());
+        let now = now_second_u32();
+        self.trigger_job(now);
+        self.trigger_redo_job(now);
         let later_millis = 1000 - now_millis() % 1000;
         ctx.run_later(
             std::time::Duration::from_millis(later_millis),
@@ -312,17 +355,28 @@ impl ScheduleManager {
             self.last_trigger_time = task_log.trigger_time;
         }
         match &task_log.status {
-            TaskStatusType::Init | TaskStatusType::Running => {
+            TaskStatusType::Init => {
                 self.running_task.insert(task_log.task_id, task_log.clone());
+                self.active_retry_task(task_log.task_id, now_second_u32() + 15, RedoType::Redo);
+            }
+            TaskStatusType::Running => {
+                self.running_task.insert(task_log.task_id, task_log.clone());
+                self.active_retry_task(
+                    task_log.task_id,
+                    now_second_u32() + task_log.get_timeout_second(self.default_timeout_second),
+                    RedoType::Timeout,
+                );
             }
             TaskStatusType::Success => {
                 self.running_task.remove(&task_log.task_id);
             }
             TaskStatusType::Fail => {
                 if task_log.can_retry() {
+                    self.running_task.insert(task_log.task_id, task_log.clone());
                     self.active_retry_task(
                         task_log.task_id,
                         now_second_u32() + task_log.get_retry_interval(),
+                        RedoType::Retry,
                     );
                 } else {
                     self.running_task.remove(&task_log.task_id);
@@ -420,7 +474,7 @@ impl ScheduleManager {
             if !local_is_master {
                 // 从节点清理任务
                 self.active_time_set.clear();
-                self.retry_set.clear();
+                self.redo_set.clear();
             }
         }
     }
@@ -441,19 +495,42 @@ impl ScheduleManager {
                     active_jobs.push((job_run_state.id, next_trigger_time, job_run_state.version));
                 }
             }
-            let mut active_list = Vec::new();
-            for task in self.running_task.values() {
-                if !task.can_retry() {
-                    continue;
+        }
+        let mut retry_list = Vec::new();
+        for task in self.running_task.values() {
+            match task.status {
+                TaskStatusType::Init => {
+                    retry_list.push((
+                        task.task_id,
+                        now + task.get_retry_interval(),
+                        RedoType::Redo,
+                    ));
                 }
-                active_list.push((task.task_id, now + task.get_retry_interval()));
-            }
-            for (task_id, time) in active_list {
-                self.active_retry_task(task_id, time);
+                TaskStatusType::Running => {
+                    let timeout = if task.timeout_second > 0 {
+                        task.timeout_second
+                    } else {
+                        self.default_timeout_second
+                    };
+                    retry_list.push((task.task_id, task.trigger_time + timeout, RedoType::Timeout));
+                }
+                TaskStatusType::Fail => {
+                    if task.can_retry() {
+                        retry_list.push((
+                            task.task_id,
+                            now + task.get_retry_interval(),
+                            RedoType::Retry,
+                        ));
+                    }
+                }
+                _ => {}
             }
         }
         for (job_id, next_trigger_time, version) in active_jobs {
             self.active_job(job_id, next_trigger_time, version);
+        }
+        for (task_id, time, redo_type) in retry_list {
+            self.active_retry_task(task_id, time, redo_type);
         }
     }
 }

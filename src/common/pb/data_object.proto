@@ -48,6 +48,7 @@ message JobTaskDo {
     repeated TaskTryLogDo try_logs = 12;
     uint32 retry_interval = 13;
     uint32 retry_count = 14;
+    uint32 timeout_second = 15;
 }
 
 
