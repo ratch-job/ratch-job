@@ -37,6 +37,7 @@ pub struct JobDo<'a> {
     pub version_id: u64,
     pub last_modified_millis: u64,
     pub create_time: u64,
+    pub retry_interval: u32,
 }
 
 impl<'a> MessageRead<'a> for JobDo<'a> {
@@ -64,6 +65,7 @@ impl<'a> MessageRead<'a> for JobDo<'a> {
                 Ok(144) => msg.version_id = r.read_uint64(bytes)?,
                 Ok(152) => msg.last_modified_millis = r.read_uint64(bytes)?,
                 Ok(160) => msg.create_time = r.read_uint64(bytes)?,
+                Ok(168) => msg.retry_interval = r.read_uint32(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -95,6 +97,7 @@ impl<'a> MessageWrite for JobDo<'a> {
         + if self.version_id == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.version_id) as u64) }
         + if self.last_modified_millis == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.last_modified_millis) as u64) }
         + if self.create_time == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.create_time) as u64) }
+        + if self.retry_interval == 0u32 { 0 } else { 2 + sizeof_varint(*(&self.retry_interval) as u64) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -118,6 +121,7 @@ impl<'a> MessageWrite for JobDo<'a> {
         if self.version_id != 0u64 { w.write_with_tag(144, |w| w.write_uint64(*&self.version_id))?; }
         if self.last_modified_millis != 0u64 { w.write_with_tag(152, |w| w.write_uint64(*&self.last_modified_millis))?; }
         if self.create_time != 0u64 { w.write_with_tag(160, |w| w.write_uint64(*&self.create_time))?; }
+        if self.retry_interval != 0u32 { w.write_with_tag(168, |w| w.write_uint32(*&self.retry_interval))?; }
         Ok(())
     }
 }

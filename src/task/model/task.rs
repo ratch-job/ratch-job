@@ -50,7 +50,7 @@ impl JobTaskInfo {
             trigger_from: EMPTY_ARC_STR.clone(),
             try_times: job.try_times,
             try_logs: vec![],
-            retry_interval: job.interval_second,
+            retry_interval: job.retry_interval,
             retry_count: 0,
             timeout_second: job.timeout_second,
         }

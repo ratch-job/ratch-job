@@ -28,6 +28,7 @@ pub struct JobInfoParam {
     pub blocking_strategy: Option<String>,
     pub timeout_second: Option<u32>,
     pub try_times: Option<u32>,
+    pub retry_interval: Option<u32>,
 }
 
 impl JobInfoParam {
@@ -59,6 +60,7 @@ impl JobInfoParam {
             timeout_second: self.timeout_second,
             try_times: self.try_times,
             update_time: Some(now_millis()),
+            retry_interval: self.retry_interval,
         }
     }
 }

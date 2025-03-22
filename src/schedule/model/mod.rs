@@ -92,9 +92,10 @@ impl JobRunState {
                 }
             }
             ScheduleType::Interval => {
+                let interval_second = std::cmp::max(1, self.interval_second);
                 let remainder = ((timestamp_seconds as i32) - (self.pre_trigger_time as i32))
-                    .rem_euclid(self.interval_second as i32);
-                result = (timestamp_seconds as i32 - remainder) as u32 + self.interval_second;
+                    .rem_euclid(interval_second as i32);
+                result = (timestamp_seconds as i32 - remainder) as u32 + interval_second;
             }
             /*
             ScheduleType::Delay => {

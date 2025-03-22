@@ -2,6 +2,7 @@ use crate::app::model::AppKey;
 use crate::common::constant::EMPTY_ARC_STR;
 use crate::common::cron_utils::CronUtil;
 use crate::common::pb::data_object::JobDo;
+use crate::common::string_utils::StringUtils;
 use crate::job::model::enum_type::{
     ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
 };
@@ -34,6 +35,7 @@ pub struct JobInfo {
     pub version_id: u64,
     pub last_modified_millis: u64,
     pub create_time: u64,
+    pub retry_interval: u32,
 }
 
 impl JobInfo {
@@ -80,6 +82,9 @@ impl JobInfo {
         if let Some(try_times) = job_param.try_times {
             self.try_times = try_times;
         }
+        if let Some(retry_interval) = job_param.retry_interval {
+            self.retry_interval = retry_interval;
+        }
         if let Some(update_time) = job_param.update_time {
             self.create_time = update_time;
         }
@@ -97,6 +102,8 @@ impl JobInfo {
             && !CronUtil::check_cron_valid(&self.cron_value)
         {
             Err(anyhow::anyhow!("cron_value is invalid!"))
+        } else if self.schedule_type == ScheduleType::Interval && self.interval_second == 0 {
+            Err(anyhow::anyhow!("interval_second eq 0,it is invalid!"))
         } else {
             Ok(())
         }
@@ -145,6 +152,7 @@ impl JobInfo {
             version_id: self.version_id,
             last_modified_millis: self.last_modified_millis,
             create_time: self.create_time,
+            retry_interval: self.retry_interval,
         }
     }
 }
@@ -173,6 +181,7 @@ impl<'a> From<JobDo<'a>> for JobInfo {
             version_id: job_do.version_id,
             last_modified_millis: job_do.last_modified_millis,
             create_time: job_do.create_time,
+            retry_interval: job_do.retry_interval,
         }
     }
 }
@@ -237,6 +246,40 @@ pub struct JobParam {
     pub timeout_second: Option<u32>,
     pub try_times: Option<u32>,
     pub update_time: Option<u64>,
+    pub retry_interval: Option<u32>,
+}
+
+impl JobParam {
+    pub fn check_valid(&self) -> anyhow::Result<()> {
+        if StringUtils::is_option_empty_arc(&self.namespace)
+            || StringUtils::is_option_empty_arc(&self.app_name)
+        {
+            return Err(anyhow::anyhow!("namespace or app_name is empty!"));
+        }
+        if let Some(run_mode) = self.run_mode.as_ref() {
+            if run_mode == &JobRunMode::Bean && StringUtils::is_option_empty_arc(&self.handle_name)
+            {
+                return Err(anyhow::anyhow!("bean handle_name is invalid!"));
+            }
+        }
+        if let Some(schedule_type) = self.schedule_type.as_ref() {
+            if schedule_type == &ScheduleType::Interval
+                && self.interval_second.clone().unwrap_or_default() == 0
+            {
+                return Err(anyhow::anyhow!("interval_second is 0,it is invalid!"));
+            }
+            if schedule_type == &ScheduleType::Cron {
+                if let Some(v) = self.cron_value.as_ref() {
+                    if !CronUtil::check_cron_valid(v) {
+                        return Err(anyhow::anyhow!("cron_value is invalid!"));
+                    }
+                } else {
+                    return Err(anyhow::anyhow!("cron_value is invalid!"));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl From<JobParam> for JobInfo {
@@ -268,6 +311,7 @@ impl From<JobParam> for JobInfo {
             version_id: 0,
             last_modified_millis: job_param.update_time.unwrap_or(0),
             create_time: 0,
+            retry_interval: job_param.interval_second.unwrap_or(0),
         }
     }
 }
@@ -303,6 +347,7 @@ pub struct JobInfoDto {
     pub version_id: u64,
     pub last_modified_millis: u64,
     pub register_time: u64,
+    pub retry_interval: u32,
 }
 
 impl JobInfoDto {
@@ -328,6 +373,7 @@ impl JobInfoDto {
             version_id: job_info.version_id,
             last_modified_millis: job_info.last_modified_millis,
             register_time: job_info.create_time,
+            retry_interval: job_info.retry_interval,
         }
     }
 }

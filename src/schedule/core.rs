@@ -243,6 +243,7 @@ impl ScheduleManager {
                         .job_run_state
                         .get(&old_task.job_id)
                         .map(|e| e.source_job.clone());
+                    #[cfg(feature = "debug")]
                     log::info!(
                         "ScheduleManager|redo task,id:{},{:?},job is none:{}",
                         task_id,
@@ -500,11 +501,10 @@ impl ScheduleManager {
         for task in self.running_task.values() {
             match task.status {
                 TaskStatusType::Init => {
-                    retry_list.push((
-                        task.task_id,
-                        now + task.get_retry_interval(),
-                        RedoType::Redo,
-                    ));
+                    // 十分钟之内支持重试
+                    if task.trigger_time + 600 > now {
+                        retry_list.push((task.task_id, task.trigger_time + 15, RedoType::Redo));
+                    }
                 }
                 TaskStatusType::Running => {
                     let timeout = if task.timeout_second > 0 {

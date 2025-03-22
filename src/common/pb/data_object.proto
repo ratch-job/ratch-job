@@ -26,6 +26,7 @@ message JobDo {
     uint64 version_id = 18;
     uint64 last_modified_millis = 19;
     uint64 create_time = 20;
+    uint32 retry_interval = 21;
 }
 
 message TaskTryLogDo {

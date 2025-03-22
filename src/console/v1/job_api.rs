@@ -66,6 +66,7 @@ async fn do_create_job(
     share_data: Data<Arc<ShareData>>,
     mut param: JobParam,
 ) -> anyhow::Result<HttpResponse> {
+    param.check_valid()?;
     if let SequenceResult::NextId(id) = share_data
         .sequence_manager
         .send(SequenceRequest::GetNextId(SEQ_JOB_ID.clone()))
@@ -119,6 +120,12 @@ pub(crate) async fn update_job(
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("update_job error,the job id is invalid".to_string()),
+        ));
+    }
+    if let Err(e) = param.check_valid() {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some(format!("update_job error,{}", e)),
         ));
     }
     if let Ok(_) = share_data
