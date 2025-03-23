@@ -47,6 +47,10 @@ impl RaftAddrRouter {
             None => Ok(RouteAddr::Unknown),
         }
     }
+
+    pub async fn get_target_route_addr(&self, target_node: u64) -> anyhow::Result<Arc<String>> {
+        self.raft_store.get_target_addr(target_node).await
+    }
 }
 
 ///
@@ -90,5 +94,14 @@ impl RaftRequestRoute {
             }
             RouteAddr::Unknown => Err(self.unknown_err()),
         }
+    }
+
+    pub async fn request_to_target(
+        &self,
+        req: RouterRequest,
+        target: u64,
+    ) -> anyhow::Result<RouterResponse> {
+        let addr = self.raft_addr_route.get_target_route_addr(target).await?;
+        router_request(req, addr, &self.cluster_sender).await
     }
 }

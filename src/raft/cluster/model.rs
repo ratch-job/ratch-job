@@ -1,4 +1,5 @@
 use crate::app::model::{AppRouteRequest, AppRouteResponse};
+use crate::metrics::timeline::model::{TimelineQueryParam, TimelineQueryResponse};
 use crate::raft::store::{ClientRequest, ClientResponse};
 use actix::Message;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,7 @@ pub enum RouterRequest {
     },
     AppRouteRequest(AppRouteRequest),
     RaftRequest(ClientRequest),
+    MetricsTimelineQuery(TimelineQueryParam),
 }
 
 impl From<ClientRequest> for RouterRequest {
@@ -32,11 +34,18 @@ impl From<AppRouteRequest> for RouterRequest {
     }
 }
 
+impl From<TimelineQueryParam> for RouterRequest {
+    fn from(req: TimelineQueryParam) -> Self {
+        RouterRequest::MetricsTimelineQuery(req)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RouterResponse {
     None,
     AppRouteResponse(AppRouteResponse),
     RaftResponse(ClientResponse),
+    MetricsTimeLineResponse(TimelineQueryResponse),
 }
 
 impl From<ClientResponse> for RouterResponse {

@@ -6,6 +6,7 @@ use crate::app::model::{AppManagerReq, AppManagerResult};
 use crate::common::share_data::ShareData;
 use crate::grpc::handler::RAFT_ROUTE_REQUEST;
 use crate::grpc::PayloadUtils;
+use crate::metrics::model::{MetricsRequest, MetricsResponse};
 use crate::raft::cluster::model::{RouterRequest, RouterResponse};
 use crate::raft::join_node;
 use crate::raft::network::factory::RaftClusterRequestSender;
@@ -45,6 +46,17 @@ pub async fn handle_route(
                 Ok(RouterResponse::AppRouteResponse(resp))
             } else {
                 Err(anyhow::anyhow!("AppManagerReq::AppRouteRequest error"))
+            }
+        }
+        RouterRequest::MetricsTimelineQuery(param) => {
+            if let MetricsResponse::TimelineResponse(resp) = app
+                .metrics_manager
+                .send(MetricsRequest::TimelineQuery(param))
+                .await??
+            {
+                Ok(RouterResponse::MetricsTimeLineResponse(resp))
+            } else {
+                Err(anyhow::anyhow!("MetricsResponse::TimelineResponse error"))
             }
         }
     }

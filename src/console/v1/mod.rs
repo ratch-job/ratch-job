@@ -1,5 +1,7 @@
 pub mod app_api;
+pub mod cluster_api;
 pub mod job_api;
+pub mod metrics_api;
 pub mod namespace_api;
 pub mod user_api;
 
@@ -35,6 +37,15 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
             .service(
                 web::resource("/job/task/latest-history")
                     .route(web::get().to(job_api::query_latest_task)),
+            )
+            .service(
+                web::resource("/metrics/timeline")
+                    .route(web::get().to(metrics_api::query_metrics_timeline))
+                    .route(web::post().to(metrics_api::query_metrics_timeline_json)),
+            )
+            .service(
+                web::resource("/cluster/cluster_node_list")
+                    .route(web::get().to(cluster_api::query_cluster_info)),
             ),
     );
 }
