@@ -86,6 +86,7 @@ pub(crate) async fn callback(
         })
         .await
     {
+        #[cfg(feature = "debug")]
         log::info!("callback success,id list:{:?}", &id_list);
         HttpResponse::Ok().json(xxl_api_empty_success())
     } else {

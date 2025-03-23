@@ -28,6 +28,7 @@ use actix::Actor;
 use async_raft_ext::raft::ClientWriteRequest;
 use async_raft_ext::{Config, Raft, RaftStorage};
 use bean_factory::{BeanDefinition, BeanFactory, FactoryData};
+use chrono::{FixedOffset, Local, Offset};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -169,6 +170,12 @@ async fn build_raft(
 
 pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareData>> {
     let app_config: Arc<AppConfig> = factory_data.get_bean().unwrap();
+    let timezone_offset =
+        if let Some(offset_value) = app_config.gmt_fixed_offset_hours.map(|e| e * 3600) {
+            FixedOffset::east_opt(offset_value).unwrap_or(Local::now().offset().fix())
+        } else {
+            Local::now().offset().fix()
+        };
     let app_data = Arc::new(ShareData {
         app_config,
         app_manager: factory_data.get_actor().unwrap(),
@@ -181,6 +188,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         raft: factory_data.get_bean().unwrap(),
         raft_store: factory_data.get_bean().unwrap(),
         raft_request_route: factory_data.get_bean().unwrap(),
+        timezone_offset: Arc::new(timezone_offset),
         factory_data,
     });
     Ok(app_data)

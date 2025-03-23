@@ -51,6 +51,7 @@ async-trait = "0.1"
 if-addrs = "0.13.3"
 futures-util = "0.3.29"
 rand = "0.8.5"
+regex = "1.11.1"
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os="windows"))'.dependencies]
 fs2 = "0.4.3"
 dirs = "5.0"

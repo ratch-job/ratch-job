@@ -11,11 +11,13 @@ use crate::task::core::TaskManager;
 use crate::task::task_history::TaskHistoryManager;
 use actix::Addr;
 use bean_factory::FactoryData;
+use chrono::FixedOffset;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ShareData {
     pub app_config: Arc<AppConfig>,
+    pub timezone_offset: Arc<FixedOffset>,
     pub app_manager: Addr<AppManager>,
     pub job_manager: Addr<JobManager>,
     pub sequence_manager: Addr<SequenceManager>,

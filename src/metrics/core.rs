@@ -106,8 +106,8 @@ impl MetricsManager {
             MetricsKey::HttpRequestHandleRtHistogram,
         ));
         self.summary_key_config.push((
-            MetricsKey::TaskFinishRtHistogram,
             MetricsKey::TaskFinishRtSummary,
+            MetricsKey::TaskFinishRtHistogram,
         ));
     }
 

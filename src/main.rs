@@ -11,6 +11,7 @@ use ratchjob::common::share_data::ShareData;
 use ratchjob::grpc::handler::InvokerHandler;
 use ratchjob::grpc::ratch_server_proto::request_server::RequestServer;
 use ratchjob::grpc::server::RequestServerImpl;
+use ratchjob::openapi::middle::CheckMiddle;
 use ratchjob::openapi::openapi_config;
 use ratchjob::starter::{build_share_data, config_factory};
 use ratchjob::web_config::app_config;
@@ -78,7 +79,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let app_data = app_data.clone();
         let app_config_shard = app_data.app_config.clone();
         App::new()
-            .app_data(Data::new(app_data))
+            .app_data(Data::new(app_data.clone()))
+            .wrap(CheckMiddle::new(app_data.clone()))
             .wrap(middleware::Logger::default())
             .configure(app_config(app_config_shard))
     });

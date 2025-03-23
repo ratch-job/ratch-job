@@ -320,7 +320,7 @@ impl ScheduleManager {
         let mut metrics_request = vec![];
         for param in params {
             if let Some(task_instance) = self.running_task.remove(&param.task_id) {
-                let duration_ms = now - (task_instance.trigger_time as i64 ) * 1000;
+                let duration_ms = now - (task_instance.trigger_time as i64) * 1000;
                 metrics_request.push(MetricsItem::new(
                     MetricsKey::TaskFinishRtHistogram,
                     MetricsRecord::HistogramRecord(duration_ms as f32),
