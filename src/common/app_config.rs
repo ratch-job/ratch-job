@@ -20,6 +20,10 @@ pub struct AppConfig {
     pub raft_join_addr: String,
     pub raft_snapshot_log_size: u64,
     pub cluster_token: Arc<String>,
+    pub metrics_enable: bool,
+    pub metrics_collect_interval_second: u64,
+    pub metrics_log_interval_second: u64,
+    pub metrics_log_enable: bool,
 }
 
 impl AppConfig {
@@ -69,6 +73,39 @@ impl AppConfig {
             .unwrap_or("10000".to_owned())
             .parse()
             .unwrap_or(10000);
+        let metrics_log_enable = std::env::var("RNACOS_METRICS_ENABLE_LOG")
+            .unwrap_or("false".to_owned())
+            .parse()
+            .unwrap_or(false);
+        let mut metrics_log_interval_second = std::env::var("RNACOS_METRICS_LOG_INTERVAL_SECOND")
+            .unwrap_or("60".to_owned())
+            .parse()
+            .unwrap_or(60);
+        if metrics_log_interval_second < 5 {
+            metrics_log_interval_second = 5;
+        }
+        let metrics_enable = std::env::var("RNACOS_ENABLE_METRICS")
+            .unwrap_or("true".to_owned())
+            .parse()
+            .unwrap_or(true);
+        let mut metrics_collect_interval_second =
+            std::env::var("RNACOS_METRICS_COLLECT_INTERVAL_SECOND")
+                .unwrap_or("15".to_owned())
+                .parse()
+                .unwrap_or(15);
+        if metrics_log_interval_second < metrics_collect_interval_second {
+            metrics_collect_interval_second = metrics_log_interval_second;
+        }
+        let naming_health_timeout = std::env::var("RNACOS_NAMING_HEALTH_TIMEOUT_SECOND")
+            .unwrap_or("15".to_owned())
+            .parse()
+            .unwrap_or(15)
+            * 1000;
+        let mut naming_instance_timeout = std::env::var("RNACOS_NAMING_INSTANCE_TIMEOUT_SECOND")
+            .unwrap_or("30".to_owned())
+            .parse()
+            .unwrap_or(30)
+            * 1000;
         Self {
             local_db_dir,
             http_api_port,
@@ -85,6 +122,10 @@ impl AppConfig {
             raft_auto_init,
             raft_join_addr,
             raft_snapshot_log_size,
+            metrics_enable,
+            metrics_log_enable,
+            metrics_collect_interval_second,
+            metrics_log_interval_second,
         }
     }
 

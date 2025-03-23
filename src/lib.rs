@@ -4,6 +4,7 @@ pub mod common;
 pub mod console;
 pub mod grpc;
 pub mod job;
+pub mod metrics;
 pub mod namespace;
 pub mod openapi;
 pub mod raft;

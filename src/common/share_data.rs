@@ -1,6 +1,7 @@
 use crate::app::core::AppManager;
 use crate::common::app_config::AppConfig;
 use crate::job::core::JobManager;
+use crate::metrics::core::MetricsManager;
 use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::core::Store;
 use crate::raft::RatchRaft;
@@ -21,6 +22,7 @@ pub struct ShareData {
     pub schedule_manager: Addr<ScheduleManager>,
     pub task_manager: Addr<TaskManager>,
     pub task_history_manager: Addr<TaskHistoryManager>,
+    pub metrics_manager: Addr<MetricsManager>,
     pub raft_request_route: Arc<RaftRequestRoute>,
     pub factory_data: FactoryData,
     pub raft: Arc<RatchRaft>,

@@ -5,6 +5,7 @@ use crate::common::share_data::ShareData;
 use crate::grpc::handler::RAFT_ROUTE_REQUEST;
 use crate::grpc::payload_utils::PayloadUtils;
 use crate::job::core::JobManager;
+use crate::metrics::core::MetricsManager;
 use crate::raft::cluster::model::RouterRequest;
 use crate::raft::cluster::node_manager::ClusterNodeManager;
 use crate::raft::cluster::route::{RaftAddrRouter, RaftRequestRoute};
@@ -120,6 +121,9 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         ClusterNodeManager::new(app_config.raft_node_id).start(),
     ));
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
+        MetricsManager::new(app_config.clone()).start(),
+    ));
     // raft end
     Ok(factory.init().await)
 }
@@ -173,6 +177,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         schedule_manager: factory_data.get_actor().unwrap(),
         task_manager: factory_data.get_actor().unwrap(),
         task_history_manager: factory_data.get_actor().unwrap(),
+        metrics_manager: factory_data.get_actor().unwrap(),
         raft: factory_data.get_bean().unwrap(),
         raft_store: factory_data.get_bean().unwrap(),
         raft_request_route: factory_data.get_bean().unwrap(),
