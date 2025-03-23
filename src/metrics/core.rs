@@ -73,15 +73,7 @@ impl MetricsManager {
         self.histogram_manager.init(
             MetricsKey::TaskFinishRtHistogram,
             &[
-                100f32,
-                500f32,
-                1_000f32,
-                5_000f32,
-                10_000f32,
-                60_000f32,
-                600_000f32,
-                3600_000f32,
-                86400_000f32,
+                0.1f32, 0.5f32, 1f32, 5f32, 10f32, 60f32, 600f32, 3600f32, 86400f32,
             ],
         );
         self.summary_manager.init(

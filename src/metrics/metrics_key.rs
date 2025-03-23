@@ -57,6 +57,7 @@ lazy_static! {
         MetricsKey::TaskRedoSize,
         MetricsKey::TaskSuccessSize,
         MetricsKey::TaskFailSize,
+        MetricsKey::TaskRunningSize,
         MetricsKey::TaskCallApiSize,
         MetricsKey::TaskFinishRtHistogram,
         MetricsKey::TaskFinishRtSummary,

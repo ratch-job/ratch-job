@@ -182,7 +182,9 @@ impl StateApplyManager {
         mut reader: SnapshotReader,
     ) -> anyhow::Result<()> {
         while let Ok(Some(record)) = reader.read_record().await {
-            data_wrap.load_snapshot(record).await?;
+            if let Err(e) = data_wrap.load_snapshot(record).await {
+                log::warn!("load_snapshot,{:?}", e);
+            }
         }
         Ok(())
     }
@@ -456,7 +458,12 @@ impl Handler<StateApplyAsyncRequest> for StateApplyManager {
             }
         }
         .into_actor(self)
-        .map(|r, _act, _ctx| r);
+        .map(|r, _act, _ctx| {
+            if let Err(e) = &r {
+                log::error!("StateApplyAsyncRequest error:{}", e);
+            }
+            r
+        });
         Box::pin(fut)
     }
 }

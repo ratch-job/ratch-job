@@ -315,24 +315,31 @@ impl ScheduleManager {
         ctx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         let mut list = Vec::with_capacity(params.len());
-        let now = now_millis_i64();
         let mut metrics_info = UpdateTaskMetricsInfo::default();
         let mut metrics_request = vec![];
         for param in params {
+            let update_time = param.task_date_time;
+            let update_second = (update_time / 1000) as u32;
             if let Some(task_instance) = self.running_task.remove(&param.task_id) {
-                let duration_ms = now - (task_instance.trigger_time as i64) * 1000;
-                metrics_request.push(MetricsItem::new(
-                    MetricsKey::TaskFinishRtHistogram,
-                    MetricsRecord::HistogramRecord(duration_ms as f32),
-                ));
+                if update_second >= self.app_start_second {
+                    let duration =
+                        (update_time - (task_instance.trigger_time as i64) * 1000) as f64 / 1000.0;
+                    metrics_request.push(MetricsItem::new(
+                        MetricsKey::TaskFinishRtHistogram,
+                        MetricsRecord::HistogramRecord(duration as f32),
+                    ));
+                    if param.success {
+                        metrics_info.success_count += 1;
+                    } else {
+                        metrics_info.fail_count += 1;
+                    }
+                }
                 let mut task_instance = task_instance.as_ref().clone();
-                task_instance.finish_time = (now / 1000) as u32;
+                task_instance.finish_time = update_second;
                 if param.success {
                     task_instance.status = TaskStatusType::Success;
-                    metrics_info.success_count += 1;
                 } else {
                     task_instance.status = TaskStatusType::Fail;
-                    metrics_info.fail_count += 1;
                     if let Some(msg) = param.handle_msg {
                         task_instance.callback_message = Arc::new(msg);
                     }

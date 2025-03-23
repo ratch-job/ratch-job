@@ -94,6 +94,7 @@ impl TimelineGroup {
                         }
                     }
                 } else if i == 0 {
+                    #[cfg(feature = "debug")]
                     log::warn!("not found key data,key: {:?}", &key);
                 }
             }
