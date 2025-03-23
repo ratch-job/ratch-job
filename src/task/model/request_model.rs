@@ -13,7 +13,7 @@ pub struct JobRunParam {
     pub executor_timeout: Option<i32>,
     pub log_date_time: Option<u64>,
     pub glue_type: Option<String>,
-    pub glue_source: Option<String>,
+    pub glue_source: Option<Arc<String>>,
     #[serde(rename(serialize = "glueUpdatetime", deserialize = "glueUpdatetime"))]
     pub glue_update_time: Option<u64>,
     pub broadcast_index: Option<u64>,
@@ -29,10 +29,10 @@ impl JobRunParam {
             executor_params: Some(job_info.trigger_param.clone()),
             executor_block_strategy: Some(job_info.blocking_strategy.to_str().to_string()),
             executor_timeout: Some(job_info.timeout_second as i32),
-            log_date_time: None,
+            log_date_time: Some(job_info.last_modified_millis),
             glue_type: Some(job_info.run_mode.to_str().to_string()),
-            glue_source: None,
-            glue_update_time: None,
+            glue_source: Some(job_info.trigger_param.clone()),
+            glue_update_time: Some(job_info.last_modified_millis),
             broadcast_index: Some(0),
             broadcast_total: Some(0),
         }

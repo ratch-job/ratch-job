@@ -86,7 +86,10 @@ impl JobInfo {
             self.retry_interval = retry_interval;
         }
         if let Some(update_time) = job_param.update_time {
-            self.create_time = update_time;
+            self.last_modified_millis = update_time;
+            if self.create_time == 0 {
+                self.create_time = update_time;
+            }
         }
         self.version_id += 1;
     }

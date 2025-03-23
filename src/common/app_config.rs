@@ -9,6 +9,7 @@ pub struct AppConfig {
     pub http_api_port: u16,
     pub xxl_job_prefix_path: String,
     pub xxl_default_access_token: String,
+    pub app_instance_health_timeout: u32,
     pub http_console_port: u16,
     pub http_workers: Option<usize>,
     pub grpc_cluster_port: u16,
@@ -47,6 +48,10 @@ impl AppConfig {
             .unwrap_or_default()
             .parse()
             .unwrap_or(http_api_port + 200);
+        let app_instance_health_timeout = std::env::var("RATCH_INSTANCE_HEALTH_TIMEOUT")
+            .unwrap_or("90".to_owned())
+            .parse()
+            .unwrap_or(90);
         let http_workers = std::env::var("RATCH_HTTP_WORKERS")
             .unwrap_or("".to_owned())
             .parse()
@@ -101,6 +106,7 @@ impl AppConfig {
             http_api_port,
             xxl_job_prefix_path,
             xxl_default_access_token,
+            app_instance_health_timeout,
             http_console_port,
             http_workers,
             grpc_cluster_port,

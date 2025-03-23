@@ -4,6 +4,7 @@ use crate::app::model::{
     AppManagerRaftResult, AppManagerReq, AppManagerResult, AppParam, AppRouteRequest,
     AppRouteResponse, InstanceTimeoutInfo, RegisterType,
 };
+use crate::common::app_config::AppConfig;
 use crate::common::byte_utils::id_to_bin;
 use crate::common::constant::{EMPTY_ARC_STR, JOB_TABLE_NAME};
 use crate::common::datetime_utils::{now_millis, now_second_u32};
@@ -24,6 +25,7 @@ use std::sync::Arc;
 pub struct AppManager {
     pub(crate) app_map: HashMap<AppKey, AppInfo>,
     task_manager: Option<Addr<TaskManager>>,
+    app_config: Option<Arc<AppConfig>>,
     app_index: AppIndex,
     app_instance_timeout: TimeoutSet<InstanceTimeoutInfo>,
     instance_timeout: u32,
@@ -34,6 +36,7 @@ impl AppManager {
         AppManager {
             app_map: HashMap::new(),
             task_manager: None,
+            app_config: None,
             app_index: AppIndex::new(),
             instance_timeout: 180,
             app_instance_timeout: TimeoutSet::new(),
@@ -375,6 +378,10 @@ impl Inject for AppManager {
         _ctx: &mut Self::Context,
     ) {
         self.task_manager = factory_data.get_actor();
+        self.app_config = factory_data.get_bean();
+        if let Some(config) = &self.app_config {
+            self.instance_timeout = config.app_instance_health_timeout + 1;
+        }
     }
 }
 
