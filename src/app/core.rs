@@ -346,6 +346,14 @@ impl AppManager {
         }
         Ok(())
     }
+
+    pub(crate) fn get_app_instance_all_count(&self) -> usize {
+        let mut count = 0;
+        for app_info in self.app_map.values() {
+            count += app_info.instance_map.len();
+        }
+        count
+    }
 }
 
 impl Actor for AppManager {

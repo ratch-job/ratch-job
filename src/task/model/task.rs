@@ -161,3 +161,16 @@ pub struct TaskWrap {
     pub app_addrs: Vec<Arc<String>>,
     pub trigger_source: TriggerSourceInfo,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct UpdateTaskMetricsInfo {
+    pub success_count: u64,
+    pub fail_count: u64,
+}
+
+impl UpdateTaskMetricsInfo {
+    pub fn add(&mut self, task_info: &UpdateTaskMetricsInfo) {
+        self.success_count += task_info.success_count;
+        self.fail_count += task_info.fail_count;
+    }
+}

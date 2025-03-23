@@ -1,6 +1,6 @@
 use crate::app::model::AppKey;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 #[bean(inject)]
 pub struct JobManager {
-    job_map: BTreeMap<u64, JobWrap>,
+    pub(crate) job_map: BTreeMap<u64, JobWrap>,
     schedule_manager: Option<Addr<ScheduleManager>>,
     job_task_log_limit: usize,
 }
@@ -218,6 +218,13 @@ impl JobManager {
 
     fn load_completed(&mut self, _ctx: &mut Context<Self>) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    pub(crate) fn get_all_enable_size(&self) -> usize {
+        self.job_map
+            .values()
+            .filter(|job_wrap| job_wrap.job.enable)
+            .count()
     }
 }
 

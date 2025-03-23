@@ -8,6 +8,9 @@ use crate::common::get_app_version;
 use crate::job::core::JobManager;
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerReq};
 use crate::job::model::job::JobInfo;
+use crate::metrics::core::MetricsManager;
+use crate::metrics::metrics_key::MetricsKey;
+use crate::metrics::model::{MetricsItem, MetricsRecord, MetricsRequest};
 use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::ClientRequest;
 use crate::sequence::model::SeqRange;
@@ -33,6 +36,7 @@ pub struct TaskManager {
     sequence_manager: Option<Addr<SequenceManager>>,
     job_manager: Option<Addr<JobManager>>,
     raft_request_route: Option<Arc<RaftRequestRoute>>,
+    metrics_manager: Option<Addr<MetricsManager>>,
 }
 
 impl TaskManager {
@@ -55,6 +59,7 @@ impl TaskManager {
             sequence_manager: None,
             job_manager: None,
             raft_request_route: None,
+            metrics_manager: None,
         }
     }
 
@@ -82,9 +87,15 @@ impl TaskManager {
         if trigger_items.is_empty() {
             return Ok(());
         }
+        self.do_send_metrics_request(MetricsRequest::Record(MetricsItem::new(
+            MetricsKey::TaskTriggerSize,
+            MetricsRecord::CounterInc(trigger_items.len() as u64),
+        )));
         if self.sequence_manager.is_none() || self.raft_request_route.is_none() {
-            log::error!("sequence_manager or job_manager is none");
-            return Err(anyhow::anyhow!("sequence_manager or job_manager is none"));
+            log::error!("sequence_manager or raft_request_route is none");
+            return Err(anyhow::anyhow!(
+                "sequence_manager or raft_request_route is none"
+            ));
         }
         let sequence_manager = self.sequence_manager.clone().unwrap();
         let raft_request_route = self.raft_request_route.clone().unwrap();
@@ -112,6 +123,17 @@ impl TaskManager {
         retry_items: Vec<RedoTaskItem>,
         ctx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
+        if retry_items.is_empty() {
+            return Ok(());
+        }
+        self.do_send_metrics_request(MetricsRequest::Record(MetricsItem::new(
+            MetricsKey::TaskRedoSize,
+            MetricsRecord::CounterInc(retry_items.len() as u64),
+        )));
+        if self.raft_request_route.is_none() {
+            log::error!("raft_request_route is none");
+            return Err(anyhow::anyhow!("raft_request_route is none"));
+        }
         let (task_list, notify_task_list) = self.build_retry_task_wrap(retry_items);
         log::info!(
             "redo_task_list|after build,task_count:{},notify_count:{}",
@@ -392,6 +414,12 @@ impl TaskManager {
         xxl_client.run_job(param).await?;
         Ok(())
     }
+
+    fn do_send_metrics_request(&self, req: MetricsRequest) {
+        if let Some(addr) = self.metrics_manager.as_ref() {
+            addr.do_send(req);
+        }
+    }
 }
 
 impl Actor for TaskManager {
@@ -414,6 +442,7 @@ impl Inject for TaskManager {
         self.sequence_manager = factory_data.get_actor();
         self.job_manager = factory_data.get_actor();
         self.raft_request_route = factory_data.get_bean();
+        self.metrics_manager = factory_data.get_actor();
     }
 }
 

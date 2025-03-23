@@ -4,12 +4,16 @@ use crate::common::constant::{
     JOB_TASK_TABLE_NAME,
 };
 use crate::common::datetime_utils::{
-    get_datetime_by_second, get_datetime_millis, get_local_offset, now_millis, now_second_u32,
+    get_datetime_by_second, get_datetime_millis, get_local_offset, now_millis, now_millis_i64,
+    now_second_u32,
 };
 use crate::common::pb::data_object::JobTaskDo;
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerReq};
 use crate::job::model::enum_type::ScheduleType;
 use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
+use crate::metrics::core::MetricsManager;
+use crate::metrics::metrics_key::MetricsKey;
+use crate::metrics::model::{MetricsItem, MetricsRecord, MetricsRequest};
 use crate::raft::cluster::model::{VoteChangeRequest, VoteChangeResponse, VoteInfo};
 use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::model::SnapshotRecordDto;
@@ -24,7 +28,7 @@ use crate::schedule::model::{JobRunState, RedoInfo, RedoType, TriggerInfo};
 use crate::task::core::TaskManager;
 use crate::task::model::actor_model::{RedoTaskItem, TaskManagerReq, TriggerItem};
 use crate::task::model::enum_type::TaskStatusType;
-use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
+use crate::task::model::task::{JobTaskInfo, TaskCallBackParam, UpdateTaskMetricsInfo};
 use actix::prelude::*;
 use actix_web::cookie::time::macros::datetime;
 use anyhow::anyhow;
@@ -43,8 +47,9 @@ pub struct ScheduleManager {
     fixed_offset: FixedOffset,
     task_manager: Option<Addr<TaskManager>>,
     raft_request_route: Option<Arc<RaftRequestRoute>>,
+    metrics_manager: Option<Addr<MetricsManager>>,
     /// 运行中的任务实例
-    running_task: HashMap<u64, Arc<JobTaskInfo>>,
+    pub(crate) running_task: HashMap<u64, Arc<JobTaskInfo>>,
     /// 失败重试集
     redo_set: TimeoutSet<RedoInfo>,
     /// 任务实例历史记录
@@ -74,10 +79,11 @@ impl Inject for ScheduleManager {
         &mut self,
         factory_data: FactoryData,
         _factory: BeanFactory,
-        ctx: &mut Self::Context,
+        _ctx: &mut Self::Context,
     ) {
         self.task_manager = factory_data.get_actor();
         self.raft_request_route = factory_data.get_bean();
+        self.metrics_manager = factory_data.get_actor();
     }
 }
 
@@ -94,6 +100,7 @@ impl ScheduleManager {
             fixed_offset,
             task_manager: None,
             raft_request_route: None,
+            metrics_manager: None,
             running_task: Default::default(),
             history_task: JobTaskLogGroup::new(),
             history_task_log_limit: 10000,
@@ -308,20 +315,34 @@ impl ScheduleManager {
         ctx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         let mut list = Vec::with_capacity(params.len());
+        let now = now_millis_i64();
+        let mut metrics_info = UpdateTaskMetricsInfo::default();
+        let mut metrics_request = vec![];
         for param in params {
             if let Some(task_instance) = self.running_task.remove(&param.task_id) {
+                let duration_ms = now - (task_instance.trigger_time as i64 ) * 1000;
+                metrics_request.push(MetricsItem::new(
+                    MetricsKey::TaskFinishRtHistogram,
+                    MetricsRecord::HistogramRecord(duration_ms as f32),
+                ));
                 let mut task_instance = task_instance.as_ref().clone();
-                task_instance.finish_time = now_second_u32();
+                task_instance.finish_time = (now / 1000) as u32;
                 if param.success {
                     task_instance.status = TaskStatusType::Success;
+                    metrics_info.success_count += 1;
                 } else {
                     task_instance.status = TaskStatusType::Fail;
+                    metrics_info.fail_count += 1;
                     if let Some(msg) = param.handle_msg {
                         task_instance.callback_message = Arc::new(msg);
                     }
                 }
                 list.push(Arc::new(task_instance));
             }
+        }
+        Self::append_update_metrics_request(&metrics_info, &mut metrics_request);
+        if !metrics_request.is_empty() {
+            self.do_send_metrics_request(MetricsRequest::BatchRecord(metrics_request));
         }
         let raft_request_route = self.raft_request_route.clone();
         if let Some(raft_request_route) = raft_request_route {
@@ -346,15 +367,39 @@ impl ScheduleManager {
     }
 
     fn update_task_log(&mut self, task_log: Arc<JobTaskInfo>) {
-        let task_log = self.update_running_task(task_log);
+        let mut metrics_request = vec![];
+        let (task_log, metrics_info) = self.update_running_task(task_log);
         self.history_task
             .update_task_log(task_log, self.history_task_log_limit);
+        Self::append_update_metrics_request(&metrics_info, &mut metrics_request);
+        if !metrics_request.is_empty() {
+            self.do_send_metrics_request(MetricsRequest::BatchRecord(metrics_request));
+        }
     }
 
-    fn update_running_task(&mut self, task_log: Arc<JobTaskInfo>) -> Arc<JobTaskInfo> {
+    fn update_task_logs(&mut self, task_logs: Vec<Arc<JobTaskInfo>>) {
+        let mut metrics_request = vec![];
+        let mut metrics_info = UpdateTaskMetricsInfo::default();
+        for item in task_logs {
+            let (task_log, tmp_metrics_info) = self.update_running_task(item);
+            self.history_task
+                .update_task_log(task_log, self.history_task_log_limit);
+            metrics_info.add(&tmp_metrics_info);
+        }
+        Self::append_update_metrics_request(&metrics_info, &mut metrics_request);
+        if !metrics_request.is_empty() {
+            self.do_send_metrics_request(MetricsRequest::BatchRecord(metrics_request));
+        }
+    }
+
+    fn update_running_task(
+        &mut self,
+        task_log: Arc<JobTaskInfo>,
+    ) -> (Arc<JobTaskInfo>, UpdateTaskMetricsInfo) {
         if self.last_trigger_time < task_log.trigger_time {
             self.last_trigger_time = task_log.trigger_time;
         }
+        let mut metrics_info = UpdateTaskMetricsInfo::default();
         match &task_log.status {
             TaskStatusType::Init => {
                 self.running_task.insert(task_log.task_id, task_log.clone());
@@ -369,7 +414,11 @@ impl ScheduleManager {
                 );
             }
             TaskStatusType::Success => {
-                self.running_task.remove(&task_log.task_id);
+                if let Some(_v) = self.running_task.remove(&task_log.task_id) {
+                    if task_log.finish_time >= self.app_start_second {
+                        metrics_info.success_count += 1;
+                    }
+                }
             }
             TaskStatusType::Fail => {
                 if task_log.can_retry() {
@@ -380,11 +429,15 @@ impl ScheduleManager {
                         RedoType::Retry,
                     );
                 } else {
-                    self.running_task.remove(&task_log.task_id);
+                    if let Some(_v) = self.running_task.remove(&task_log.task_id) {
+                        if task_log.finish_time >= self.app_start_second {
+                            metrics_info.fail_count += 1;
+                        }
+                    }
                 }
             }
         };
-        task_log
+        (task_log, metrics_info)
     }
 
     fn query_latest_history_task_logs(
@@ -533,6 +586,38 @@ impl ScheduleManager {
             self.active_retry_task(task_id, time, redo_type);
         }
     }
+
+    fn append_update_metrics_request(
+        metrics_info: &UpdateTaskMetricsInfo,
+        metrics_request: &mut Vec<MetricsItem>,
+    ) {
+        if metrics_info.success_count > 0 {
+            metrics_request.push(MetricsItem::new(
+                MetricsKey::TaskSuccessSize,
+                MetricsRecord::CounterInc(metrics_info.success_count),
+            ));
+            metrics_request.push(MetricsItem::new(
+                MetricsKey::TaskFinishTotalCount,
+                MetricsRecord::CounterInc(metrics_info.success_count),
+            ));
+        }
+        if metrics_info.fail_count > 0 {
+            metrics_request.push(MetricsItem::new(
+                MetricsKey::TaskFailSize,
+                MetricsRecord::CounterInc(metrics_info.fail_count),
+            ));
+            metrics_request.push(MetricsItem::new(
+                MetricsKey::TaskFinishTotalCount,
+                MetricsRecord::CounterInc(metrics_info.fail_count),
+            ));
+        }
+    }
+
+    fn do_send_metrics_request(&self, req: MetricsRequest) {
+        if let Some(addr) = self.metrics_manager.as_ref() {
+            addr.do_send(req);
+        }
+    }
 }
 
 impl Handler<ScheduleManagerReq> for ScheduleManager {
@@ -551,9 +636,7 @@ impl Handler<ScheduleManagerReq> for ScheduleManager {
                 self.update_task_log(task);
             }
             ScheduleManagerReq::UpdateTaskList(task_list) => {
-                for task in task_list {
-                    self.update_task_log(task);
-                }
+                self.update_task_logs(task_list);
             }
             ScheduleManagerReq::QueryJobTaskLog(param) => {
                 let (total, list) = self.query_latest_history_task_logs(&param);
