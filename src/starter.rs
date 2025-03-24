@@ -51,12 +51,12 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
         SequenceManager::new().start(),
     ));
     let schedule_manager =
-        ScheduleManager::new(app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60)).start();
+        create_actor_at_thread(ScheduleManager::new(app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60)));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         schedule_manager.clone(),
     ));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
-        TaskManager::new(app_config.clone()).start(),
+        create_actor_at_thread(TaskManager::new(app_config.clone())),
     ));
     factory.register(BeanDefinition::actor_from_obj(
         TaskHistoryManager::new().start(),
