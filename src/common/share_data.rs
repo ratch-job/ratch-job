@@ -6,6 +6,7 @@ use crate::raft::cluster::node_manager::ClusterNodeManager;
 use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::core::Store;
 use crate::raft::RatchRaft;
+use crate::schedule::batch_call::BatchCallManager;
 use crate::schedule::core::ScheduleManager;
 use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
@@ -31,4 +32,5 @@ pub struct ShareData {
     pub raft: Arc<RatchRaft>,
     pub raft_store: Arc<Store>,
     pub cluster_node_manager: Addr<ClusterNodeManager>,
+    pub batch_call_manager: Addr<BatchCallManager>,
 }

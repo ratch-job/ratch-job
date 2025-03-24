@@ -33,7 +33,7 @@ impl JobManager {
         JobManager {
             job_map: BTreeMap::new(),
             schedule_manager: None,
-            job_task_log_limit: 200,
+            job_task_log_limit: 100,
         }
     }
 

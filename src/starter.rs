@@ -19,6 +19,7 @@ use crate::raft::store::raftlog::RaftLogManager;
 use crate::raft::store::raftsnapshot::RaftSnapshotManager;
 use crate::raft::store::ClientRequest;
 use crate::raft::RatchRaft;
+use crate::schedule::batch_call::BatchCallManager;
 use crate::schedule::core::ScheduleManager;
 use crate::sequence::core::SequenceDbManager;
 use crate::sequence::SequenceManager;
@@ -48,10 +49,14 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
         job_manager.clone(),
     ));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
+        BatchCallManager::new().start(),
+    ));
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
         SequenceManager::new().start(),
     ));
-    let schedule_manager =
-        create_actor_at_thread(ScheduleManager::new(app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60)));
+    let schedule_manager = create_actor_at_thread(ScheduleManager::new(
+        app_config.gmt_fixed_offset_hours.map(|v| v * 60 * 60),
+    ));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         schedule_manager.clone(),
     ));
@@ -190,6 +195,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         raft_store: factory_data.get_bean().unwrap(),
         raft_request_route: factory_data.get_bean().unwrap(),
         cluster_node_manager: factory_data.get_actor().unwrap(),
+        batch_call_manager: factory_data.get_actor().unwrap(),
         factory_data,
     });
     Ok(app_data)

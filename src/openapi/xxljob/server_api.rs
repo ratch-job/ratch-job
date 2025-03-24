@@ -5,6 +5,7 @@ use crate::common::share_data::ShareData;
 use crate::openapi::xxljob::model::server_request::{CallbackParam, RegistryParam};
 use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
 use crate::raft::store::ClientRequest;
+use crate::schedule::batch_call::BatchCallManagerReq;
 use crate::schedule::model::actor_model::ScheduleManagerRaftReq;
 use crate::task::model::actor_model::TaskManagerReq;
 use actix_web::web::Data;
@@ -78,12 +79,8 @@ pub(crate) async fn callback(
 ) -> impl Responder {
     let id_list: Vec<u64> = params.iter().map(|p| p.log_id).collect();
     if let Ok(_) = share_data
-        .raft_request_route
-        .request(ClientRequest::ScheduleReq {
-            req: ScheduleManagerRaftReq::TaskCallBacks(
-                params.into_iter().map(|p| p.into()).collect(),
-            ),
-        })
+        .batch_call_manager
+        .send(BatchCallManagerReq::Callback(params))
         .await
     {
         #[cfg(feature = "debug")]
