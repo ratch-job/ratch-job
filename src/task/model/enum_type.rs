@@ -43,4 +43,22 @@ impl TaskStatusType {
             TaskStatusType::Success => false,
         }
     }
+
+    pub fn is_finish(&self) -> bool {
+        match self {
+            TaskStatusType::Init => false,
+            TaskStatusType::Running => false,
+            TaskStatusType::Fail => true,
+            TaskStatusType::Success => true,
+        }
+    }
+
+    pub fn is_running(&self) -> bool {
+        match self {
+            TaskStatusType::Init => false,
+            TaskStatusType::Running => true,
+            TaskStatusType::Fail => false,
+            TaskStatusType::Success => false,
+        }
+    }
 }

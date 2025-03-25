@@ -24,6 +24,7 @@ use crate::schedule::job_task::JobTaskLogGroup;
 use crate::schedule::model::actor_model::{
     ScheduleManagerRaftReq, ScheduleManagerRaftResult, ScheduleManagerReq, ScheduleManagerResult,
 };
+use crate::schedule::model::finish_mark::FinishMarkGroup;
 use crate::schedule::model::{JobRunState, RedoInfo, RedoType, TriggerInfo};
 use crate::task::core::TaskManager;
 use crate::task::model::actor_model::{RedoTaskItem, TaskManagerReq, TriggerItem};
@@ -43,6 +44,7 @@ use std::sync::Arc;
 #[bean(inject)]
 pub struct ScheduleManager {
     job_run_state: HashMap<u64, JobRunState>,
+    finish_mark_group: FinishMarkGroup,
     active_time_set: TimeoutSet<TriggerInfo>,
     fixed_offset: FixedOffset,
     task_manager: Option<Addr<TaskManager>>,
@@ -97,6 +99,7 @@ impl ScheduleManager {
         ScheduleManager {
             job_run_state: HashMap::new(),
             active_time_set: TimeoutSet::new(),
+            finish_mark_group: FinishMarkGroup::new(),
             fixed_offset,
             task_manager: None,
             raft_request_route: None,
@@ -209,6 +212,10 @@ impl ScheduleManager {
                         log::info!("job next trigger is none,id:{}", &item.job_id);
                     }
                     self.update_job_trigger_time(item.job_id, item.trigger_time, next_trigger_time);
+                    if trigger_list.len() >= 100 {
+                        task_manager.do_send(TaskManagerReq::TriggerTaskList(trigger_list.clone()));
+                        trigger_list.clear();
+                    }
                 } else {
                     #[cfg(feature = "debug")]
                     log::info!(
@@ -319,6 +326,7 @@ impl ScheduleManager {
         let now = now_second_u32();
         self.trigger_job(now);
         self.trigger_redo_job(now, ctx);
+        self.switch_finish_mark(now);
         let later_millis = 1000 - now_millis() % 1000;
         ctx.run_later(
             std::time::Duration::from_millis(later_millis),
@@ -340,6 +348,10 @@ impl ScheduleManager {
             let update_time = param.task_date_time;
             let update_second = (update_time / 1000) as u32;
             if let Some(task_instance) = self.running_task.remove(&param.task_id) {
+                if task_instance.status == TaskStatusType::Init {
+                    self.finish_mark_group
+                        .mark_finish(param.task_id, param.success);
+                }
                 if update_second >= self.app_start_second {
                     let duration =
                         (update_time - (task_instance.trigger_time as i64) * 1000) as f64 / 1000.0;
@@ -364,7 +376,13 @@ impl ScheduleManager {
                     }
                 }
                 list.push(Arc::new(task_instance));
+            } else {
+                self.finish_mark_group
+                    .mark_finish(param.task_id, param.success);
             }
+        }
+        if !self.local_is_master {
+            self.switch_finish_mark(now_second_u32());
         }
         Self::append_update_metrics_request(&metrics_info, &mut metrics_request);
         if !metrics_request.is_empty() {
@@ -378,6 +396,12 @@ impl ScheduleManager {
                 .spawn(ctx);
         }
         Ok(())
+    }
+
+    fn switch_finish_mark(&mut self, now_second: u32) {
+        if self.finish_mark_group.can_switch(now_second) {
+            self.finish_mark_group.switch(now_second + 30);
+        }
     }
 
     async fn notify_update_task(
@@ -432,12 +456,14 @@ impl ScheduleManager {
                 //self.active_retry_task(task_log.task_id, now_second_u32() + 15, RedoType::Redo);
             }
             TaskStatusType::Running => {
-                self.running_task.insert(task_log.task_id, task_log.clone());
-                self.active_retry_task(
-                    task_log.task_id,
-                    now_second_u32() + task_log.get_timeout_second(self.default_timeout_second),
-                    RedoType::Timeout,
-                );
+                if !self.finish_mark_group.is_finish(task_log.task_id) {
+                    self.running_task.insert(task_log.task_id, task_log.clone());
+                    self.active_retry_task(
+                        task_log.task_id,
+                        now_second_u32() + task_log.get_timeout_second(self.default_timeout_second),
+                        RedoType::Timeout,
+                    );
+                }
             }
             TaskStatusType::Success => {
                 if let Some(_v) = self.running_task.remove(&task_log.task_id) {
