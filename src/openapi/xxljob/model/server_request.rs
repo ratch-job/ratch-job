@@ -17,7 +17,7 @@ pub struct CallbackParam {
     #[serde(rename(serialize = "logDateTim", deserialize = "logDateTim"))]
     pub log_date_time: i64,
     pub handle_code: i32,
-    pub handle_msg: Option<String>,
+    pub handle_msg: Option<Arc<String>>,
 }
 
 impl From<CallbackParam> for crate::task::model::task::TaskCallBackParam {

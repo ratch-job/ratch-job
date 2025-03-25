@@ -151,7 +151,7 @@ pub struct TaskCallBackParam {
     pub task_id: u64,
     pub task_date_time: i64,
     pub success: bool,
-    pub handle_msg: Option<String>,
+    pub handle_msg: Option<Arc<String>>,
 }
 
 pub struct TaskWrap {
