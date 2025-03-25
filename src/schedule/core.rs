@@ -64,6 +64,7 @@ pub struct ScheduleManager {
     last_retry_time: u32,
     running_heartbeat: bool,
     default_timeout_second: u32,
+    trigger_batch_max_count: usize,
 }
 
 impl Actor for ScheduleManager {
@@ -115,6 +116,7 @@ impl ScheduleManager {
             redo_set: TimeoutSet::new(),
             running_heartbeat: false,
             default_timeout_second: 24 * 60 * 60, // 默认24小时
+            trigger_batch_max_count: 1000,
         }
     }
 
@@ -212,7 +214,7 @@ impl ScheduleManager {
                         log::info!("job next trigger is none,id:{}", &item.job_id);
                     }
                     self.update_job_trigger_time(item.job_id, item.trigger_time, next_trigger_time);
-                    if trigger_list.len() >= 100 {
+                    if trigger_list.len() >= self.trigger_batch_max_count {
                         task_manager.do_send(TaskManagerReq::TriggerTaskList(trigger_list.clone()));
                         trigger_list.clear();
                     }

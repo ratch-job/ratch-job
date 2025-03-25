@@ -7,24 +7,24 @@ use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use futures_util::task::SpawnExt;
 use std::sync::Arc;
-//use tokio::sync::oneshot::Sender;
+use tokio::sync::oneshot::Sender;
 
 #[derive(Debug, Default)]
 pub struct CallbackGroup {
     pub params: Vec<TaskCallBackParam>,
-    //pub senders: Vec<Sender<bool>>,
+    pub senders: Vec<Sender<bool>>,
 }
 
 impl CallbackGroup {
     pub fn new() -> Self {
         Self {
             params: vec![],
-            //senders: vec![],
+            senders: vec![],
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.params.is_empty()
+        self.senders.is_empty()
     }
 }
 
@@ -32,6 +32,7 @@ impl CallbackGroup {
 pub struct BatchCallManager {
     raft_request_route: Option<Arc<RaftRequestRoute>>,
     callback_cache: Option<CallbackGroup>,
+    callback_batch_max_count: usize,
 }
 
 impl BatchCallManager {
@@ -39,6 +40,7 @@ impl BatchCallManager {
         Self {
             raft_request_route: None,
             callback_cache: Some(CallbackGroup::new()),
+            callback_batch_max_count: 500,
         }
     }
 
@@ -56,6 +58,9 @@ impl BatchCallManager {
             {
                 result = true;
             }
+        }
+        for sender in params.senders {
+            sender.send(result).ok();
         }
         Ok(())
     }
@@ -119,19 +124,35 @@ pub enum BatchCallManagerReq {
 }
 
 impl Handler<BatchCallManagerReq> for BatchCallManager {
-    type Result = anyhow::Result<()>;
+    type Result = ResponseActFuture<Self, anyhow::Result<()>>;
 
     fn handle(&mut self, msg: BatchCallManagerReq, _ctx: &mut Self::Context) -> Self::Result {
-        //todo 这里暂时移除等待，后续需要本地缓存，保证最终触达；
-        match msg {
+        let mut count = 0;
+        let rx = match msg {
             BatchCallManagerReq::Callback(params) => {
+                let (tx, rx) = tokio::sync::oneshot::channel();
                 if let Some(callback_cache) = self.callback_cache.as_mut() {
                     for param in params {
                         callback_cache.params.push(param.into());
                     }
+                    callback_cache.senders.push(tx);
+                    count = callback_cache.senders.len();
                 }
+                rx
+            }
+        };
+        let fut = async move {
+            if rx.await? {
                 Ok(())
+            } else {
+                Err(anyhow::anyhow!("callback error"))
             }
         }
+        .into_actor(self)
+        .map(|res: anyhow::Result<()>, _act, _ctx| res);
+        if count >= self.callback_batch_max_count {
+            self.callback(_ctx);
+        }
+        Box::pin(fut)
     }
 }
