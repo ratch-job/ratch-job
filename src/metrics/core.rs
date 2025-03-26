@@ -46,8 +46,9 @@ impl MetricsManager {
         let total_memory = system.total_memory() as f32 / (1024.0 * 1024.0);
         let mut gauge_manager = GaugeManager::default();
         gauge_manager.set(MetricsKey::SysTotalMemory, total_memory);
+        let counter_manager = Self::init_counter_manager();
         Self {
-            counter_manager: Default::default(),
+            counter_manager,
             gauge_manager,
             histogram_manager: Default::default(),
             summary_manager: Default::default(),
@@ -63,6 +64,19 @@ impl MetricsManager {
             metrics_collect: None,
         }
     }
+
+    fn init_counter_manager() -> CounterManager {
+        let mut counter_manager = CounterManager::default();
+        counter_manager.absolute(MetricsKey::TaskTriggerSize, 0);
+        counter_manager.absolute(MetricsKey::TaskRedoSize, 0);
+        counter_manager.absolute(MetricsKey::TaskSuccessSize, 0);
+        counter_manager.absolute(MetricsKey::TaskFailSize, 0);
+        counter_manager.absolute(MetricsKey::TaskCallApiSize, 0);
+        counter_manager.absolute(MetricsKey::TaskFinishTotalCount, 0);
+        counter_manager.absolute(MetricsKey::HttpRequestTotalCount, 0);
+        counter_manager
+    }
+
     fn init(&mut self, ctx: &mut Context<Self>) {
         self.init_histogram();
         self.hb(ctx);

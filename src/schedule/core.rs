@@ -402,7 +402,7 @@ impl ScheduleManager {
 
     fn switch_finish_mark(&mut self, now_second: u32) {
         if self.finish_mark_group.can_switch(now_second) {
-            self.finish_mark_group.switch(now_second + 30);
+            self.finish_mark_group.switch(now_second + 5);
         }
     }
 
