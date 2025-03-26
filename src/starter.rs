@@ -24,6 +24,7 @@ use crate::schedule::core::ScheduleManager;
 use crate::sequence::core::SequenceDbManager;
 use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
+use crate::task::request_actor::TaskRequestActor;
 use crate::task::task_history::TaskHistoryManager;
 use actix::Actor;
 use async_raft_ext::raft::ClientWriteRequest;
@@ -60,8 +61,13 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         schedule_manager.clone(),
     ));
+    let (task_manager, task_request_actor) = create_actor_at_thread2(
+        TaskManager::new(app_config.clone()),
+        TaskRequestActor::new(app_config.clone()),
+    );
+    factory.register(BeanDefinition::actor_with_inject_from_obj(task_manager));
     factory.register(BeanDefinition::actor_with_inject_from_obj(
-        create_actor_at_thread(TaskManager::new(app_config.clone())),
+        task_request_actor,
     ));
     factory.register(BeanDefinition::actor_from_obj(
         TaskHistoryManager::new().start(),

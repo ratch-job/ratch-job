@@ -23,6 +23,8 @@ use crate::task::model::app_instance::{AppInstanceStateGroup, InstanceAddrSelect
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobRunParam;
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam, TaskWrap};
+use crate::task::model::task_request::TaskRequestCmd;
+use crate::task::request_actor::TaskRequestActor;
 use crate::task::request_client::XxlClient;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
@@ -37,6 +39,7 @@ pub struct TaskManager {
     job_manager: Option<Addr<JobManager>>,
     raft_request_route: Option<Arc<RaftRequestRoute>>,
     metrics_manager: Option<Addr<MetricsManager>>,
+    task_request_actor: Option<Addr<TaskRequestActor>>,
 }
 
 impl TaskManager {
@@ -60,6 +63,7 @@ impl TaskManager {
             job_manager: None,
             raft_request_route: None,
             metrics_manager: None,
+            task_request_actor: None,
         }
     }
 
@@ -91,7 +95,10 @@ impl TaskManager {
             MetricsKey::TaskTriggerSize,
             MetricsRecord::CounterInc(trigger_items.len() as u64),
         )));
-        if self.sequence_manager.is_none() || self.raft_request_route.is_none() {
+        if self.sequence_manager.is_none()
+            || self.raft_request_route.is_none()
+            || self.task_request_actor.is_none()
+        {
             log::error!("sequence_manager or raft_request_route is none");
             return Err(anyhow::anyhow!(
                 "sequence_manager or raft_request_route is none"
@@ -106,9 +113,16 @@ impl TaskManager {
                 let (task_list, notify_task_list) = act.build_task_wrap(list);
                 let raft_request_route = act.raft_request_route.clone().unwrap();
                 let xxl_request_header = act.xxl_request_header.clone();
+                let task_request_actor = act.task_request_actor.clone().unwrap();
                 async move {
                     Self::notify_update_task(&raft_request_route, notify_task_list).await?;
-                    Self::run_task_list(task_list, xxl_request_header, raft_request_route).await?;
+                    Self::run_task_list(
+                        task_list,
+                        xxl_request_header,
+                        raft_request_route,
+                        task_request_actor,
+                    )
+                    .await?;
                     Ok(())
                 }
                 .into_actor(act)
@@ -130,7 +144,7 @@ impl TaskManager {
             MetricsKey::TaskRedoSize,
             MetricsRecord::CounterInc(retry_items.len() as u64),
         )));
-        if self.raft_request_route.is_none() {
+        if self.raft_request_route.is_none() || self.task_request_actor.is_none() {
             log::error!("raft_request_route is none");
             return Err(anyhow::anyhow!("raft_request_route is none"));
         }
@@ -142,9 +156,16 @@ impl TaskManager {
         );
         let raft_request_route = self.raft_request_route.clone().unwrap();
         let xxl_request_header = self.xxl_request_header.clone();
+        let task_request_actor = self.task_request_actor.clone().unwrap();
         async move {
             Self::notify_update_task(&raft_request_route, notify_task_list).await?;
-            Self::run_task_list(task_list, xxl_request_header, raft_request_route).await?;
+            Self::run_task_list(
+                task_list,
+                xxl_request_header,
+                raft_request_route,
+                task_request_actor,
+            )
+            .await?;
             Ok(())
         }
         .into_actor(self)
@@ -305,6 +326,7 @@ impl TaskManager {
         task_wrap_list: Vec<TaskWrap>,
         xxl_request_header: HashMap<String, String>,
         raft_request_route: Arc<RaftRequestRoute>,
+        task_request_actor: Addr<TaskRequestActor>,
     ) -> anyhow::Result<()> {
         let client = reqwest::Client::new();
         let mut task_list = Vec::with_capacity(task_wrap_list.len());
@@ -315,39 +337,25 @@ impl TaskManager {
             match task_wrap.select_result {
                 InstanceAddrSelectResult::Fixed(addr) => {
                     task_info.instance_addr = addr.clone();
-                    if let Err(err) =
-                        Self::do_run_task(addr, &param, &client, &xxl_request_header).await
-                    {
-                        task_info.status = TaskStatusType::Fail;
-                        task_info.trigger_message = Arc::new(err.to_string());
-                        task_info.finish_time = now_second_u32();
-                        log::error!("run task error:{}", err);
-                    } else {
-                        task_info.status = TaskStatusType::Running;
-                    }
+                    task_request_actor.do_send(TaskRequestCmd::RunTask(
+                        addr,
+                        param,
+                        task_info.clone(),
+                    ));
+                    task_info.status = TaskStatusType::Running;
                 }
                 InstanceAddrSelectResult::Selected(addr) => {
                     task_info.instance_addr = addr.clone();
-                    //let try_times = std::cmp::max(std::cmp::min(task_wrap.job_info.try_times, 5u32),1u32);
-                    //if let Err(err) = Self::try_run_task( addr, task_wrap.app_addrs, &param, &client, &xxl_request_header, try_times).await
-                    if let Err(err) =
-                        Self::do_run_task(addr, &param, &client, &xxl_request_header).await
-                    {
-                        task_info.status = TaskStatusType::Fail;
-                        task_info.trigger_message = Arc::new(err.to_string());
-                        task_info.finish_time = now_second_u32();
-                        //log::error!("run task error,try_times:{},err:{}", try_times, err);
-                        log::error!("run task error,err:{}", err);
-                    } else {
-                        task_info.status = TaskStatusType::Running;
-                    }
+                    task_request_actor.do_send(TaskRequestCmd::RunTask(
+                        addr,
+                        param,
+                        task_info.clone(),
+                    ));
+                    task_info.status = TaskStatusType::Running;
                 }
                 InstanceAddrSelectResult::ALL(addrs) => {
-                    for addr in addrs {
-                        Self::do_run_task(addr, &param, &client, &xxl_request_header)
-                            .await
-                            .ok();
-                    }
+                    task_request_actor.do_send(TaskRequestCmd::RunBroadcastTask(addrs, param));
+                    task_info.status = TaskStatusType::Running;
                     task_info.status = TaskStatusType::Running;
                 }
                 InstanceAddrSelectResult::Empty => {
@@ -443,6 +451,7 @@ impl Inject for TaskManager {
         self.job_manager = factory_data.get_actor();
         self.raft_request_route = factory_data.get_bean();
         self.metrics_manager = factory_data.get_actor();
+        self.task_request_actor = factory_data.get_actor();
     }
 }
 
