@@ -458,7 +458,13 @@ impl ScheduleManager {
                 //self.active_retry_task(task_log.task_id, now_second_u32() + 15, RedoType::Redo);
             }
             TaskStatusType::Running => {
-                if !self.finish_mark_group.is_finish(task_log.task_id) {
+                if let Some(v) = self.finish_mark_group.get_value(task_log.task_id) {
+                    if v {
+                        metrics_info.success_count += 1;
+                    } else {
+                        metrics_info.fail_count += 1;
+                    }
+                } else {
                     self.running_task.insert(task_log.task_id, task_log.clone());
                     self.active_retry_task(
                         task_log.task_id,

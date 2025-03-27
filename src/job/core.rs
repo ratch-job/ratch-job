@@ -100,14 +100,11 @@ impl JobManager {
     }
 
     fn update_job_task(&mut self, task_log: Arc<JobTaskInfo>) {
-        let mut send_mark = true;
         if let Some(job_wrap) = self.job_map.get_mut(&task_log.job_id) {
-            send_mark = job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit);
+            job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit);
         }
-        if send_mark {
-            if let Some(schedule_manager) = self.schedule_manager.as_ref() {
-                schedule_manager.do_send(ScheduleManagerReq::UpdateTask(task_log));
-            }
+        if let Some(schedule_manager) = self.schedule_manager.as_ref() {
+            schedule_manager.do_send(ScheduleManagerReq::UpdateTask(task_log));
         }
     }
 
@@ -115,11 +112,9 @@ impl JobManager {
         let mut send_list = vec![];
         for task_log in task_logs {
             if let Some(job_wrap) = self.job_map.get_mut(&task_log.job_id) {
-                if !job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit) {
-                    continue;
-                }
+                job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit);
             }
-            send_list.push(task_log)
+            send_list.push(task_log);
         }
         if send_list.is_empty() {
             return;

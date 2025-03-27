@@ -218,10 +218,7 @@ impl JobWrap {
 
     pub fn update_task_log(&mut self, new_task_log: Arc<JobTaskInfo>, limit_count: usize) -> bool {
         if let Some(task_log) = self.task_log_map.get_mut(&new_task_log.task_id) {
-            if task_log.status.is_finish()
-                && new_task_log.status.is_running()
-                && task_log.execution_time == new_task_log.execution_time
-            {
+            if task_log.status.is_finish() && new_task_log.status.is_running() {
                 //先收到sdk的响应再收到内部运行中状态
                 return false;
             }

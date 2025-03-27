@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug, Default)]
 pub struct FinishMarkPlace {
-    task_mark: HashMap<u64, bool>,
+    pub(crate) task_mark: HashMap<u64, bool>,
 }
 
 impl FinishMarkPlace {
@@ -57,6 +57,14 @@ impl FinishMarkGroup {
 
     pub fn is_finish(&self, task_id: u64) -> bool {
         self.place_a.is_finish(task_id) || self.place_b.is_finish(task_id)
+    }
+
+    pub fn get_value(&self, task_id: u64) -> Option<bool> {
+        if self.place_a.is_finish(task_id) {
+            self.place_a.task_mark.get(&task_id).map(|x| *x)
+        } else {
+            self.place_b.task_mark.get(&task_id).map(|x| *x)
+        }
     }
 
     pub fn can_switch(&self, time: u32) -> bool {
