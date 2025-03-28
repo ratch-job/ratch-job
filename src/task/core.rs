@@ -183,6 +183,7 @@ impl TaskManager {
         let mut start_id = range.start;
         let mut task_list = Vec::with_capacity(trigger_items.len());
         let mut notify_task_list = Vec::with_capacity(trigger_items.len());
+        let now = now_second_u32();
         for item in trigger_items {
             let mut task_instance = JobTaskInfo::from_job(item.trigger_time, &item.job_info);
             if let TriggerSourceType::User(_) = &item.trigger_source.source_type {
@@ -191,6 +192,7 @@ impl TaskManager {
             task_instance.task_id = start_id;
             start_id += 1;
             task_instance.status = TaskStatusType::Init;
+            task_instance.execution_time = now;
             task_instance.trigger_from = item.trigger_source.source_type.get_source_from();
             notify_task_list.push(Arc::new(task_instance.clone()));
             task_list.push((task_instance, item.job_info, item.trigger_source))
@@ -328,7 +330,6 @@ impl TaskManager {
         raft_request_route: Arc<RaftRequestRoute>,
         task_request_actor: Addr<TaskRequestActor>,
     ) -> anyhow::Result<()> {
-        let client = reqwest::Client::new();
         let mut task_list = Vec::with_capacity(task_wrap_list.len());
         for task_wrap in task_wrap_list {
             let mut task_info = task_wrap.task;
@@ -337,32 +338,21 @@ impl TaskManager {
             match task_wrap.select_result {
                 InstanceAddrSelectResult::Fixed(addr) => {
                     task_info.instance_addr = addr.clone();
-                    task_request_actor.do_send(TaskRequestCmd::RunTask(
-                        addr,
-                        param,
-                        task_info.clone(),
-                    ));
-                    task_info.status = TaskStatusType::Running;
+                    task_request_actor.do_send(TaskRequestCmd::RunTask(addr, param, task_info));
                 }
                 InstanceAddrSelectResult::Selected(addr) => {
                     task_info.instance_addr = addr.clone();
-                    task_request_actor.do_send(TaskRequestCmd::RunTask(
-                        addr,
-                        param,
-                        task_info.clone(),
-                    ));
-                    task_info.status = TaskStatusType::Running;
+                    task_request_actor.do_send(TaskRequestCmd::RunTask(addr, param, task_info));
                 }
                 InstanceAddrSelectResult::ALL(addrs) => {
                     task_request_actor.do_send(TaskRequestCmd::RunBroadcastTask(addrs, param));
                     task_info.status = TaskStatusType::Running;
-                    task_info.status = TaskStatusType::Running;
+                    task_list.push(Arc::new(task_info));
                 }
                 InstanceAddrSelectResult::Empty => {
                     //前面已处理过，不会执行到这里
                 }
             }
-            task_list.push(Arc::new(task_info));
         }
         Self::notify_update_task(&raft_request_route, task_list).await?;
         Ok(())

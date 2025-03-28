@@ -4,6 +4,7 @@ use crate::common::get_app_version;
 use crate::job::model::actor_model::JobManagerRaftReq;
 use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::ClientRequest;
+use crate::schedule::batch_call::{BatchCallManager, BatchUpdateTaskManagerReq};
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobRunParam;
 use crate::task::model::task::JobTaskInfo;
@@ -19,7 +20,9 @@ use std::sync::Arc;
 pub struct TaskRequestActor {
     client: reqwest::Client,
     xxl_request_header: HashMap<String, String>,
-    raft_request_route: Option<Arc<RaftRequestRoute>>,
+    batch_call_manager: Option<Addr<BatchCallManager>>,
+    request_semaphore: Arc<tokio::sync::Semaphore>,
+    pub(crate) running_count: usize,
 }
 
 impl TaskRequestActor {
@@ -40,7 +43,9 @@ impl TaskRequestActor {
         Self {
             client,
             xxl_request_header,
-            raft_request_route: None,
+            batch_call_manager: None,
+            request_semaphore: Arc::new(tokio::sync::Semaphore::new(config.task_request_parallel)),
+            running_count: 0,
         }
     }
 
@@ -51,42 +56,55 @@ impl TaskRequestActor {
         mut task_info: JobTaskInfo,
         ctx: &mut Context<Self>,
     ) {
-        //let raft_request_route = self.raft_request_route.clone();
         let client = self.client.clone();
         let xxl_request_header = self.xxl_request_header.clone();
-        let raft_request_route = self.raft_request_route.clone();
+        let batch_call_manager = self.batch_call_manager.clone();
+        let semaphore = self.request_semaphore.clone();
         async move {
-            let result = Self::do_run_task(addr, &param, &client, &xxl_request_header).await;
+            let result: anyhow::Result<()> = {
+                match semaphore.acquire_owned().await {
+                    Ok(permit) => {
+                        let r =
+                            Self::do_run_task(&addr, &param, &client, &xxl_request_header).await;
+                        drop(permit);
+                        r
+                    }
+                    Err(err) => Err(anyhow::format_err!(err)),
+                }
+            };
             if let Err(err) = result {
                 log::error!("run task error:{}", &err);
-                if let Some(raft_request_route) = raft_request_route {
-                    task_info.status = TaskStatusType::Fail;
-                    task_info.trigger_message = Arc::new(err.to_string());
-                    task_info.finish_time = now_second_u32();
-                    return Self::notify_update_task(
-                        &raft_request_route,
-                        vec![Arc::new(task_info)],
-                    )
-                    .await;
-                }
+                task_info.status = TaskStatusType::Fail;
+                task_info.trigger_message = Arc::new(err.to_string());
+                task_info.finish_time = now_second_u32();
+            } else {
+                task_info.status = TaskStatusType::Running;
+            }
+            if let Some(raft_request_route) = batch_call_manager {
+                raft_request_route
+                    .do_send(BatchUpdateTaskManagerReq::UpdateTask(Arc::new(task_info)));
             }
             Ok(())
         }
         .into_actor(self)
-        .map(|result, _, _| {})
+        .map(|_r: anyhow::Result<()>, act, _| {
+            act.running_count -= 1;
+        })
         .spawn(ctx);
     }
 
     fn run_broadcast_task(
         &mut self,
-        addrs: Vec<Arc<String>>,
+        addrs: Arc<Vec<Arc<String>>>,
         param: JobRunParam,
         ctx: &mut Context<Self>,
     ) {
         let client = self.client.clone();
         let xxl_request_header = self.xxl_request_header.clone();
+        let semaphore = self.request_semaphore.clone();
         async move {
-            for addr in addrs {
+            let _permit = semaphore.acquire_owned().await?;
+            for addr in addrs.iter() {
                 Self::do_run_task(addr, &param, &client, &xxl_request_header)
                     .await
                     .ok();
@@ -94,32 +112,19 @@ impl TaskRequestActor {
             Ok(())
         }
         .into_actor(self)
-        .map(|_r: anyhow::Result<()>, _, _| {})
+        .map(|_r: anyhow::Result<()>, act, _| {
+            act.running_count -= 1;
+        })
         .spawn(ctx);
     }
 
-    async fn notify_update_task(
-        raft_request_route: &Arc<RaftRequestRoute>,
-        tasks: Vec<Arc<JobTaskInfo>>,
-    ) -> anyhow::Result<()> {
-        if tasks.is_empty() {
-            return Ok(());
-        }
-        raft_request_route
-            .request(ClientRequest::JobReq {
-                req: JobManagerRaftReq::UpdateTaskList(tasks),
-            })
-            .await?;
-        Ok(())
-    }
-
     async fn do_run_task(
-        instance_addr: Arc<String>,
+        instance_addr: &Arc<String>,
         param: &JobRunParam,
         client: &reqwest::Client,
         xxl_request_header: &HashMap<String, String>,
     ) -> anyhow::Result<()> {
-        let xxl_client = XxlClient::new(&client, &xxl_request_header, &instance_addr);
+        let xxl_client = XxlClient::new(&client, &xxl_request_header, instance_addr);
         xxl_client.run_job(param).await?;
         Ok(())
     }
@@ -140,7 +145,7 @@ impl Inject for TaskRequestActor {
         _factory: BeanFactory,
         _ctx: &mut Self::Context,
     ) {
-        self.raft_request_route = factory_data.get_bean();
+        self.batch_call_manager = factory_data.get_actor();
     }
 }
 
@@ -148,6 +153,7 @@ impl Handler<TaskRequestCmd> for TaskRequestActor {
     type Result = anyhow::Result<TaskRequestResult>;
 
     fn handle(&mut self, msg: TaskRequestCmd, ctx: &mut Context<Self>) -> Self::Result {
+        self.running_count += 1;
         match msg {
             TaskRequestCmd::RunTask(addr, params, task) => {
                 self.run_task(addr, params, task, ctx);

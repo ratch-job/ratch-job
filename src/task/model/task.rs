@@ -158,7 +158,7 @@ pub struct TaskWrap {
     pub task: JobTaskInfo,
     pub job_info: Arc<JobInfo>,
     pub select_result: InstanceAddrSelectResult,
-    pub app_addrs: Vec<Arc<String>>,
+    pub app_addrs: Arc<Vec<Arc<String>>>,
     pub trigger_source: TriggerSourceInfo,
 }
 

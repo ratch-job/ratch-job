@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub enum InstanceAddrSelectResult {
     Fixed(Arc<String>),
     Selected(Arc<String>),
-    ALL(Vec<Arc<String>>),
+    ALL(Arc<Vec<Arc<String>>>),
     Empty,
 }
 
@@ -33,7 +33,7 @@ impl AppInstanceState {
 pub struct AppInstanceStateGroup {
     pub app_key: AppKey,
     pub instance_map: HashMap<Arc<String>, AppInstanceState>,
-    pub instance_keys: Vec<Arc<String>>,
+    pub instance_keys: Arc<Vec<Arc<String>>>,
     pub round_robin_index: usize,
 }
 
@@ -42,7 +42,7 @@ impl AppInstanceStateGroup {
         AppInstanceStateGroup {
             app_key,
             instance_map: HashMap::new(),
-            instance_keys: Vec::new(),
+            instance_keys: Arc::new(Vec::new()),
             round_robin_index: 0,
         }
     }
@@ -50,7 +50,7 @@ impl AppInstanceStateGroup {
     pub fn clean(&mut self) {
         self.round_robin_index = 0;
         self.instance_map = HashMap::new();
-        self.instance_keys = Vec::new();
+        self.instance_keys = Arc::new(Vec::new());
     }
 
     pub fn set_instance_list(&mut self, instance_list: Vec<Arc<String>>) {
@@ -65,7 +65,7 @@ impl AppInstanceStateGroup {
         }
         let instance = AppInstanceState::new(key.clone());
         self.instance_map.insert(key.clone(), instance);
-        self.instance_keys.push(key);
+        self.instance_keys = Arc::new(self.instance_map.keys().map(|k| k.clone()).collect());
     }
 
     pub fn remove_instance(&mut self, key: Arc<String>) {
@@ -73,7 +73,7 @@ impl AppInstanceStateGroup {
             return;
         }
         self.instance_map.remove(&key);
-        self.instance_keys.retain(|k| k != &key);
+        self.instance_keys = Arc::new(self.instance_map.keys().map(|k| k.clone()).collect());
     }
 
     pub fn select_instance(

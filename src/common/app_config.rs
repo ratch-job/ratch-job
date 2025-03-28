@@ -25,6 +25,7 @@ pub struct AppConfig {
     pub metrics_collect_interval_second: u64,
     pub metrics_log_interval_second: u64,
     pub metrics_log_enable: bool,
+    pub task_request_parallel: usize,
 }
 
 impl AppConfig {
@@ -101,6 +102,11 @@ impl AppConfig {
         if metrics_log_interval_second < metrics_collect_interval_second {
             metrics_collect_interval_second = metrics_log_interval_second;
         }
+        //task_request_parallel
+        let task_request_parallel = std::env::var("RATCH_TASK_REQUEST_PARALLEL")
+            .unwrap_or("5".to_owned())
+            .parse()
+            .unwrap_or(5);
         Self {
             local_db_dir,
             http_api_port,
@@ -122,6 +128,7 @@ impl AppConfig {
             metrics_log_enable,
             metrics_collect_interval_second,
             metrics_log_interval_second,
+            task_request_parallel,
         }
     }
 

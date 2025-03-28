@@ -7,7 +7,7 @@ use std::sync::Arc;
 #[rtype(result = "anyhow::Result<TaskRequestResult>")]
 pub enum TaskRequestCmd {
     RunTask(Arc<String>, JobRunParam, JobTaskInfo),
-    RunBroadcastTask(Vec<Arc<String>>, JobRunParam),
+    RunBroadcastTask(Arc<Vec<Arc<String>>>, JobRunParam),
 }
 
 pub enum TaskRequestResult {
