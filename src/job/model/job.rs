@@ -6,6 +6,7 @@ use crate::common::string_utils::StringUtils;
 use crate::job::model::enum_type::{
     ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
 };
+use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::task::JobTaskInfo;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -216,11 +217,15 @@ impl JobWrap {
         }
     }
 
-    pub fn update_task_log(&mut self, new_task_log: Arc<JobTaskInfo>, limit_count: usize) -> bool {
+    pub fn update_task_log(
+        &mut self,
+        new_task_log: Arc<JobTaskInfo>,
+        limit_count: usize,
+    ) -> Option<bool> {
         if let Some(task_log) = self.task_log_map.get_mut(&new_task_log.task_id) {
             if task_log.status.is_finish() && new_task_log.status.is_running() {
                 //先收到sdk的响应再收到内部运行中状态
-                return false;
+                return Some(task_log.status == TaskStatusType::Success);
             }
             *task_log = new_task_log;
         } else {
@@ -229,7 +234,7 @@ impl JobWrap {
                 self.task_log_map.pop_first();
             }
         };
-        true
+        None
     }
 }
 

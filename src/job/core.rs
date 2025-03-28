@@ -12,6 +12,7 @@ use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse}
 use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
 use crate::schedule::core::ScheduleManager;
 use crate::schedule::model::actor_model::ScheduleManagerReq;
+use crate::schedule::model::DelayFinishTasks;
 use crate::task::model::actor_model::TaskHistoryManagerReq;
 use crate::task::model::task::JobTaskInfo;
 use crate::task::task_history::TaskHistoryManager;
@@ -100,27 +101,44 @@ impl JobManager {
     }
 
     fn update_job_task(&mut self, task_log: Arc<JobTaskInfo>) {
+        let mut delay_finish = DelayFinishTasks::new();
         if let Some(job_wrap) = self.job_map.get_mut(&task_log.job_id) {
-            job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit);
+            if let Some(success) =
+                job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit)
+            {
+                delay_finish.add_task(task_log.task_id, success);
+            }
         }
         if let Some(schedule_manager) = self.schedule_manager.as_ref() {
-            schedule_manager.do_send(ScheduleManagerReq::UpdateTask(task_log));
+            if delay_finish.is_empty() {
+                schedule_manager.do_send(ScheduleManagerReq::UpdateTask(task_log));
+            } else {
+                schedule_manager.do_send(ScheduleManagerReq::DelayFinishTasks(delay_finish));
+            }
         }
     }
 
     fn update_job_task_list(&mut self, task_logs: Vec<Arc<JobTaskInfo>>) {
+        let mut delay_finish = DelayFinishTasks::new();
         let mut send_list = vec![];
         for task_log in task_logs {
             if let Some(job_wrap) = self.job_map.get_mut(&task_log.job_id) {
-                job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit);
+                if let Some(success) =
+                    job_wrap.update_task_log(task_log.clone(), self.job_task_log_limit)
+                {
+                    delay_finish.add_task(task_log.task_id, success);
+                    continue;
+                }
             }
             send_list.push(task_log);
         }
-        if send_list.is_empty() {
-            return;
-        }
         if let Some(schedule_manager) = self.schedule_manager.as_ref() {
-            schedule_manager.do_send(ScheduleManagerReq::UpdateTaskList(send_list));
+            if !send_list.is_empty() {
+                schedule_manager.do_send(ScheduleManagerReq::UpdateTaskList(send_list));
+            }
+            if !delay_finish.is_empty() {
+                schedule_manager.do_send(ScheduleManagerReq::DelayFinishTasks(delay_finish));
+            }
         }
     }
 

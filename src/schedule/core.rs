@@ -25,7 +25,7 @@ use crate::schedule::model::actor_model::{
     ScheduleManagerRaftReq, ScheduleManagerRaftResult, ScheduleManagerReq, ScheduleManagerResult,
 };
 use crate::schedule::model::finish_mark::FinishMarkGroup;
-use crate::schedule::model::{JobRunState, RedoInfo, RedoType, TriggerInfo};
+use crate::schedule::model::{DelayFinishTasks, JobRunState, RedoInfo, RedoType, TriggerInfo};
 use crate::task::core::TaskManager;
 use crate::task::model::actor_model::{RedoTaskItem, TaskManagerReq, TriggerItem};
 use crate::task::model::enum_type::TaskStatusType;
@@ -459,6 +459,7 @@ impl ScheduleManager {
             }
             TaskStatusType::Running => {
                 if let Some(v) = self.finish_mark_group.get_value(task_log.task_id) {
+                    log::warn!("task_id:{} is finish buy delay handle", task_log.task_id);
                     if v {
                         metrics_info.success_count += 1;
                     } else {
@@ -498,6 +499,25 @@ impl ScheduleManager {
             }
         };
         (task_log, metrics_info)
+    }
+
+    fn delay_finish_tasks(&mut self, finish_tasks: DelayFinishTasks) {
+        let mut metrics_info = UpdateTaskMetricsInfo::default();
+        for task_id in finish_tasks.success_tasks {
+            if let Some(_v) = self.running_task.remove(&task_id) {
+                metrics_info.success_count += 1;
+            }
+        }
+        for task_id in finish_tasks.fail_tasks {
+            if let Some(_v) = self.running_task.remove(&task_id) {
+                metrics_info.fail_count += 1;
+            }
+        }
+        let mut metrics_request = vec![];
+        Self::append_update_metrics_request(&metrics_info, &mut metrics_request);
+        if !metrics_request.is_empty() {
+            self.do_send_metrics_request(MetricsRequest::BatchRecord(metrics_request));
+        }
     }
 
     fn query_latest_history_task_logs(
@@ -697,6 +717,9 @@ impl Handler<ScheduleManagerReq> for ScheduleManager {
             }
             ScheduleManagerReq::UpdateTaskList(task_list) => {
                 self.update_task_logs(task_list);
+            }
+            ScheduleManagerReq::DelayFinishTasks(finish_tasks) => {
+                self.delay_finish_tasks(finish_tasks);
             }
             ScheduleManagerReq::QueryJobTaskLog(param) => {
                 let (total, list) = self.query_latest_history_task_logs(&param);

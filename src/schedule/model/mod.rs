@@ -144,3 +144,38 @@ impl RedoInfo {
         RedoInfo { task_id, redo_type }
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct DelayFinishTasks {
+    pub success_tasks: Vec<u64>,
+    pub fail_tasks: Vec<u64>,
+}
+
+impl DelayFinishTasks {
+    pub fn new() -> Self {
+        DelayFinishTasks {
+            success_tasks: vec![],
+            fail_tasks: vec![],
+        }
+    }
+
+    pub fn add_task(&mut self, task_id: u64, task_result: bool) {
+        if task_result {
+            self.success_tasks.push(task_id);
+        } else {
+            self.fail_tasks.push(task_id);
+        }
+    }
+
+    pub fn add_success_task(&mut self, task_id: u64) {
+        self.success_tasks.push(task_id);
+    }
+
+    pub fn add_fail_task(&mut self, task_id: u64) {
+        self.fail_tasks.push(task_id);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.success_tasks.is_empty() && self.fail_tasks.is_empty()
+    }
+}

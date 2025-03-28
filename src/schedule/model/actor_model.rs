@@ -1,4 +1,5 @@
 use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
+use crate::schedule::model::DelayFinishTasks;
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::Message;
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,7 @@ pub enum ScheduleManagerReq {
     UpdateJob(Arc<JobInfo>),
     RemoveJob(u64),
     UpdateTask(Arc<JobTaskInfo>),
+    DelayFinishTasks(DelayFinishTasks),
     UpdateTaskList(Vec<Arc<JobTaskInfo>>),
     QueryJobTaskLog(JobTaskLogQueryParam),
 }
