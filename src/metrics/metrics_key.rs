@@ -23,6 +23,7 @@ pub enum MetricsKey {
     JobEnableSize,
     // schedule task
     TaskTriggerSize,
+    TaskTriggerFinishSize,
     TaskRedoSize,
     TaskSuccessSize,
     TaskFailSize,
@@ -55,6 +56,7 @@ lazy_static! {
         MetricsKey::JobEnableSize,
         // schedule task
         MetricsKey::TaskTriggerSize,
+        MetricsKey::TaskTriggerFinishSize,
         MetricsKey::TaskRedoSize,
         MetricsKey::TaskSuccessSize,
         MetricsKey::TaskFailSize,
@@ -89,6 +91,7 @@ impl MetricsKey {
             MetricsKey::JobSize => "job_size",
             MetricsKey::JobEnableSize => "job_enable_size",
             MetricsKey::TaskTriggerSize => "task_trigger_size",
+            MetricsKey::TaskTriggerFinishSize => "task_trigger_finish_size",
             MetricsKey::TaskRedoSize => "task_redo_size",
             MetricsKey::TaskSuccessSize => "task_success_size",
             MetricsKey::TaskFailSize => "task_fail_size",
@@ -133,6 +136,7 @@ impl MetricsKey {
             MetricsKey::JobSize => "Job size",
             MetricsKey::JobEnableSize => "Job enable size",
             MetricsKey::TaskTriggerSize => "Task trigger size",
+            MetricsKey::TaskTriggerFinishSize => "Task trigger finish size",
             MetricsKey::TaskRedoSize => "Task redo size",
             MetricsKey::TaskSuccessSize => "Task success size",
             MetricsKey::TaskFailSize => "Task fail size",

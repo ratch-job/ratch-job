@@ -49,73 +49,36 @@ impl TaskRequestActor {
         }
     }
 
-    fn run_task(
-        &mut self,
-        addr: Arc<String>,
-        param: JobRunParam,
-        mut task_info: JobTaskInfo,
-        ctx: &mut Context<Self>,
-    ) {
-        let client = self.client.clone();
-        let xxl_request_header = self.xxl_request_header.clone();
-        let batch_call_manager = self.batch_call_manager.clone();
-        let semaphore = self.request_semaphore.clone();
-        async move {
-            let result: anyhow::Result<()> = {
-                match semaphore.acquire_owned().await {
-                    Ok(permit) => {
-                        let r =
-                            Self::do_run_task(&addr, &param, &client, &xxl_request_header).await;
-                        drop(permit);
-                        r
+    async fn async_run_task(
+        msg: TaskRequestCmd,
+        xxl_request_header: HashMap<String, String>,
+        client: reqwest::Client,
+        semaphore: Arc<tokio::sync::Semaphore>,
+    ) -> anyhow::Result<(anyhow::Result<()>, Option<JobTaskInfo>)> {
+        let permit = match semaphore.acquire_owned().await {
+            Ok(permit) => permit,
+            Err(err) => {
+                return Ok((Err(err.into()), msg.get_task()));
+            }
+        };
+        match msg {
+            TaskRequestCmd::RunTask(addr, param, task) => {
+                let r = Self::do_run_task(&addr, &param, &client, &xxl_request_header).await;
+                drop(permit);
+                Ok((r, Some(task)))
+            }
+            TaskRequestCmd::RunBroadcastTask(addrs, param) => {
+                let mut r = Ok(());
+                for addr in addrs.iter() {
+                    let t = Self::do_run_task(addr, &param, &client, &xxl_request_header).await;
+                    if t.is_err() {
+                        r = t;
                     }
-                    Err(err) => Err(anyhow::format_err!(err)),
                 }
-            };
-            if let Err(err) = result {
-                log::error!("run task error:{}", &err);
-                task_info.status = TaskStatusType::Fail;
-                task_info.trigger_message = Arc::new(err.to_string());
-                task_info.finish_time = now_second_u32();
-            } else {
-                task_info.status = TaskStatusType::Running;
+                drop(permit);
+                Ok((r, None))
             }
-            if let Some(raft_request_route) = batch_call_manager {
-                raft_request_route
-                    .do_send(BatchUpdateTaskManagerReq::UpdateTask(Arc::new(task_info)));
-            }
-            Ok(())
         }
-        .into_actor(self)
-        .map(|_r: anyhow::Result<()>, act, _| {
-            act.running_count -= 1;
-        })
-        .spawn(ctx);
-    }
-
-    fn run_broadcast_task(
-        &mut self,
-        addrs: Arc<Vec<Arc<String>>>,
-        param: JobRunParam,
-        ctx: &mut Context<Self>,
-    ) {
-        let client = self.client.clone();
-        let xxl_request_header = self.xxl_request_header.clone();
-        let semaphore = self.request_semaphore.clone();
-        async move {
-            let _permit = semaphore.acquire_owned().await?;
-            for addr in addrs.iter() {
-                Self::do_run_task(addr, &param, &client, &xxl_request_header)
-                    .await
-                    .ok();
-            }
-            Ok(())
-        }
-        .into_actor(self)
-        .map(|_r: anyhow::Result<()>, act, _| {
-            act.running_count -= 1;
-        })
-        .spawn(ctx);
     }
 
     async fn do_run_task(
@@ -150,18 +113,42 @@ impl Inject for TaskRequestActor {
 }
 
 impl Handler<TaskRequestCmd> for TaskRequestActor {
-    type Result = anyhow::Result<TaskRequestResult>;
+    type Result = ResponseActFuture<Self, anyhow::Result<TaskRequestResult>>;
 
-    fn handle(&mut self, msg: TaskRequestCmd, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: TaskRequestCmd, _ctx: &mut Context<Self>) -> Self::Result {
         self.running_count += 1;
-        match msg {
-            TaskRequestCmd::RunTask(addr, params, task) => {
-                self.run_task(addr, params, task, ctx);
-            }
-            TaskRequestCmd::RunBroadcastTask(addrs, params) => {
-                self.run_broadcast_task(addrs, params, ctx);
-            }
-        }
-        Ok(TaskRequestResult::None)
+        let client = self.client.clone();
+        let xxl_request_header = self.xxl_request_header.clone();
+        let semaphore = self.request_semaphore.clone();
+        let fut = Self::async_run_task(msg, xxl_request_header, client, semaphore)
+            .into_actor(self)
+            .map(|res, act, _ctx| {
+                act.running_count -= 1;
+                match res {
+                    Ok((r, task_info)) => {
+                        if let Some(mut task_info) = task_info {
+                            match r {
+                                Ok(_) => {
+                                    task_info.status = TaskStatusType::Running;
+                                }
+                                Err(err) => {
+                                    log::error!("run task error:{}", &err);
+                                    task_info.status = TaskStatusType::Fail;
+                                    task_info.trigger_message = Arc::new(err.to_string());
+                                    task_info.finish_time = now_second_u32();
+                                }
+                            };
+                            if let Some(raft_request_route) = act.batch_call_manager.as_ref() {
+                                raft_request_route.do_send(BatchUpdateTaskManagerReq::UpdateTask(
+                                    Arc::new(task_info),
+                                ));
+                            }
+                        }
+                        Ok(TaskRequestResult::RunningCount(act.running_count))
+                    }
+                    Err(err) => Err(err),
+                }
+            });
+        Box::pin(fut)
     }
 }

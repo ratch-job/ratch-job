@@ -10,6 +10,16 @@ pub enum TaskRequestCmd {
     RunBroadcastTask(Arc<Vec<Arc<String>>>, JobRunParam),
 }
 
+impl TaskRequestCmd {
+    pub fn get_task(self) -> Option<JobTaskInfo> {
+        match self {
+            TaskRequestCmd::RunTask(_, _, task) => Some(task),
+            TaskRequestCmd::RunBroadcastTask(_, _) => None,
+        }
+    }
+}
+
 pub enum TaskRequestResult {
     None,
+    RunningCount(usize),
 }

@@ -68,6 +68,7 @@ impl MetricsManager {
     fn init_counter_manager() -> CounterManager {
         let mut counter_manager = CounterManager::default();
         counter_manager.absolute(MetricsKey::TaskTriggerSize, 0);
+        counter_manager.absolute(MetricsKey::TaskTriggerFinishSize, 0);
         counter_manager.absolute(MetricsKey::TaskRedoSize, 0);
         counter_manager.absolute(MetricsKey::TaskSuccessSize, 0);
         counter_manager.absolute(MetricsKey::TaskFailSize, 0);

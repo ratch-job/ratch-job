@@ -104,9 +104,9 @@ impl AppConfig {
         }
         //task_request_parallel
         let task_request_parallel = std::env::var("RATCH_TASK_REQUEST_PARALLEL")
-            .unwrap_or("5".to_owned())
+            .unwrap_or("20".to_owned())
             .parse()
-            .unwrap_or(5);
+            .unwrap_or(20);
         Self {
             local_db_dir,
             http_api_port,

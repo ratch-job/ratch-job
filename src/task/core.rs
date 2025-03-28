@@ -23,7 +23,7 @@ use crate::task::model::app_instance::{AppInstanceStateGroup, InstanceAddrSelect
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobRunParam;
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam, TaskWrap};
-use crate::task::model::task_request::TaskRequestCmd;
+use crate::task::model::task_request::{TaskRequestCmd, TaskRequestResult};
 use crate::task::request_actor::TaskRequestActor;
 use crate::task::request_client::XxlClient;
 use actix::prelude::*;
@@ -40,6 +40,7 @@ pub struct TaskManager {
     raft_request_route: Option<Arc<RaftRequestRoute>>,
     metrics_manager: Option<Addr<MetricsManager>>,
     task_request_actor: Option<Addr<TaskRequestActor>>,
+    task_request_parallel: usize,
 }
 
 impl TaskManager {
@@ -56,6 +57,7 @@ impl TaskManager {
                 config.xxl_default_access_token.clone(),
             );
         }
+        let task_request_parallel = config.task_request_parallel + 20;
         TaskManager {
             app_instance_group: HashMap::new(),
             xxl_request_header,
@@ -64,6 +66,7 @@ impl TaskManager {
             raft_request_route: None,
             metrics_manager: None,
             task_request_actor: None,
+            task_request_parallel,
         }
     }
 
@@ -112,22 +115,30 @@ impl TaskManager {
                 let list = result.unwrap_or_default();
                 let (task_list, notify_task_list) = act.build_task_wrap(list);
                 let raft_request_route = act.raft_request_route.clone().unwrap();
-                let xxl_request_header = act.xxl_request_header.clone();
                 let task_request_actor = act.task_request_actor.clone().unwrap();
+                let task_request_parallel = act.task_request_parallel;
                 async move {
+                    let count = notify_task_list.len() + task_list.len();
                     Self::notify_update_task(&raft_request_route, notify_task_list).await?;
                     Self::run_task_list(
                         task_list,
-                        xxl_request_header,
+                        task_request_parallel,
                         raft_request_route,
                         task_request_actor,
                     )
                     .await?;
-                    Ok(())
+                    Ok(count)
                 }
                 .into_actor(act)
             })
-            .map(|_: anyhow::Result<()>, _, _| ())
+            .map(|r: anyhow::Result<usize>, act, _| {
+                if let Ok(c) = r {
+                    act.do_send_metrics_request(MetricsRequest::Record(MetricsItem::new(
+                        MetricsKey::TaskTriggerFinishSize,
+                        MetricsRecord::CounterInc(c as u64),
+                    )));
+                }
+            })
             .spawn(ctx);
         Ok(())
     }
@@ -156,12 +167,13 @@ impl TaskManager {
         );
         let raft_request_route = self.raft_request_route.clone().unwrap();
         let xxl_request_header = self.xxl_request_header.clone();
+        let task_request_parallel = self.task_request_parallel;
         let task_request_actor = self.task_request_actor.clone().unwrap();
         async move {
             Self::notify_update_task(&raft_request_route, notify_task_list).await?;
             Self::run_task_list(
                 task_list,
-                xxl_request_header,
+                task_request_parallel,
                 raft_request_route,
                 task_request_actor,
             )
@@ -326,26 +338,61 @@ impl TaskManager {
 
     async fn run_task_list(
         task_wrap_list: Vec<TaskWrap>,
-        xxl_request_header: HashMap<String, String>,
+        task_request_parallel: usize,
         raft_request_route: Arc<RaftRequestRoute>,
         task_request_actor: Addr<TaskRequestActor>,
     ) -> anyhow::Result<()> {
         let mut task_list = Vec::with_capacity(task_wrap_list.len());
+        let mut index = 0;
         for task_wrap in task_wrap_list {
+            index += 1;
             let mut task_info = task_wrap.task;
             let mut param = JobRunParam::from_job_info(task_info.task_id, &task_wrap.job_info);
             param.log_date_time = Some(task_info.trigger_time as u64 * 1000);
+            if index >= task_request_parallel {
+                index = 0;
+            }
             match task_wrap.select_result {
                 InstanceAddrSelectResult::Fixed(addr) => {
                     task_info.instance_addr = addr.clone();
-                    task_request_actor.do_send(TaskRequestCmd::RunTask(addr, param, task_info));
+                    if index == 0 {
+                        if let Ok(Ok(TaskRequestResult::RunningCount(wait_count))) =
+                            task_request_actor
+                                .send(TaskRequestCmd::RunTask(addr, param, task_info))
+                                .await
+                        {
+                            index = wait_count;
+                        }
+                    } else {
+                        task_request_actor.do_send(TaskRequestCmd::RunTask(addr, param, task_info));
+                    }
                 }
                 InstanceAddrSelectResult::Selected(addr) => {
                     task_info.instance_addr = addr.clone();
-                    task_request_actor.do_send(TaskRequestCmd::RunTask(addr, param, task_info));
+                    if index == 0 {
+                        if let Ok(Ok(TaskRequestResult::RunningCount(wait_count))) =
+                            task_request_actor
+                                .send(TaskRequestCmd::RunTask(addr, param, task_info))
+                                .await
+                        {
+                            index = wait_count;
+                        }
+                    } else {
+                        task_request_actor.do_send(TaskRequestCmd::RunTask(addr, param, task_info));
+                    }
                 }
                 InstanceAddrSelectResult::ALL(addrs) => {
-                    task_request_actor.do_send(TaskRequestCmd::RunBroadcastTask(addrs, param));
+                    if index == 0 {
+                        if let Ok(Ok(TaskRequestResult::RunningCount(wait_count))) =
+                            task_request_actor
+                                .send(TaskRequestCmd::RunBroadcastTask(addrs, param))
+                                .await
+                        {
+                            index = wait_count;
+                        }
+                    } else {
+                        task_request_actor.do_send(TaskRequestCmd::RunBroadcastTask(addrs, param));
+                    }
                     task_info.status = TaskStatusType::Running;
                     task_list.push(Arc::new(task_info));
                 }
