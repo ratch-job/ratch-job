@@ -1,8 +1,15 @@
 # ratch-job
 
-一个rust实现的分布式任务调度平台服务。计划完全兼容xxl-job协议，然后再增强一些任务调度平台能力。
+ratch-job 是一个rust实现的分布式任务调度平台服务。
+完全兼容xxl-job协议，同时增强一些任务调度平台能力。
 
 
+### 特性
+
+1. 自带raft分布式储存,不依赖外部数据库，可直接运行服务。
+2. 轻量、高性能，每秒运行1000任务持续超过6分钟，cpu使用单核38%，内存占用85M；
+3. 完全兼容xxl-job协议，支持使用xxl-job服务的应用平滑迁移到ratch-job；
+4. 支持open-api管理任务。
 
 ### 一、 安装运行 ratch-job
 
@@ -239,7 +246,7 @@ curl -X POST "http://127.0.0.1:8725/ratch/v1/job/create" -H 'Content-Type: appli
 ratch-job控制台自带服务监控，包含服务应用cpu,内存水位、任务调度rps、状态、数量等关键指标。
 
 
-【图】
+![](https://github.com/ratch-job/ratch-job/raw/master/doc/assets/imgs/20250329102751.png)
 
 
 ### 六、性能
@@ -275,4 +282,9 @@ ratch-job控制台自带服务监控，包含服务应用cpu,内存水位、任�
 
 ![](https://github.com/ratch-job/ratch-job/raw/master/doc/assets/imgs/20250329102751.png)
 
+
+### 七、open api
+
+
+待补充说明
 
