@@ -3,7 +3,7 @@ version: '3.8'
 
 services:
   ratchjob:
-    image: qingpan/ratchjob:latest
+    image: qingpan/ratchjob:stable
     container_name: ratchjob
     ports:
       - "8725:8725"
