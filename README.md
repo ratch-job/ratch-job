@@ -111,18 +111,26 @@ cargo run --release
 
 | 参数KEY|内容描述|默认值|示例|开始支持的版本|
 |--|--|--|--|--|
-|RUST_LOG|日志等级:debug,info,warn,error;所有http,grpc请求都会打info日志,如果不观注可以设置为error减少日志量|info|error|0.3.0|
+|RUST_LOG|日志等级:debug,info,warn,error;所有http,grpc请求都会打info日志,如果不观注可以设置为error减少日志量|info|error|0.1.x|
 |RATCH_HTTP_API_PORT|http open api端口|8725|8725|0.1.x|
 |RATCH_HTTP_CONSOLE_PORT|独立控制台端口|OpenApi+100|8825|0.1.x|
 |RATCH_GRPC_CLUSTER_PORT|grpc端口(用于raft集群通信)|OpenApi+200|8925|0.1.x|
-|RATCH_DATA_DIR|本地数据库文件夹, 会在系统运行时自动创建|linux,MacOS默认为~/.local/share/ratchjob/ratch_db;windows,docker默认为ratch_db|ratch_db|0.1.1|
+|RATCH_DATA_DIR|本地数据库文件夹, 会在系统运行时自动创建|linux,MacOS默认为~/.local/share/ratchjob/ratch_db;windows,docker默认为ratch_db|ratch_db|0.1.x|
 |DEFAULT_XXL_JOB_ADMIN_PREFIX_PATH|自定义xxl-job api路径|/xxl-job-admin|/xxl-job-admin|0.1.x|
 |RATCH_XXL_DEFAULT_ACCESS_TOKEN|xxl-job全局token|default_token|default_token|0.1.x|
-|RATCH_RAFT_NODE_ID|节点id|1|1|0.1.1|
-|RATCH_RAFT_NODE_ADDR|节点地址Ip:GrpcPort,单节点运行时每次启动都会生效；多节点集群部署时，只取加入集群时配置的值|127.0.0.1:GrpcPort|127.0.0.1:8925|0.1.1|
-|RATCH_RAFT_AUTO_INIT|是否当做主节点初始化,(只在每一次启动时生效)|节点1时默认为true,节点非1时为false|true|0.1.1|
-|RATCH_RAFT_JOIN_ADDR|是否当做节点加入对应的主节点,LeaderIp:GrpcPort；只在第一次启动时生效|空|127.0.0.1:8925|0.1.1|
-|RATCH_CLUSTER_TOKEN|集群间的通信请求校验token，空表示不开启校验，设置后只有相同token的节点间才可通讯|空字符串|1234567890abcdefg|0.1.1|
-|RATCH_GMT_OFFSET_HOURS|日志时间的时区，单位小时；默认为本机时区，运行在docker时需要指定|local|8(东8区),-5(西5区)|0.5.7|
+|RATCH_RAFT_NODE_ID|节点id|1|1|0.1.x|
+|RATCH_RAFT_NODE_ADDR|节点地址Ip:GrpcPort,单节点运行时每次启动都会生效；多节点集群部署时，只取加入集群时配置的值|127.0.0.1:GrpcPort|127.0.0.1:8925|0.1.x|
+|RATCH_RAFT_AUTO_INIT|是否当做主节点初始化,(只在每一次启动时生效)|节点1时默认为true,节点非1时为false|true|0.1.x|
+|RATCH_RAFT_JOIN_ADDR|是否当做节点加入对应的主节点,LeaderIp:GrpcPort；只在第一次启动时生效|空|127.0.0.1:8925|0.1.x|
+|RATCH_CLUSTER_TOKEN|集群间的通信请求校验token，空表示不开启校验，设置后只有相同token的节点间才可通讯|空字符串|1234567890abcdefg|0.1.x|
+|RATCH_GMT_OFFSET_HOURS|日志时间的时区，单位小时；默认为本机时区，运行在docker时需要指定|local|8(东8区),-5(西5区)|0.1.x|
+| RATCH_HTTP_WORKERS | HTTP服务线程数，空表示自动分配 | 空 | 8 | 0.1.x |
+| RATCH_INSTANCE_HEALTH_TIMEOUT | 实例健康检查超时时间(秒) | 90 | 120 | 0.1.x |
+| RATCH_RAFT_SNAPSHOT_LOG_SIZE | Raft触发快照的日志条数阈值 | 10000 | 20000 | 0.1.x |
+| RATCH_ENABLE_METRICS | 是否启用指标收集 | true | true | 0.1.x |
+| RATCH_METRICS_COLLECT_INTERVAL_SECOND | 指标收集间隔(秒) | 15 | 30 | 0.1.x |
+| RATCH_METRICS_ENABLE_LOG | 是否记录指标日志 | false | false | 0.1.x |
+| RATCH_METRICS_LOG_INTERVAL_SECOND | 指标日志记录间隔(秒)，最小5秒 | 60 | 30 | 0.1.x |
+| RATCH_TASK_REQUEST_PARALLEL | 任务请求(协程)并行处理数 | 20 | 50 | 0.1.x |
 
 
