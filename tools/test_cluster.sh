@@ -91,13 +91,13 @@ EOF
 
 query_node_metrics() {
     echo "\n the node1 raft metrics"
-    curl "http://127.0.0.1:8725/api/v1/raft/metrics"
+    curl "http://127.0.0.1:8725/ratch/v1/raft/metrics"
 
     echo "\n the node2 raft metrics"
-    curl "http://127.0.0.1:8726/api/v1/raft/metrics"
+    curl "http://127.0.0.1:8726/ratch/v1/raft/metrics"
 
     echo "\n the node3 raft metrics"
-    curl "http://127.0.0.1:8727/api/v1/raft/metrics"
+    curl "http://127.0.0.1:8727/ratch/v1/raft/metrics"
 }
 
 #start_cluster
@@ -106,25 +106,25 @@ query_node_metrics() {
 
 test_add_job_to_cluster() {
   echo "\nset job info to node 1"
-  curl -X POST "http://127.0.0.1:8725/api/v1/job/create" -H 'Content-Type: application/json' -d '{"appName":"xxl-job-executor-sample","namespace":"xxl","handleName":"demoJobHandler","scheduleType":"CRON","cronValue":"0/15 * * * * *","blockingStrategy":"COVER_EARLY"}'
+  curl -X POST "http://127.0.0.1:8725/ratch/v1/job/create" -H 'Content-Type: application/json' -d '{"appName":"xxl-job-executor-sample","namespace":"xxl","handleName":"demoJobHandler","scheduleType":"CRON","cronValue":"0/15 * * * * *","blockingStrategy":"COVER_EARLY"}'
   sleep 1
 
   echo "\nset job info to node 2"
-  curl -X POST "http://127.0.0.1:8726/api/v1/job/create" -H 'Content-Type: application/json' -d '{"appName":"job-executor-sample","namespace":"xxl","handleName":"demoJobHandler02","scheduleType":"CRON","cronValue":"0/15 * * * * *","blockingStrategy":"COVER_EARLY"}'
+  curl -X POST "http://127.0.0.1:8726/ratch/v1/job/create" -H 'Content-Type: application/json' -d '{"appName":"job-executor-sample","namespace":"xxl","handleName":"demoJobHandler02","scheduleType":"CRON","cronValue":"0/15 * * * * *","blockingStrategy":"COVER_EARLY"}'
   sleep 1
 
   echo "\nset job info to node 3"
-  curl -X POST "http://127.0.0.1:8727/api/v1/job/create" -H 'Content-Type: application/json' -d '{"appName":"job-executor-sample","namespace":"xxl","handleName":"demoJobHandler03","scheduleType":"CRON","cronValue":"0/15 * * * * *","blockingStrategy":"COVER_EARLY"}'
+  curl -X POST "http://127.0.0.1:8727/ratch/v1/job/create" -H 'Content-Type: application/json' -d '{"appName":"job-executor-sample","namespace":"xxl","handleName":"demoJobHandler03","scheduleType":"CRON","cronValue":"0/15 * * * * *","blockingStrategy":"COVER_EARLY"}'
   sleep 1
 
   echo "\nquery job info from node 1"
-  curl "http://127.0.0.1:8725/api/v1/job/list?app_name=job-executor-sample"
+  curl "http://127.0.0.1:8725/ratch/v1/job/list?app_name=job-executor-sample"
 
   echo "\nquery job info from node 2"
-  curl "http://127.0.0.1:8726/api/v1/job/list?app_name=job-executor-sample"
+  curl "http://127.0.0.1:8726/ratch/v1/job/list?app_name=job-executor-sample"
 
   echo "\nquery job info from node 3"
-  curl "http://127.0.0.1:8727/api/v1/job/list?app_name=job-executor-sample"
+  curl "http://127.0.0.1:8727/ratch/v1/job/list?app_name=job-executor-sample"
 
 
 }
