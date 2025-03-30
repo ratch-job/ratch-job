@@ -4,3 +4,4 @@ Cargo.lock
 .env
 cluster_example/
 tmp/
+*.DS_Store

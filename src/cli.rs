@@ -2,8 +2,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// A fictional versioning CLI
 #[derive(Debug, Parser)] // requires `derive` feature
-#[command(name = "git")]
-#[command(about = "ratch-job cli", long_about = None)]
+#[command(name = "ratch-job")]
+#[command(version, about = "ratch-job cli", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
