@@ -82,12 +82,21 @@ impl AppManager {
         last_time: u32,
     ) {
         if let Some(instance_addrs) = instance_addrs {
-            for addr in instance_addrs {
-                if let Some(instance) = app_info.instance_map.get_mut(&addr) {
-                    //instance.last_modified_time=last_time;
-                    instance.enable = true;
-                    instance.healthy = true;
-                } else {
+            if !app_info.is_auto() {
+                //静态的设置为输入的地址列表
+                let mut exit_instances = HashMap::new();
+                let mut new_instance_addrs = vec![];
+                for addr in instance_addrs {
+                    if let Some(instance) = app_info.instance_map.get(&addr) {
+                        exit_instances.insert(addr, instance.clone());
+                    } else {
+                        new_instance_addrs.push(addr);
+                    }
+                }
+
+                app_info.instance_map.clear();
+                app_info.instance_map.extend(exit_instances.into_iter());
+                for addr in new_instance_addrs {
                     app_info
                         .instance_map
                         .insert(addr.clone(), AppInstance::new_with_time(addr, last_time));
@@ -115,8 +124,15 @@ impl AppManager {
         instance_key: Arc<String>,
         last_modified_time: u32,
     ) {
+        if let Some(app_info) = self.app_map.get(&key) {
+            if !app_info.is_auto() {
+                //手工静态地址应用，不采用应用上传地址
+                return;
+            }
+        }
         let check_time = now_second_u32() - self.instance_timeout;
         if check_time >= last_modified_time {
+            //超时了，不处理
             return;
         }
         self.app_instance_timeout.add(
@@ -323,6 +339,10 @@ impl AppManager {
         let start_time = now - self.instance_timeout;
         let mut add_keys = vec![];
         for (app_key, app_info) in self.app_map.iter() {
+            if !app_info.is_auto() {
+                // 非自动注册的应用，不处理
+                continue;
+            }
             for (instance_key, instance) in app_info.instance_map.iter() {
                 let timeout = instance.last_modified_time;
                 self.app_instance_timeout.add(

@@ -35,6 +35,13 @@ impl RegisterType {
             RegisterType::Manual => "MANUAL",
         }
     }
+
+    pub fn is_auto(&self) -> bool {
+        match self {
+            RegisterType::Auto => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -82,6 +89,10 @@ impl AppInfo {
             tmp: self.tmp,
             instances,
         }
+    }
+
+    pub fn is_auto(&self) -> bool {
+        self.register_type.is_auto()
     }
 }
 
@@ -258,6 +269,7 @@ pub struct AppInfoDto {
     pub label: Arc<String>,
     pub register_type: String,
     pub instance_addrs: Option<Vec<Arc<String>>>,
+    pub instance_count: usize,
 }
 
 impl AppInfoDto {
@@ -271,12 +283,14 @@ impl AppInfoDto {
         } else {
             None
         };
+        let instance_count = app_info.instance_map.len();
         AppInfoDto {
             app_name: app_info.app_name.clone(),
             namespace: app_info.namespace.clone(),
             label: app_info.label.clone(),
             register_type: app_info.register_type.to_str().to_owned(),
             instance_addrs,
+            instance_count,
         }
     }
 }
@@ -327,6 +341,7 @@ pub enum AppManagerReq {
     GetApp(AppKey),
     #[deprecated]
     RegisterAppInstance(AppKey, Arc<String>),
+    #[deprecated]
     UnregisterAppInstance(AppKey, Arc<String>),
     GetAppInstanceAddrs(AppKey),
     GetAllInstanceAddrs,
