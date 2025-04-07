@@ -1,8 +1,5 @@
 use crate::app::core::AppManager;
-use crate::common::constant::{
-    APP_INFO_TABLE_NAME, JOB_TABLE_NAME, JOB_TASK_HISTORY_TABLE_NAME, JOB_TASK_RUNNING_TABLE_NAME,
-    JOB_TASK_TABLE_NAME, SEQUENCE_TABLE_NAME,
-};
+use crate::common::constant::{APP_INFO_TABLE_NAME, JOB_NOTIFY_NOTIFY_TABLE_NAME, JOB_TABLE_NAME, JOB_TASK_HISTORY_TABLE_NAME, JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME, SEQUENCE_TABLE_NAME};
 use crate::job::core::JobManager;
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftapply::RaftApplyDataRequest;
@@ -12,6 +9,7 @@ use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::schedule::core::ScheduleManager;
 use crate::sequence::core::SequenceDbManager;
 use actix::prelude::*;
+use crate::webhook::actor_model::{WebhookManagerRaftReq, WebhookManagerReq};
 use crate::webhook::core::WebHookManager;
 
 #[derive(Clone)]
@@ -37,6 +35,9 @@ impl RaftDataHandler {
             .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
             .await??;
         self.schedule_manager
+            .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
+            .await??;
+        self.webhook_manager
             .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
             .await??;
         Ok(())
@@ -66,6 +67,10 @@ impl RaftDataHandler {
                 let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
                 self.schedule_manager.send(req).await??;
             }
+            ref tree if *tree == JOB_NOTIFY_NOTIFY_TABLE_NAME.as_str() => {
+                let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
+                self.app_manager.send(req).await??;
+            }
             _ => {}
         }
         Ok(())
@@ -80,6 +85,8 @@ impl RaftDataHandler {
         self.job_manager
             .do_send(RaftApplyDataRequest::LoadCompleted);
         self.schedule_manager
+            .do_send(RaftApplyDataRequest::LoadCompleted);
+        self.webhook_manager
             .do_send(RaftApplyDataRequest::LoadCompleted);
         Ok(())
     }

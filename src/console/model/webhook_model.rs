@@ -1,6 +1,6 @@
 use crate::app::model::AppKey;
 use crate::webhook::model::ChannelType::{Email, WebHook};
-use crate::webhook::model::{ChannelConfig, ChannelType, EmailConfig, EmailType, HookConfig, NotifyConfigModel, NotifyConfigModelOb, NotifyConfigPageQuery, WebHookSource};
+use crate::webhook::model::{ChannelConfig, ChannelType, EmailConfig, EmailType, HookConfig, NotifyConfigModel, NotifyConfigModelOb, NotifyConfigPageQuery, NotifyConfigParam, WebHookSource};
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -18,7 +18,7 @@ pub struct NotifyConfigAdd {
     pub email: String,
     pub username: String,
     pub password: String,
-    token: Option<String>,
+    pub token: Option<String>,
 }
 
 impl NotifyConfigAdd {
@@ -69,6 +69,24 @@ impl NotifyConfigAdd {
             channel_config: cfg,
         };
         Ok(model)
+    }
+
+    pub(crate) fn to_param1(&self) -> anyhow::Result<NotifyConfigParam> {
+        let param = NotifyConfigParam{
+            id: None,
+            enable: self.enable,
+            app_name: Some(self.app_name.clone()),
+            namespace: Some(self.namespace.clone()),
+            name: Some(Arc::new(self.name.clone())),
+            channel_type: Some(Arc::new(self.channel_type.clone())),
+            channel_sub_type: Some(Arc::new(self.channel_sub_type.clone())),
+            url: Some(Arc::new(self.url.clone())),
+            email: Some(Arc::new(self.email.clone())),
+            username: Some(Arc::new(self.username.clone())),
+            password: Some(Arc::new(self.password.clone())),
+            token: self.token.clone().map(|x|Arc::new(x)),
+        };
+        Ok(param)
     }
 }
 
@@ -136,6 +154,24 @@ impl NotifyConfigUpdate {
             channel_config: cfg,
         };
         Ok(NotifyConfigModelOb{ id: self.id, model })
+    }
+
+    pub(crate) fn to_param1(&self) -> anyhow::Result<NotifyConfigParam> {
+        let param = NotifyConfigParam{
+            id: Some(self.id),
+            enable: self.enable,
+            app_name: Some(self.app_name.clone()),
+            namespace: Some(self.namespace.clone()),
+            name: Some(Arc::new(self.name.clone())),
+            channel_type: Some(Arc::new(self.channel_type.clone())),
+            channel_sub_type: Some(Arc::new(self.channel_sub_type.clone())),
+            url: Some(Arc::new(self.url.clone())),
+            email: Some(Arc::new(self.email.clone())),
+            username: Some(Arc::new(self.username.clone())),
+            password: Some(Arc::new(self.password.clone())),
+            token: self.token.clone().map(|x|Arc::new(x)),
+        };
+        Ok(param)
     }
 }
 

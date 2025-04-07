@@ -4,8 +4,8 @@ use crate::common::share_data::ShareData;
 use crate::console::model::webhook_model::{NotifyConfigAdd, NotifyConfigInfo, NotifyConfigQuery, NotifyConfigRemove, NotifyConfigUpdate};
 use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
 use crate::sequence::{SequenceRequest, SequenceResult};
-use crate::webhook::actor_model::{WebhookManagerReq, WebhookManagerResult};
-use crate::webhook::model::{ChannelType, EmailType, NotifyConfigModelOb, WebHookSource};
+use crate::webhook::actor_model::{WebhookManagerRaftReq, WebhookManagerRaftResult, WebhookManagerReq, WebhookManagerResult};
+use crate::webhook::model::{ChannelType, EmailType, NotifyConfigModelOb, NotifyConfigParam, WebHookSource};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::collections::HashMap;
@@ -45,7 +45,7 @@ pub(crate) async fn notify_config_add(
     share_data: Data<Arc<ShareData>>,
     web::Json(request): web::Json<NotifyConfigAdd>,
 ) -> impl Responder {
-    let param = match request.to_param() {
+    let param = match request.to_param1() {
         Ok(oj) => {
             oj
         }
@@ -61,9 +61,9 @@ pub(crate) async fn notify_config_add(
         .send(SequenceRequest::GetNextId(SEQ_NOTIFY_CONFIG_ID.clone()))
         .await
     {
-        if let Ok(Ok(WebhookManagerResult::ConfigInfo(Some(info)))) = share_data
+        if let Ok(Ok(WebhookManagerRaftResult::Info(info))) = share_data
             .webhook_manager
-            .send(WebhookManagerReq::AddConfig(NotifyConfigModelOb{ id, model:  param}))
+            .send(WebhookManagerRaftReq::AddNotifyConfig(param))
             .await
         {
             HttpResponse::Ok().json(ApiResult::success(Some(info)))
@@ -85,7 +85,7 @@ pub(crate) async fn notify_config_update(
     share_data: Data<Arc<ShareData>>,
     web::Json(request): web::Json<NotifyConfigUpdate>,
 ) -> impl Responder {
-    let param = match request.to_param() {
+    let param = match request.to_param1() {
         Ok(oj) => {
             oj
         }
@@ -96,12 +96,12 @@ pub(crate) async fn notify_config_update(
             ));
         }
     };
-    if let Ok(Ok(WebhookManagerResult::None)) = share_data
+    if let Ok(Ok(WebhookManagerRaftResult::Info(info))) = share_data
         .webhook_manager
-        .send(WebhookManagerReq::UpdateConfig(param))
+        .send(WebhookManagerRaftReq::UpdateNotifyConfig(param))
         .await
     {
-        HttpResponse::Ok().json(ApiResult::success(Some(())))
+        HttpResponse::Ok().json(ApiResult::success(Some(info)))
     } else {
         HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
@@ -115,9 +115,9 @@ pub(crate) async fn notify_config_remove(
     web::Json(request): web::Json<NotifyConfigRemove>,
 ) -> impl Responder {
     let param = request;
-    if let Ok(Ok(WebhookManagerResult::None)) = share_data
+    if let Ok(Ok(WebhookManagerRaftResult::None)) = share_data
         .webhook_manager
-        .send(WebhookManagerReq::RemoveConfig(param.id))
+        .send(WebhookManagerRaftReq::Remove(param.id))
         .await
     {
         HttpResponse::Ok().json(ApiResult::success(Some(())))
