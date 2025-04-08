@@ -11,6 +11,7 @@ use actix_web::{web, HttpResponse, Responder};
 use std::collections::HashMap;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
+use crate::raft::store::{ClientRequest, ClientResponse};
 
 //选择下拉框借口
 pub(crate) async fn query_notify_channel(
@@ -45,7 +46,7 @@ pub(crate) async fn notify_config_add(
     share_data: Data<Arc<ShareData>>,
     web::Json(request): web::Json<NotifyConfigAdd>,
 ) -> impl Responder {
-    let param = match request.to_param1() {
+    let mut param = match request.to_param1() {
         Ok(oj) => {
             oj
         }
@@ -61,9 +62,11 @@ pub(crate) async fn notify_config_add(
         .send(SequenceRequest::GetNextId(SEQ_NOTIFY_CONFIG_ID.clone()))
         .await
     {
-        if let Ok(Ok(WebhookManagerRaftResult::Info(info))) = share_data
-            .webhook_manager
-            .send(WebhookManagerRaftReq::AddNotifyConfig(param))
+        param.id = Some(id);
+        if let Ok(ClientResponse::NotifyConfigResp {
+                      resp: WebhookManagerRaftResult::Info(info),
+                  } )= share_data
+            .raft_request_route.request(ClientRequest::NotifyConfigReq {req: WebhookManagerRaftReq::AddNotifyConfig(param)})
             .await
         {
             HttpResponse::Ok().json(ApiResult::success(Some(info)))
@@ -96,12 +99,13 @@ pub(crate) async fn notify_config_update(
             ));
         }
     };
-    if let Ok(Ok(WebhookManagerRaftResult::Info(info))) = share_data
-        .webhook_manager
-        .send(WebhookManagerRaftReq::UpdateNotifyConfig(param))
+    if let Ok(ClientResponse::NotifyConfigResp {
+                  resp: WebhookManagerRaftResult::None,
+              } )= share_data
+        .raft_request_route.request(ClientRequest::NotifyConfigReq {req: WebhookManagerRaftReq::UpdateNotifyConfig(param)})
         .await
     {
-        HttpResponse::Ok().json(ApiResult::success(Some(info)))
+        HttpResponse::Ok().json(ApiResult::success(Some(())))
     } else {
         HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
@@ -115,10 +119,12 @@ pub(crate) async fn notify_config_remove(
     web::Json(request): web::Json<NotifyConfigRemove>,
 ) -> impl Responder {
     let param = request;
-    if let Ok(Ok(WebhookManagerRaftResult::None)) = share_data
-        .webhook_manager
-        .send(WebhookManagerRaftReq::Remove(param.id))
-        .await
+    if let Ok(ClientResponse::NotifyConfigResp {
+                  resp: WebhookManagerRaftResult::None,
+              } ) =
+        share_data
+            .raft_request_route.request(ClientRequest::NotifyConfigReq {req: WebhookManagerRaftReq::Remove(param.id)})
+            .await
     {
         HttpResponse::Ok().json(ApiResult::success(Some(())))
     } else {
