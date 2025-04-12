@@ -1,5 +1,6 @@
 use self::model::LogRecordDto;
 use crate::app::model::{AppManagerRaftReq, AppManagerRaftResult};
+use crate::cache::actor_model::{CacheManagerRaftReq, CacheManagerRaftResult};
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerRaftResult};
 use crate::schedule::model::actor_model::{ScheduleManagerRaftReq, ScheduleManagerRaftResult};
 use crate::sequence::model::{SequenceRaftReq, SequenceRaftResult};
@@ -27,6 +28,7 @@ pub enum ClientRequest {
     SequenceReq { req: SequenceRaftReq },
     JobReq { req: JobManagerRaftReq },
     ScheduleReq { req: ScheduleManagerRaftReq },
+    CacheReq { req: CacheManagerRaftReq },
 }
 
 impl AppData for ClientRequest {}
@@ -35,10 +37,26 @@ impl AppData for ClientRequest {}
 pub enum ClientResponse {
     Success,
     Fail,
-    AppResp { resp: AppManagerRaftResult },
-    SequenceResp { resp: SequenceRaftResult },
-    JobResp { resp: JobManagerRaftResult },
-    ScheduleReq { resp: ScheduleManagerRaftResult },
+    AppResp {
+        resp: AppManagerRaftResult,
+    },
+    SequenceResp {
+        resp: SequenceRaftResult,
+    },
+    JobResp {
+        resp: JobManagerRaftResult,
+    },
+    ///前期写错，后面改ScheduleResp;之后找合适时机删除
+    #[deprecated]
+    ScheduleReq {
+        resp: ScheduleManagerRaftResult,
+    },
+    ScheduleResp {
+        resp: ScheduleManagerRaftResult,
+    },
+    CacheResp {
+        resp: CacheManagerRaftResult,
+    },
 }
 
 impl Default for ClientResponse {

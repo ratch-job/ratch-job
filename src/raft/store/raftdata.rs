@@ -1,7 +1,8 @@
 use crate::app::core::AppManager;
+use crate::cache::core::CacheManager;
 use crate::common::constant::{
-    APP_INFO_TABLE_NAME, JOB_TABLE_NAME, JOB_TASK_HISTORY_TABLE_NAME, JOB_TASK_RUNNING_TABLE_NAME,
-    JOB_TASK_TABLE_NAME, SEQUENCE_TABLE_NAME,
+    APP_INFO_TABLE_NAME, CACHE_TABLE_NAME, JOB_TABLE_NAME, JOB_TASK_HISTORY_TABLE_NAME,
+    JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME, SEQUENCE_TABLE_NAME,
 };
 use crate::job::core::JobManager;
 use crate::raft::store::model::SnapshotRecordDto;
@@ -19,6 +20,7 @@ pub struct RaftDataHandler {
     pub app_manager: Addr<AppManager>,
     pub job_manager: Addr<JobManager>,
     pub schedule_manager: Addr<ScheduleManager>,
+    pub cache_manager: Addr<CacheManager>,
 }
 
 impl RaftDataHandler {
@@ -35,6 +37,9 @@ impl RaftDataHandler {
             .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
             .await??;
         self.schedule_manager
+            .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
+            .await??;
+        self.cache_manager
             .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
             .await??;
         Ok(())
@@ -64,6 +69,10 @@ impl RaftDataHandler {
                 let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
                 self.schedule_manager.send(req).await??;
             }
+            ref tree if *tree == CACHE_TABLE_NAME.as_str() => {
+                let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
+                self.cache_manager.send(req).await??;
+            }
             _ => {}
         }
         Ok(())
@@ -78,6 +87,8 @@ impl RaftDataHandler {
         self.job_manager
             .do_send(RaftApplyDataRequest::LoadCompleted);
         self.schedule_manager
+            .do_send(RaftApplyDataRequest::LoadCompleted);
+        self.cache_manager
             .do_send(RaftApplyDataRequest::LoadCompleted);
         Ok(())
     }
@@ -117,6 +128,9 @@ impl RaftDataHandler {
             ClientRequest::ScheduleReq { req } => {
                 self.schedule_manager.send(req).await.ok();
             }
+            ClientRequest::CacheReq { req } => {
+                self.cache_manager.send(req).await.ok();
+            }
         }
         Ok(())
     }
@@ -154,7 +168,12 @@ impl RaftDataHandler {
             }
             ClientRequest::ScheduleReq { req } => {
                 let r = self.schedule_manager.send(req).await??;
-                Ok(ClientResponse::ScheduleReq { resp: r })
+                //Ok(ClientResponse::ScheduleReq { resp: r })
+                Ok(ClientResponse::ScheduleResp { resp: r })
+            }
+            ClientRequest::CacheReq { req } => {
+                let r = self.cache_manager.send(req).await??;
+                Ok(ClientResponse::CacheResp { resp: r })
             }
         }
     }
@@ -187,6 +206,9 @@ impl RaftDataHandler {
             }
             ClientRequest::ScheduleReq { req } => {
                 self.schedule_manager.do_send(req);
+            }
+            ClientRequest::CacheReq { req } => {
+                self.cache_manager.do_send(req);
             }
         }
         Ok(())

@@ -1,4 +1,5 @@
 use crate::app::core::AppManager;
+use crate::cache::core::CacheManager;
 use crate::common::app_config::AppConfig;
 use crate::job::core::JobManager;
 use crate::metrics::core::MetricsManager;
@@ -33,4 +34,5 @@ pub struct ShareData {
     pub raft_store: Arc<Store>,
     pub cluster_node_manager: Addr<ClusterNodeManager>,
     pub batch_call_manager: Addr<BatchCallManager>,
+    pub cache_manager: Addr<CacheManager>,
 }

@@ -1,4 +1,5 @@
 pub mod app;
+pub mod cache;
 pub mod cli;
 pub mod common;
 pub mod console;

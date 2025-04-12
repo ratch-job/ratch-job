@@ -67,3 +67,10 @@ message AppInfoDo {
     bool tmp = 5;
     repeated AppInstanceDo instances= 6;
 }
+
+message CacheItemDo {
+    uint32 cache_type = 1;
+    string key = 2;
+    bytes data = 3;
+    int32 timeout = 4;
+}
