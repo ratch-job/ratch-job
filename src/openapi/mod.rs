@@ -10,4 +10,11 @@ use actix_web::web::ServiceConfig;
 pub fn openapi_config(config: &mut ServiceConfig) {
     metrics_config(config);
     v1_api_config(config);
+    #[cfg(feature = "debug")]
+    openapi_debug_config(config);
+}
+
+#[cfg(feature = "debug")]
+pub fn openapi_debug_config(config: &mut ServiceConfig) {
+    crate::cache::debug_api::cache_debug_api_config(config);
 }
