@@ -74,3 +74,25 @@ message CacheItemDo {
     bytes data = 3;
     int32 timeout = 4;
 }
+
+message PrivilegeGroupDo {
+    bool enabled = 1;
+    bool whitelist_is_all = 2;
+    repeated string whitelist = 3;
+    bool blacklist_is_all = 4;
+    repeated string blacklist = 5;
+}
+
+message UserInfoDo {
+    string username = 1;
+    string nickname = 2;
+    string password = 3;
+    string password_hash = 4;
+    int64 gmt_create = 5;
+    int64 gmt_modified = 6;
+    bool enable = 7;
+    repeated string roles = 8;
+    map<string, string> extend_info = 9;
+    PrivilegeGroupDo namespace_privilege = 10;
+    PrivilegeGroupDo app_privilege = 11;
+}

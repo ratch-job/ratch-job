@@ -13,4 +13,5 @@ pub mod schedule;
 pub mod sequence;
 pub mod starter;
 pub mod task;
+pub mod user;
 pub mod web_config;

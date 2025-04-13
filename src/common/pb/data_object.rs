@@ -10,6 +10,8 @@
 
 
 use std::borrow::Cow;
+use std::collections::HashMap;
+type KVMap<K, V> = HashMap<K, V>;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::*;
@@ -382,6 +384,129 @@ impl<'a> MessageWrite for CacheItemDo<'a> {
         if self.key != "" { w.write_with_tag(18, |w| w.write_string(&**&self.key))?; }
         if self.data != Cow::Borrowed(b"") { w.write_with_tag(26, |w| w.write_bytes(&**&self.data))?; }
         if self.timeout != 0i32 { w.write_with_tag(32, |w| w.write_int32(*&self.timeout))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct PrivilegeGroupDo<'a> {
+    pub enabled: bool,
+    pub whitelist_is_all: bool,
+    pub whitelist: Vec<Cow<'a, str>>,
+    pub blacklist_is_all: bool,
+    pub blacklist: Vec<Cow<'a, str>>,
+}
+
+impl<'a> MessageRead<'a> for PrivilegeGroupDo<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(8) => msg.enabled = r.read_bool(bytes)?,
+                Ok(16) => msg.whitelist_is_all = r.read_bool(bytes)?,
+                Ok(26) => msg.whitelist.push(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(32) => msg.blacklist_is_all = r.read_bool(bytes)?,
+                Ok(42) => msg.blacklist.push(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for PrivilegeGroupDo<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.enabled == false { 0 } else { 1 + sizeof_varint(*(&self.enabled) as u64) }
+        + if self.whitelist_is_all == false { 0 } else { 1 + sizeof_varint(*(&self.whitelist_is_all) as u64) }
+        + self.whitelist.iter().map(|s| 1 + sizeof_len((s).len())).sum::<usize>()
+        + if self.blacklist_is_all == false { 0 } else { 1 + sizeof_varint(*(&self.blacklist_is_all) as u64) }
+        + self.blacklist.iter().map(|s| 1 + sizeof_len((s).len())).sum::<usize>()
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.enabled != false { w.write_with_tag(8, |w| w.write_bool(*&self.enabled))?; }
+        if self.whitelist_is_all != false { w.write_with_tag(16, |w| w.write_bool(*&self.whitelist_is_all))?; }
+        for s in &self.whitelist { w.write_with_tag(26, |w| w.write_string(&**s))?; }
+        if self.blacklist_is_all != false { w.write_with_tag(32, |w| w.write_bool(*&self.blacklist_is_all))?; }
+        for s in &self.blacklist { w.write_with_tag(42, |w| w.write_string(&**s))?; }
+        Ok(())
+    }
+}
+
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct UserInfoDo<'a> {
+    pub username: Cow<'a, str>,
+    pub nickname: Cow<'a, str>,
+    pub password: Cow<'a, str>,
+    pub password_hash: Cow<'a, str>,
+    pub gmt_create: i64,
+    pub gmt_modified: i64,
+    pub enable: bool,
+    pub roles: Vec<Cow<'a, str>>,
+    pub extend_info: KVMap<Cow<'a, str>, Cow<'a, str>>,
+    pub namespace_privilege: Option<data_object::PrivilegeGroupDo<'a>>,
+    pub app_privilege: Option<data_object::PrivilegeGroupDo<'a>>,
+}
+
+impl<'a> MessageRead<'a> for UserInfoDo<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
+        let mut msg = Self::default();
+        while !r.is_eof() {
+            match r.next_tag(bytes) {
+                Ok(10) => msg.username = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(18) => msg.nickname = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(26) => msg.password = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(34) => msg.password_hash = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(40) => msg.gmt_create = r.read_int64(bytes)?,
+                Ok(48) => msg.gmt_modified = r.read_int64(bytes)?,
+                Ok(56) => msg.enable = r.read_bool(bytes)?,
+                Ok(66) => msg.roles.push(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(74) => {
+                    let (key, value) = r.read_map(bytes, |r, bytes| Ok(r.read_string(bytes).map(Cow::Borrowed)?), |r, bytes| Ok(r.read_string(bytes).map(Cow::Borrowed)?))?;
+                    msg.extend_info.insert(key, value);
+                }
+                Ok(82) => msg.namespace_privilege = Some(r.read_message::<data_object::PrivilegeGroupDo>(bytes)?),
+                Ok(90) => msg.app_privilege = Some(r.read_message::<data_object::PrivilegeGroupDo>(bytes)?),
+                Ok(t) => { r.read_unknown(bytes, t)?; }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(msg)
+    }
+}
+
+impl<'a> MessageWrite for UserInfoDo<'a> {
+    fn get_size(&self) -> usize {
+        0
+        + if self.username == "" { 0 } else { 1 + sizeof_len((&self.username).len()) }
+        + if self.nickname == "" { 0 } else { 1 + sizeof_len((&self.nickname).len()) }
+        + if self.password == "" { 0 } else { 1 + sizeof_len((&self.password).len()) }
+        + if self.password_hash == "" { 0 } else { 1 + sizeof_len((&self.password_hash).len()) }
+        + if self.gmt_create == 0i64 { 0 } else { 1 + sizeof_varint(*(&self.gmt_create) as u64) }
+        + if self.gmt_modified == 0i64 { 0 } else { 1 + sizeof_varint(*(&self.gmt_modified) as u64) }
+        + if self.enable == false { 0 } else { 1 + sizeof_varint(*(&self.enable) as u64) }
+        + self.roles.iter().map(|s| 1 + sizeof_len((s).len())).sum::<usize>()
+        + self.extend_info.iter().map(|(k, v)| 1 + sizeof_len(2 + sizeof_len((k).len()) + sizeof_len((v).len()))).sum::<usize>()
+        + self.namespace_privilege.as_ref().map_or(0, |m| 1 + sizeof_len((m).get_size()))
+        + self.app_privilege.as_ref().map_or(0, |m| 1 + sizeof_len((m).get_size()))
+    }
+
+    fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
+        if self.username != "" { w.write_with_tag(10, |w| w.write_string(&**&self.username))?; }
+        if self.nickname != "" { w.write_with_tag(18, |w| w.write_string(&**&self.nickname))?; }
+        if self.password != "" { w.write_with_tag(26, |w| w.write_string(&**&self.password))?; }
+        if self.password_hash != "" { w.write_with_tag(34, |w| w.write_string(&**&self.password_hash))?; }
+        if self.gmt_create != 0i64 { w.write_with_tag(40, |w| w.write_int64(*&self.gmt_create))?; }
+        if self.gmt_modified != 0i64 { w.write_with_tag(48, |w| w.write_int64(*&self.gmt_modified))?; }
+        if self.enable != false { w.write_with_tag(56, |w| w.write_bool(*&self.enable))?; }
+        for s in &self.roles { w.write_with_tag(66, |w| w.write_string(&**s))?; }
+        for (k, v) in self.extend_info.iter() { w.write_with_tag(74, |w| w.write_map(2 + sizeof_len((k).len()) + sizeof_len((v).len()), 10, |w| w.write_string(&**k), 18, |w| w.write_string(&**v)))?; }
+        if let Some(ref s) = self.namespace_privilege { w.write_with_tag(82, |w| w.write_message(s))?; }
+        if let Some(ref s) = self.app_privilege { w.write_with_tag(90, |w| w.write_message(s))?; }
         Ok(())
     }
 }
