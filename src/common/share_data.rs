@@ -12,6 +12,7 @@ use crate::schedule::core::ScheduleManager;
 use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
 use crate::task::task_history::TaskHistoryManager;
+use crate::user::core::UserManager;
 use actix::Addr;
 use bean_factory::FactoryData;
 use chrono::FixedOffset;
@@ -35,4 +36,5 @@ pub struct ShareData {
     pub cluster_node_manager: Addr<ClusterNodeManager>,
     pub batch_call_manager: Addr<BatchCallManager>,
     pub cache_manager: Addr<CacheManager>,
+    pub user_manager: Addr<UserManager>,
 }

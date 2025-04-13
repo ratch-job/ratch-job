@@ -441,7 +441,6 @@ impl<'a> MessageWrite for PrivilegeGroupDo<'a> {
 pub struct UserInfoDo<'a> {
     pub username: Cow<'a, str>,
     pub nickname: Cow<'a, str>,
-    pub password: Cow<'a, str>,
     pub password_hash: Cow<'a, str>,
     pub gmt_create: i64,
     pub gmt_modified: i64,
@@ -459,7 +458,6 @@ impl<'a> MessageRead<'a> for UserInfoDo<'a> {
             match r.next_tag(bytes) {
                 Ok(10) => msg.username = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(18) => msg.nickname = r.read_string(bytes).map(Cow::Borrowed)?,
-                Ok(26) => msg.password = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(34) => msg.password_hash = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(40) => msg.gmt_create = r.read_int64(bytes)?,
                 Ok(48) => msg.gmt_modified = r.read_int64(bytes)?,
@@ -484,7 +482,6 @@ impl<'a> MessageWrite for UserInfoDo<'a> {
         0
         + if self.username == "" { 0 } else { 1 + sizeof_len((&self.username).len()) }
         + if self.nickname == "" { 0 } else { 1 + sizeof_len((&self.nickname).len()) }
-        + if self.password == "" { 0 } else { 1 + sizeof_len((&self.password).len()) }
         + if self.password_hash == "" { 0 } else { 1 + sizeof_len((&self.password_hash).len()) }
         + if self.gmt_create == 0i64 { 0 } else { 1 + sizeof_varint(*(&self.gmt_create) as u64) }
         + if self.gmt_modified == 0i64 { 0 } else { 1 + sizeof_varint(*(&self.gmt_modified) as u64) }
@@ -498,7 +495,6 @@ impl<'a> MessageWrite for UserInfoDo<'a> {
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
         if self.username != "" { w.write_with_tag(10, |w| w.write_string(&**&self.username))?; }
         if self.nickname != "" { w.write_with_tag(18, |w| w.write_string(&**&self.nickname))?; }
-        if self.password != "" { w.write_with_tag(26, |w| w.write_string(&**&self.password))?; }
         if self.password_hash != "" { w.write_with_tag(34, |w| w.write_string(&**&self.password_hash))?; }
         if self.gmt_create != 0i64 { w.write_with_tag(40, |w| w.write_int64(*&self.gmt_create))?; }
         if self.gmt_modified != 0i64 { w.write_with_tag(48, |w| w.write_int64(*&self.gmt_modified))?; }

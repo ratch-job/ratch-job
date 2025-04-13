@@ -27,6 +27,7 @@ use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
 use crate::task::request_actor::TaskRequestActor;
 use crate::task::task_history::TaskHistoryManager;
+use crate::user::core::UserManager;
 use actix::Actor;
 use async_raft_ext::raft::ClientWriteRequest;
 use async_raft_ext::{Config, Raft, RaftStorage};
@@ -115,12 +116,17 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         cache_manager.clone(),
     ));
+    let user_manager = UserManager::new().start();
+    factory.register(BeanDefinition::actor_with_inject_from_obj(
+        user_manager.clone(),
+    ));
     let raft_data_wrap = Arc::new(RaftDataHandler {
         sequence_db: sequence_db_addr,
         app_manager,
         job_manager,
         schedule_manager,
         cache_manager,
+        user_manager,
     });
     factory.register(BeanDefinition::from_obj(raft_data_wrap.clone()));
     let raft = build_raft(&app_config, store.clone(), cluster_sender.clone()).await?;
@@ -209,6 +215,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         cluster_node_manager: factory_data.get_actor().unwrap(),
         batch_call_manager: factory_data.get_actor().unwrap(),
         cache_manager: factory_data.get_actor().unwrap(),
+        user_manager: factory_data.get_actor().unwrap(),
         factory_data,
     });
     Ok(app_data)

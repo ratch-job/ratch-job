@@ -86,7 +86,7 @@ message PrivilegeGroupDo {
 message UserInfoDo {
     string username = 1;
     string nickname = 2;
-    string password = 3;
+    //string password = 3;
     string password_hash = 4;
     int64 gmt_create = 5;
     int64 gmt_modified = 6;

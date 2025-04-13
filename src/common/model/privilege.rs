@@ -176,6 +176,27 @@ where
             false
         }
     }
+
+    pub fn update(&mut self, options: PrivilegeGroupOptionParam<T>) {
+        if let Some(enabled) = options.whitelist_is_all {
+            self.whitelist_is_all = enabled;
+        }
+        if let Some(whitelist) = options.whitelist {
+            self.whitelist = Some(whitelist);
+        }
+        if let Some(blacklist_is_all) = options.blacklist_is_all {
+            self.blacklist_is_all = blacklist_is_all;
+        }
+        if let Some(blacklist) = options.blacklist {
+            self.blacklist = Some(blacklist);
+        }
+    }
+
+    pub fn update_option(&mut self, options: Option<PrivilegeGroupOptionParam<T>>) {
+        if let Some(param) = options {
+            self.update(param)
+        }
+    }
 }
 
 impl PrivilegeGroup<Arc<String>> {

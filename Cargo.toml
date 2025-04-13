@@ -72,6 +72,7 @@ bytes = "1"
 byteorder = "1.4"
 sysinfo = "0.30"
 bitflags = "2.6"
+bcrypt = "0.15"
 
 [build-dependencies]
 #用于生成grpc代码，生成后注释掉避免编译额外依赖protoc

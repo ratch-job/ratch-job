@@ -4,6 +4,7 @@ use crate::cache::actor_model::{CacheManagerRaftReq, CacheManagerRaftResult};
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerRaftResult};
 use crate::schedule::model::actor_model::{ScheduleManagerRaftReq, ScheduleManagerRaftResult};
 use crate::sequence::model::{SequenceRaftReq, SequenceRaftResult};
+use crate::user::actor_model::{UserManagerRaftReq, UserManagerRaftResult};
 use async_raft_ext::raft::{Entry, EntryPayload};
 use async_raft_ext::{AppData, AppDataResponse};
 use serde::{Deserialize, Serialize};
@@ -29,6 +30,7 @@ pub enum ClientRequest {
     JobReq { req: JobManagerRaftReq },
     ScheduleReq { req: ScheduleManagerRaftReq },
     CacheReq { req: CacheManagerRaftReq },
+    UserReq { req: UserManagerRaftReq },
 }
 
 impl AppData for ClientRequest {}
@@ -56,6 +58,9 @@ pub enum ClientResponse {
     },
     CacheResp {
         resp: CacheManagerRaftResult,
+    },
+    UserResp {
+        resp: UserManagerRaftResult,
     },
 }
 
