@@ -2,6 +2,7 @@ pub mod privilege;
 
 use std::{collections::HashMap, sync::Arc};
 
+use crate::common::model::privilege::PrivilegeGroup;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -48,9 +49,11 @@ pub struct PageResult<T> {
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct UserSession {
     pub username: Arc<String>,
-    pub nickname: Option<String>,
+    pub nickname: String,
     pub roles: Vec<Arc<String>>,
     pub extend_infos: HashMap<String, String>,
+    pub namespace_privilege: PrivilegeGroup<Arc<String>>,
+    pub app_privilege: PrivilegeGroup<Arc<String>>,
     /// 时间戳，单位秒
     pub refresh_time: u32,
 }

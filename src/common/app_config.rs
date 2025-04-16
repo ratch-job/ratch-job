@@ -26,6 +26,8 @@ pub struct AppConfig {
     pub metrics_log_interval_second: u64,
     pub metrics_log_enable: bool,
     pub task_request_parallel: usize,
+    pub console_captcha_enable: bool,
+    pub console_login_timeout: i32,
 }
 
 impl AppConfig {
@@ -107,6 +109,14 @@ impl AppConfig {
             .unwrap_or("20".to_owned())
             .parse()
             .unwrap_or(20);
+        let console_captcha_enable = std::env::var("RATCH_CONSOLE_ENABLE_CAPTCHA")
+            .unwrap_or("true".to_owned())
+            .parse()
+            .unwrap_or(true);
+        let console_login_timeout = std::env::var("RNACOS_CONSOLE_LOGIN_TIMEOUT")
+            .unwrap_or("86400".to_owned())
+            .parse()
+            .unwrap_or(86400);
         Self {
             local_db_dir,
             http_api_port,
@@ -129,6 +139,8 @@ impl AppConfig {
             metrics_collect_interval_second,
             metrics_log_interval_second,
             task_request_parallel,
+            console_captcha_enable,
+            console_login_timeout,
         }
     }
 

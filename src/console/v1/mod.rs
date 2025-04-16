@@ -1,6 +1,7 @@
 pub mod app_api;
 pub mod cluster_api;
 pub mod job_api;
+pub mod login_api;
 pub mod metrics_api;
 pub mod namespace_api;
 pub mod user_api;

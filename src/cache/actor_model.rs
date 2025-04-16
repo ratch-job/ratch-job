@@ -55,7 +55,7 @@ pub enum CacheManagerRaftResult {
     Ok,
     Nil,
     None,
-    Value(Arc<CacheValue>),
+    Value(CacheValue),
     Exists(bool),
     Ttl(i32),
 }

@@ -3,6 +3,7 @@ pub mod app_config;
 pub mod byte_utils;
 pub mod constant;
 pub mod cron_utils;
+pub mod crypto_utils;
 pub mod datetime_utils;
 pub mod hash_utils;
 pub mod http_utils;

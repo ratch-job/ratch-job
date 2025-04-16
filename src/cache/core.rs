@@ -19,11 +19,11 @@ use std::sync::Arc;
 
 pub struct CacheItem {
     pub expire: i32,
-    pub value: Arc<CacheValue>,
+    pub value: CacheValue,
 }
 
 impl CacheItem {
-    pub fn new(value: Arc<CacheValue>, expire: i32) -> Self {
+    pub fn new(value: CacheValue, expire: i32) -> Self {
         CacheItem { expire, value }
     }
 }
@@ -61,7 +61,7 @@ impl CacheManager {
         });
     }
 
-    fn do_set_arc(&mut self, key: CacheKey, value: Arc<CacheValue>, expire: i32) {
+    fn do_set(&mut self, key: CacheKey, value: CacheValue, expire: i32) {
         self.cache
             .insert(key.clone(), CacheItem::new(value, expire));
         if expire < 0 {
@@ -70,11 +70,8 @@ impl CacheManager {
         }
         self.time_set.add(expire as u64, key);
     }
-    fn do_set(&mut self, key: CacheKey, value: CacheValue, expire: i32) {
-        self.do_set_arc(key, Arc::new(value), expire)
-    }
 
-    fn get_valid_value(&self, key: &CacheKey) -> Option<&Arc<CacheValue>> {
+    fn get_valid_value(&self, key: &CacheKey) -> Option<&CacheValue> {
         if let Some(v) = self.cache.get(key) {
             if v.expire > -1 && v.expire < now_second_i32() {
                 None
@@ -157,7 +154,7 @@ impl CacheManager {
 
     fn expire(&mut self, key: CacheKey, expire: i32) -> CacheManagerRaftResult {
         if let Some(v) = self.get_valid_value(&key) {
-            self.do_set_arc(key, v.clone(), expire);
+            self.do_set(key, v.clone(), expire);
             CacheManagerRaftResult::Ok
         } else {
             CacheManagerRaftResult::Nil
@@ -184,15 +181,15 @@ impl CacheManager {
                 if v == i64::MAX {
                     return CacheManagerRaftResult::Nil;
                 }
-                let value = Arc::new(CacheValue::Number(v + 1));
-                self.do_set_arc(key, value.clone(), expire);
+                let value = CacheValue::Number(v + 1);
+                self.do_set(key, value.clone(), expire);
                 CacheManagerRaftResult::Value(value)
             } else {
                 CacheManagerRaftResult::Nil
             }
         } else {
-            let value = Arc::new(CacheValue::Number(1));
-            self.do_set_arc(key, value.clone(), expire);
+            let value = CacheValue::Number(1);
+            self.do_set(key, value.clone(), expire);
             CacheManagerRaftResult::Value(value)
         }
     }
@@ -203,15 +200,15 @@ impl CacheManager {
                 if v == i64::MIN {
                     return CacheManagerRaftResult::Nil;
                 }
-                let value = Arc::new(CacheValue::Number(v - 1));
-                self.do_set_arc(key, value.clone(), expire);
+                let value = CacheValue::Number(v - 1);
+                self.do_set(key, value.clone(), expire);
                 CacheManagerRaftResult::Value(value)
             } else {
                 CacheManagerRaftResult::Nil
             }
         } else {
-            let value = Arc::new(CacheValue::Number(-1));
-            self.do_set_arc(key, value.clone(), expire);
+            let value = CacheValue::Number(-1);
+            self.do_set(key, value.clone(), expire);
             CacheManagerRaftResult::Value(value)
         }
     }
