@@ -1,4 +1,5 @@
 use crate::common::constant;
+use crate::common::string_utils::StringUtils;
 use std::sync::Arc;
 
 const DEFAULT_DB_PATH: &str = "ratch_db";
@@ -28,6 +29,8 @@ pub struct AppConfig {
     pub task_request_parallel: usize,
     pub console_captcha_enable: bool,
     pub console_login_timeout: i32,
+    pub init_admin_username: String,
+    pub init_admin_password: String,
 }
 
 impl AppConfig {
@@ -117,6 +120,12 @@ impl AppConfig {
             .unwrap_or("86400".to_owned())
             .parse()
             .unwrap_or(86400);
+        let init_admin_username =
+            StringUtils::map_not_empty(std::env::var("RNACOS_INIT_ADMIN_USERNAME").ok())
+                .unwrap_or("admin".to_owned());
+        let init_admin_password =
+            StringUtils::map_not_empty(std::env::var("RNACOS_INIT_ADMIN_PASSWORD").ok())
+                .unwrap_or("admin".to_owned());
         Self {
             local_db_dir,
             http_api_port,
@@ -141,6 +150,8 @@ impl AppConfig {
             task_request_parallel,
             console_captcha_enable,
             console_login_timeout,
+            init_admin_username,
+            init_admin_password,
         }
     }
 

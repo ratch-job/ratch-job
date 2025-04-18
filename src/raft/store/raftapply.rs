@@ -190,7 +190,11 @@ impl StateApplyManager {
     }
 
     fn load_log(&mut self, ctx: &mut Context<Self>) {
-        if self.last_applied_log == 0 || self.log_manager.is_none() || self.data_wrap.is_none() {
+        if self.last_applied_log == 0 {
+            self.load_complete(ctx);
+            return;
+        }
+        if self.log_manager.is_none() || self.data_wrap.is_none() {
             return;
         }
         let start_index = self.snapshot_next_index;

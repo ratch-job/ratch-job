@@ -1,8 +1,13 @@
+use crate::common::app_config::AppConfig;
 use crate::common::constant::USER_TABLE_NAME;
+use crate::common::datetime_utils::now_millis_i64;
 use crate::common::pb::data_object::UserInfoDo;
+use crate::raft::cluster::model::{RouteAddr, VoteChangeRequest, VoteChangeResponse};
+use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse};
 use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
+use crate::raft::store::ClientRequest;
 use crate::user::actor_model::{UserManagerRaftReq, UserManagerRaftResult, UserManagerReq};
 use crate::user::build_password_hash;
 use crate::user::model::{QueryUserPageParam, UserDto, UserInfo};
@@ -11,16 +16,25 @@ use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use quick_protobuf::{BytesReader, Writer};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[bean(inject)]
 pub struct UserManager {
     data: BTreeMap<Arc<String>, UserInfo>,
+    raft_router: Option<Arc<RaftRequestRoute>>,
+    local_is_master: bool,
+    data_load_completed: bool,
+    app_config: Option<Arc<AppConfig>>,
 }
 
 impl UserManager {
     pub fn new() -> Self {
         UserManager {
             data: BTreeMap::new(),
+            raft_router: None,
+            local_is_master: false,
+            data_load_completed: false,
+            app_config: None,
         }
     }
 
@@ -113,8 +127,59 @@ impl UserManager {
         Ok(())
     }
 
-    fn load_completed(&mut self, _ctx: &mut Context<Self>) -> anyhow::Result<()> {
+    fn load_completed(&mut self, ctx: &mut Context<Self>) -> anyhow::Result<()> {
+        self.data_load_completed = true;
+        ctx.run_later(Duration::from_millis(500), |act, ctx| {
+            act.try_init_manager_admin_user(ctx);
+        });
         Ok(())
+    }
+
+    fn try_init_manager_admin_user(&mut self, ctx: &mut Context<Self>) {
+        if !self.data.is_empty()
+            || !self.local_is_master
+            || !self.data_load_completed
+            || self.raft_router.is_none()
+            || self.app_config.is_none()
+        {
+            return;
+        }
+        let app_config = self.app_config.clone().unwrap();
+        let username = app_config.init_admin_username.to_owned();
+        let now = now_millis_i64();
+        let user_info = UserDto {
+            username: Arc::new(username.clone()),
+            nickname: Some(username),
+            password: None,
+            password_hash: Some(
+                build_password_hash(&app_config.init_admin_password).unwrap_or_default(),
+            ),
+            gmt_create: Some(now),
+            gmt_modified: Some(now),
+            enable: Some(true),
+            roles: None,
+            extend_info: None,
+            namespace_privilege: None,
+            app_privilege: None,
+        };
+        let raft_router = self.raft_router.clone().unwrap();
+        async move {
+            let req = UserManagerRaftReq::AddUser(user_info);
+            if let Ok(RouteAddr::Local) = raft_router.get_route_addr().await {
+                raft_router.request(ClientRequest::UserReq { req }).await
+            } else {
+                Err(anyhow::anyhow!("The current node is not the master node."))
+            }
+        }
+        .into_actor(self)
+        .map(|res, _act, _ctx| {
+            if let Err(err) = res {
+                log::warn!("init manager admin user error:{}", err);
+            } else {
+                log::info!("init manager admin user finish.");
+            }
+        })
+        .spawn(ctx);
     }
 }
 
@@ -129,7 +194,14 @@ impl Actor for UserManager {
 impl Inject for UserManager {
     type Context = Context<Self>;
 
-    fn inject(&mut self, factory_data: FactoryData, factory: BeanFactory, ctx: &mut Self::Context) {
+    fn inject(
+        &mut self,
+        factory_data: FactoryData,
+        _factory: BeanFactory,
+        _ctx: &mut Self::Context,
+    ) {
+        self.raft_router = factory_data.get_bean();
+        self.app_config = factory_data.get_bean();
     }
 }
 
@@ -209,5 +281,31 @@ impl Handler<RaftApplyDataRequest> for UserManager {
             }
         }
         Ok(RaftApplyDataResponse::None)
+    }
+}
+
+impl Handler<VoteChangeRequest> for UserManager {
+    type Result = anyhow::Result<VoteChangeResponse>;
+
+    fn handle(&mut self, msg: VoteChangeRequest, ctx: &mut Self::Context) -> Self::Result {
+        match msg {
+            VoteChangeRequest::VoteChange {
+                vote_info: _vote_info,
+                local_is_master,
+            } => {
+                log::info!(
+                    "UserManager|vote change|{:?}|{}",
+                    &_vote_info,
+                    local_is_master
+                );
+                self.local_is_master = local_is_master;
+                if self.data_load_completed && self.local_is_master {
+                    ctx.run_later(Duration::from_secs(5), |act, ctx| {
+                        act.try_init_manager_admin_user(ctx);
+                    });
+                }
+            }
+        }
+        Ok(VoteChangeResponse::None)
     }
 }

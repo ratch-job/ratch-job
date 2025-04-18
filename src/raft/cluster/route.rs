@@ -80,6 +80,10 @@ impl RaftRequestRoute {
         anyhow::anyhow!("unknown the raft leader addr!")
     }
 
+    pub async fn get_route_addr(&self) -> anyhow::Result<RouteAddr> {
+        self.raft_addr_route.get_route_addr().await
+    }
+
     pub async fn request(&self, req: ClientRequest) -> anyhow::Result<ClientResponse> {
         match self.raft_addr_route.get_route_addr().await? {
             RouteAddr::Local => {

@@ -65,9 +65,9 @@ pub async fn get_cache(
     let req = CacheManagerLocalReq::Get(CacheKey::new(CacheType::String, param.key));
     match app.cache_manager.send(req).await.unwrap().unwrap() {
         CacheManagerRaftResult::Value(v) => {
-            let vstr = match v.as_ref() {
+            let value = match v {
                 CacheValue::Number(v) => Arc::new(v.to_string()),
-                CacheValue::String(v) => v.clone(),
+                CacheValue::String(v) => v,
                 CacheValue::Map(m) => Arc::new(serde_json::to_string(&m).unwrap_or_default()),
                 CacheValue::UserSession(m) => {
                     Arc::new(serde_json::to_string(&m).unwrap_or_default())
@@ -77,7 +77,7 @@ pub async fn get_cache(
                 }
             };
             Ok(Json(ValueResult {
-                value: vstr,
+                value,
                 success: true,
             }))
         }

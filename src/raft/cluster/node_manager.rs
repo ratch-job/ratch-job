@@ -5,6 +5,7 @@ use crate::raft::cluster::router_request;
 use crate::raft::network::factory::RaftClusterRequestSender;
 use crate::schedule::core::ScheduleManager;
 use crate::schedule::model::actor_model::ScheduleManagerRaftReq;
+use crate::user::core::UserManager;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use std::collections::{BTreeMap, HashSet};
@@ -66,6 +67,7 @@ pub struct ClusterNodeManager {
     all_nodes: BTreeMap<u64, ClusterInnerNode>,
     cluster_sender: Option<Arc<RaftClusterRequestSender>>,
     schedule_manager: Option<Addr<ScheduleManager>>,
+    user_manager: Option<Addr<UserManager>>,
     first_init: bool,
     last_vote: VoteInfo,
 }
@@ -77,6 +79,7 @@ impl ClusterNodeManager {
             all_nodes: BTreeMap::new(),
             cluster_sender: None,
             schedule_manager: None,
+            user_manager: None,
             first_init: false,
             last_vote: VoteInfo::default(),
         }
@@ -164,6 +167,12 @@ impl ClusterNodeManager {
                 local_is_master,
             });
         }
+        if let Some(user_manager) = self.user_manager.as_ref() {
+            user_manager.do_send(VoteChangeRequest::VoteChange {
+                vote_info: self.last_vote.clone(),
+                local_is_master,
+            });
+        }
     }
 
     async fn do_send_to_other_nodes(
@@ -215,6 +224,7 @@ impl Inject for ClusterNodeManager {
     ) {
         self.cluster_sender = factory_data.get_bean();
         self.schedule_manager = factory_data.get_actor();
+        self.user_manager = factory_data.get_actor();
     }
 }
 
