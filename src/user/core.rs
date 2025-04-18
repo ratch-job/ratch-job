@@ -49,7 +49,7 @@ impl UserManager {
             user.update(user_dto);
             true
         } else {
-            self.add_user(user_dto);
+            //self.add_user(user_dto);
             false
         }
     }

@@ -18,6 +18,15 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
                 web::resource("/namespaces/list")
                     .route(web::get().to(namespace_api::query_namespace_list)),
             )
+            .service(web::resource("/user/info").route(web::get().to(user_api::get_user_info)))
+            .service(web::resource("/user/list").route(web::get().to(user_api::get_user_page_list)))
+            .service(web::resource("/user/add").route(web::post().to(user_api::add_user)))
+            .service(web::resource("/user/update").route(web::post().to(user_api::update_user)))
+            .service(web::resource("/user/remove").route(web::post().to(user_api::remove_user)))
+            .service(
+                web::resource("/user/reset_password")
+                    .route(web::post().to(user_api::reset_password)),
+            )
             .service(
                 web::resource("/user/web_resources")
                     .route(web::get().to(user_api::get_user_web_resources)),
