@@ -9,8 +9,9 @@ use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse}
 use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
 use crate::raft::store::ClientRequest;
 use crate::user::actor_model::{UserManagerRaftReq, UserManagerRaftResult, UserManagerReq};
-use crate::user::build_password_hash;
 use crate::user::model::{QueryUserPageParam, UserDto, UserInfo};
+use crate::user::permission::USER_ROLE_MANAGER;
+use crate::user::{build_password_hash, verify_password_hash};
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use quick_protobuf::{BytesReader, Writer};
@@ -56,8 +57,7 @@ impl UserManager {
 
     fn check_user(&self, name: Arc<String>, password: String) -> anyhow::Result<(bool, UserInfo)> {
         if let Some(user) = self.data.get(&name) {
-            let password_hash = build_password_hash(&password)?;
-            if user.password_hash == password_hash {
+            if let Ok(true) = verify_password_hash(&password, &user.password_hash) {
                 Ok((true, user.clone()))
             } else {
                 Ok((false, user.clone()))
@@ -157,7 +157,7 @@ impl UserManager {
             gmt_create: Some(now),
             gmt_modified: Some(now),
             enable: Some(true),
-            roles: None,
+            roles: Some(vec![USER_ROLE_MANAGER.clone()]),
             extend_info: None,
             namespace_privilege: None,
             app_privilege: None,

@@ -3,7 +3,7 @@ use actix::Message;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "anyhow::Result<UserManagerRaftResult>")]
 pub enum UserManagerReq {
     CheckUser { name: Arc<String>, password: String },

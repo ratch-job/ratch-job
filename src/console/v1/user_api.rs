@@ -43,7 +43,7 @@ pub async fn get_user_info(req: HttpRequest) -> actix_web::Result<impl Responder
 pub async fn reset_password(
     req: HttpRequest,
     app: Data<Arc<ShareData>>,
-    web::Form(param): web::Form<ResetPasswordParam>,
+    web::Json(param): web::Json<ResetPasswordParam>,
 ) -> actix_web::Result<impl Responder> {
     let (msg, username) = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
         let username = Arc::new(session.username.to_string());
@@ -110,7 +110,7 @@ pub async fn get_user_page_list(
 
 pub async fn add_user(
     app: Data<Arc<ShareData>>,
-    web::Form(user_param): web::Form<UpdateUserInfoParam>,
+    web::Json(user_param): web::Json<UpdateUserInfoParam>,
 ) -> actix_web::Result<impl Responder> {
     let user: UserDto = user_param.into();
     if user.roles.is_none() {
@@ -129,7 +129,7 @@ pub async fn add_user(
 
 pub async fn update_user(
     app: Data<Arc<ShareData>>,
-    web::Form(user_param): web::Form<UpdateUserInfoParam>,
+    web::Json(user_param): web::Json<UpdateUserInfoParam>,
 ) -> actix_web::Result<impl Responder> {
     let mut user: UserDto = user_param.into();
     user.gmt_create = None;
@@ -149,7 +149,7 @@ pub async fn update_user(
 
 pub async fn remove_user(
     app: Data<Arc<ShareData>>,
-    web::Form(user): web::Form<UpdateUserInfoParam>,
+    web::Json(user): web::Json<UpdateUserInfoParam>,
 ) -> actix_web::Result<impl Responder> {
     let msg = UserManagerRaftReq::Remove(user.username);
     match app

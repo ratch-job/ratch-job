@@ -18,6 +18,9 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
                 web::resource("/namespaces/list")
                     .route(web::get().to(namespace_api::query_namespace_list)),
             )
+            .service(web::resource("/login/login").route(web::post().to(login_api::login)))
+            .service(web::resource("/login/captcha").route(web::get().to(login_api::gen_captcha)))
+            .service(web::resource("/login/logout").route(web::post().to(login_api::logout)))
             .service(web::resource("/user/info").route(web::get().to(user_api::get_user_info)))
             .service(web::resource("/user/list").route(web::get().to(user_api::get_user_page_list)))
             .service(web::resource("/user/add").route(web::post().to(user_api::add_user)))
