@@ -1,3 +1,4 @@
+use crate::common::constant::EMPTY_STR;
 use crate::common::get_app_version;
 use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
@@ -7,22 +8,38 @@ use crate::console::model::user_model::{
 use crate::raft::store::ClientRequest;
 use crate::user::actor_model::{UserManagerRaftReq, UserManagerRaftResult, UserManagerReq};
 use crate::user::model::UserDto;
+use crate::user::permission::UserRole;
 use actix_http::HttpMessage;
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use std::sync::Arc;
 
-pub async fn get_user_web_resources(
-    _req: HttpRequest,
-    _app_data: web::Data<Arc<ShareData>>,
-) -> impl Responder {
-    let data = UserPermissions {
-        from: "OLD_CONSOLE",
-        version: get_app_version(),
-        username: None,
-        resources: vec![],
-    };
-    HttpResponse::Ok().json(ApiResult::success(Some(data)))
+///
+/// 获取用户权限资源列表
+/// 这里把取不到UserSession当成旧控制台，后继可以考虑单独实现一个接口
+pub async fn get_user_web_resources(req: HttpRequest) -> actix_web::Result<impl Responder> {
+    if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        let resources = if session.roles.is_empty() {
+            UserRole::get_base_resources()
+        } else {
+            UserRole::get_web_resources_by_roles(session.roles.iter().map(|e| e.as_str()).collect())
+        };
+        let data = UserPermissions {
+            resources,
+            from: EMPTY_STR,
+            version: get_app_version(),
+            username: Some(session.username.clone()),
+        };
+        Ok(HttpResponse::Ok().json(ApiResult::success(Some(data))))
+    } else {
+        let data = UserPermissions {
+            resources: vec![],
+            from: "OLD_CONSOLE",
+            version: get_app_version(),
+            username: None,
+        };
+        Ok(HttpResponse::Ok().json(ApiResult::success(Some(data))))
+    }
 }
 
 pub async fn get_user_info(req: HttpRequest) -> actix_web::Result<impl Responder> {

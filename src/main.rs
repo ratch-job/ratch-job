@@ -8,6 +8,7 @@ use ratchjob::cli::Commands;
 use ratchjob::common::app_config::AppConfig;
 use ratchjob::common::get_app_version;
 use ratchjob::common::share_data::ShareData;
+use ratchjob::console::middle::login_middle::CheckLogin;
 use ratchjob::grpc::handler::InvokerHandler;
 use ratchjob::grpc::ratch_server_proto::request_server::RequestServer;
 use ratchjob::grpc::server::RequestServerImpl;
@@ -113,11 +114,12 @@ fn init_env(env_path: &str) {
 async fn run_console_web(source_app_data: Arc<ShareData>) {
     let http_console_addr = source_app_data.app_config.get_http_console_addr();
     log::info!("console server http addr:{}", &http_console_addr);
-    let app_data = Data::new(source_app_data.clone());
     HttpServer::new(move || {
-        let app_data = app_data.clone();
+        let source_app_data = source_app_data.clone();
+        let app_data = Data::new(source_app_data.clone());
         App::new()
             .app_data(app_data)
+            .wrap(CheckLogin::new(source_app_data))
             .wrap(middleware::Logger::default())
             .wrap(middleware::Compress::default())
             .configure(console_config)

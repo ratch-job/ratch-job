@@ -117,6 +117,7 @@ lazy_static::lazy_static! {
         R::WebResource("/nopermission"),
         R::WebResource("/p/login"),
         R::WebResource("/manage/about"),
+        R::WebResource("/manage/index"),
         R::WebResource("/ratchjob"),
         R::WebResource("/ratchjob/"),
         R::WebResource("/ratchjob/404"),
@@ -131,6 +132,7 @@ lazy_static::lazy_static! {
         R::Path("/manage/about",HTTP_METHOD_GET),
         R::Path("/ratchjob",HTTP_METHOD_GET),
         R::Path("/ratchjob/",HTTP_METHOD_GET),
+        R::Path("/ratchjob/index",HTTP_METHOD_GET),
         R::Path("/ratchjob/404",HTTP_METHOD_GET),
         R::Path("/ratchjob/nopermission",HTTP_METHOD_GET),
         R::Path("/ratchjob/p/login",HTTP_METHOD_GET),
@@ -143,22 +145,72 @@ lazy_static::lazy_static! {
         R::Path("/ratchjob/api/console/v1/user/web_resources",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/user/reset_password",HTTP_METHOD_ALL),
         R::Path("/ratchjob/api/console/v1/namespaces/list",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/app/list",HTTP_METHOD_GET),
 
     ]);
 
     static ref M_CLUSTER_VISITOR: ModuleResource = ModuleResource::new(vec![
         //WebResource
         R::WebResource("/manage/cluster"),
-        R::WebResource("/ratchjob/manage/cluster"),
         //path
         R::Path("/ratchjob/manage/cluster",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/cluster/cluster_node_list",HTTP_METHOD_GET),
     ]);
 
+    static ref M_APP_VISITOR: ModuleResource = ModuleResource::new(vec![
+        //WebResource
+        R::WebResource("/manage/app"),
+        //path
+        R::Path("/ratchjob/manage/app",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/app/list",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/app/info",HTTP_METHOD_GET),
+    ]);
+
+    static ref M_APP_MANAGER: ModuleResource = ModuleResource::new(vec![
+        //WebResource
+        R::WebResource("/manage/app"),
+        //path
+        R::Path("/ratchjob/manage/app",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/app/list",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/app/info",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/app/update",HTTP_METHOD_ALL),
+        R::Path("/ratchjob/api/console/v1/app/remove",HTTP_METHOD_ALL),
+    ]);
+
+    static ref M_JOB_VISITOR: ModuleResource = ModuleResource::new(vec![
+        //WebResource
+        R::WebResource("/manage/job"),
+        R::WebResource("/manage/task/latest"),
+        //path
+        R::Path("/ratchjob/manage/job",HTTP_METHOD_GET),
+        R::Path("/ratchjob/manage/task/latest",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/list",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/info",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/task/list",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/task/latest-history",HTTP_METHOD_GET),
+    ]);
+
+    static ref M_JOB_MANAGER: ModuleResource = ModuleResource::new(vec![
+        //WebResource
+        R::WebResource("/manage/job"),
+        R::WebResource("/manage/task/latest"),
+        //path
+        R::Path("/ratchjob/manage/job",HTTP_METHOD_GET),
+        R::Path("/ratchjob/manage/task/latest",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/list",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/info",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/task/list",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/task/latest-history",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/create",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/update",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/remove",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/trigger",HTTP_METHOD_GET),
+    ]);
+
+
     static ref M_USER_MANAGE: ModuleResource = ModuleResource::new(vec![
         //WebResource
         R::WebResource("/manage/user"),
-        R::WebResource("/ratchjob/manage/user"),
         R::WebResource("USER_UPDATE"),
         //path
         R::Path("/ratchjob/manage/user",HTTP_METHOD_GET),
@@ -182,21 +234,27 @@ lazy_static::lazy_static! {
 
     static ref R_VISITOR: Arc<GroupResource> = Arc::new(GroupResource::new(vec![
         &M_BASE,
-        //&M_CLUSTER_VISITOR,
-        //&M_NAMESPACE_VISITOR,
+        &M_APP_VISITOR,
+        &M_JOB_VISITOR,
+        &M_CLUSTER_VISITOR,
+        &M_METRICS_VISITOR,
     ]));
 
     static ref R_DEVELOPER: Arc<GroupResource> = Arc::new(GroupResource::new(vec![
         &M_BASE,
+        &M_APP_MANAGER,
+        &M_JOB_MANAGER,
         &M_CLUSTER_VISITOR,
         &M_METRICS_VISITOR,
     ]));
 
     static ref R_MANAGER: Arc<GroupResource> = Arc::new(GroupResource::new(vec![
         &M_BASE,
+        &M_APP_MANAGER,
+        &M_JOB_MANAGER,
         &M_CLUSTER_VISITOR,
-        &M_USER_MANAGE,
         &M_METRICS_VISITOR,
+        &M_USER_MANAGE,
     ]));
 
 }
@@ -296,6 +354,14 @@ impl UserRole {
         }
         set.into_iter().collect()
     }
+
+    pub fn get_base_resources() -> Vec<&'static str> {
+        let mut set = HashSet::new();
+        for item in &M_BASE.web_resources {
+            set.insert(*item);
+        }
+        set.into_iter().collect()
+    }
 }
 
 pub struct UserRoleHelper;
@@ -312,5 +378,9 @@ impl UserRoleHelper {
             }
         }
         Arc::new(role_value.to_owned())
+    }
+
+    pub fn match_url_by_base(path: &str, method: &str) -> bool {
+        M_BASE.match_url(path, method)
     }
 }
