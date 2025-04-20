@@ -6,7 +6,7 @@ use crate::app::model::{
 };
 use crate::common::app_config::AppConfig;
 use crate::common::byte_utils::id_to_bin;
-use crate::common::constant::{EMPTY_ARC_STR, JOB_TABLE_NAME};
+use crate::common::constant::{APP_INFO_TABLE_NAME, EMPTY_ARC_STR, JOB_TABLE_NAME};
 use crate::common::datetime_utils::{now_millis, now_second_u32};
 use crate::common::pb::data_object::AppInfoDo;
 use crate::raft::store::model::SnapshotRecordDto;
@@ -315,7 +315,7 @@ impl AppManager {
                 writer.write_message(&value_do)?;
             }
             let record = SnapshotRecordDto {
-                tree: JOB_TABLE_NAME.clone(),
+                tree: APP_INFO_TABLE_NAME.clone(),
                 key: key.build_key().as_bytes().to_vec(),
                 value: buf,
                 op_type: 0,

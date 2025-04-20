@@ -82,7 +82,9 @@ impl RaftDataHandler {
                 let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
                 self.user_manager.send(req).await??;
             }
-            _ => {}
+            _ => {
+                log::warn!("RaftDataHandler|load_snapshot|ignore_data|tree={}", &record.tree);
+            }
         }
         Ok(())
     }

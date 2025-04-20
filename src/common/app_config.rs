@@ -116,15 +116,15 @@ impl AppConfig {
             .unwrap_or("true".to_owned())
             .parse()
             .unwrap_or(true);
-        let console_login_timeout = std::env::var("RNACOS_CONSOLE_LOGIN_TIMEOUT")
+        let console_login_timeout = std::env::var("RATCH_CONSOLE_LOGIN_TIMEOUT")
             .unwrap_or("86400".to_owned())
             .parse()
             .unwrap_or(86400);
         let init_admin_username =
-            StringUtils::map_not_empty(std::env::var("RNACOS_INIT_ADMIN_USERNAME").ok())
+            StringUtils::map_not_empty(std::env::var("RATCH_INIT_ADMIN_USERNAME").ok())
                 .unwrap_or("admin".to_owned());
         let init_admin_password =
-            StringUtils::map_not_empty(std::env::var("RNACOS_INIT_ADMIN_PASSWORD").ok())
+            StringUtils::map_not_empty(std::env::var("RATCH_INIT_ADMIN_PASSWORD").ok())
                 .unwrap_or("admin".to_owned());
         Self {
             local_db_dir,

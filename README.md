@@ -155,6 +155,10 @@ ratchjob
 | RATCH_METRICS_ENABLE_LOG | 是否记录指标日志 | false | false | 0.1.x |
 | RATCH_METRICS_LOG_INTERVAL_SECOND | 指标日志记录间隔(秒)，最小5秒 | 60 | 30 | 0.1.x |
 | RATCH_TASK_REQUEST_PARALLEL | 任务请求(协程)并行处理数 | 20 | 50 | 0.1.x |
+| RATCH_CONSOLE_ENABLE_CAPTCHA | 控制台登陆是否启用验证码 | true | true | 0.1.5 |
+| RATCH_CONSOLE_LOGIN_TIMEOUT | 控制台登陆session过期时间(秒) | 86400 | 86400 | 0.1.5 |
+| RATCH_INIT_ADMIN_USERNAME | 初始化管理员用户名 | admin | admin | 0.1.5 |
+| RATCH_INIT_ADMIN_PASSWORD | 初始化管理员密码 | admin | admin | 0.1.5 |
 
 
 
@@ -194,6 +198,11 @@ xxl.job.accessToken=default_token
 ratch-job支持通过控制台或open-api创建任务。
 
 1、方式一：任务管理中创建任务
+
+系统会默认创建一个名为`admin`的用户，密码为`admin`(也可以通过环境变量 RATCH_INIT_ADMIN_USERNAME 和 RATCH_INIT_ADMIN_PASSWORD 修改默认账号的账户名和密码)。 
+
+使用默认账户登陆控制台并创建任务：
+
 
 ![](https://github.com/ratch-job/ratch-job/raw/master/doc/assets/imgs/20250331004847.png)
 
