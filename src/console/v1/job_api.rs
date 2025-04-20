@@ -1,6 +1,6 @@
 use crate::common::constant::{EMPTY_ARC_STR, SEQ_JOB_ID};
 use crate::common::datetime_utils::{now_millis, now_second_u32};
-use crate::common::model::{ApiResult, PageResult};
+use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
 use crate::console::model::job::{
     JobInfoParam, JobQueryListRequest, JobTaskLogQueryListRequest, TriggerJobParam,
@@ -16,15 +16,25 @@ use crate::sequence::{SequenceRequest, SequenceResult};
 use crate::task::model::actor_model::{
     TaskHistoryManagerReq, TaskHistoryManagerResult, TaskManagerReq, TriggerItem,
 };
+use actix_http::HttpMessage;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
 
 pub(crate) async fn query_job_list(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Query(request): web::Query<JobQueryListRequest>,
 ) -> impl Responder {
-    let param = request.to_param();
+    let session = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    let param = request.to_param_with_session(&session);
     if let Ok(Ok(JobManagerResult::JobPageInfo(total_count, list))) = share_data
         .job_manager
         .send(JobManagerReq::QueryJob(param))

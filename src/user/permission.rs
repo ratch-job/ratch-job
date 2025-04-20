@@ -169,6 +169,7 @@ lazy_static::lazy_static! {
     static ref M_APP_MANAGER: ModuleResource = ModuleResource::new(vec![
         //WebResource
         R::WebResource("/manage/app"),
+        R::WebResource("APP_UPDATE"),
         //path
         R::Path("/ratchjob/manage/app",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/app/list",HTTP_METHOD_GET),
@@ -194,6 +195,7 @@ lazy_static::lazy_static! {
         //WebResource
         R::WebResource("/manage/job"),
         R::WebResource("/manage/task/latest"),
+        R::WebResource("JOB_UPDATE"),
         //path
         R::Path("/ratchjob/manage/job",HTTP_METHOD_GET),
         R::Path("/ratchjob/manage/task/latest",HTTP_METHOD_GET),

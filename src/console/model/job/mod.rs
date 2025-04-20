@@ -1,4 +1,6 @@
 use crate::common::datetime_utils::now_millis;
+use crate::common::model::privilege::PrivilegeGroup;
+use crate::common::model::UserSession;
 use crate::common::namespace_util::get_namespace_by_option;
 use crate::job::job_index::JobQueryParam;
 use crate::job::model::enum_type::{
@@ -84,6 +86,26 @@ pub struct JobQueryListRequest {
 }
 
 impl JobQueryListRequest {
+    pub fn to_param_with_session(self, session: &Arc<UserSession>) -> JobQueryParam {
+        let limit = self.page_size.unwrap_or(0xffff_ffff);
+        let page_no = if self.page_no.unwrap_or(1) < 1 {
+            1
+        } else {
+            self.page_no.unwrap_or(1)
+        };
+        let offset = (page_no - 1) * limit;
+        JobQueryParam {
+            namespace: self.namespace,
+            app_name: self.app_name,
+            like_description: self.like_description,
+            like_handle_name: self.like_handle_name,
+            app_privilege: session.app_privilege.clone(),
+            namespace_privilege: session.namespace_privilege.clone(),
+            offset,
+            limit,
+        }
+    }
+
     pub fn to_param(self) -> JobQueryParam {
         let limit = self.page_size.unwrap_or(0xffff_ffff);
         let page_no = if self.page_no.unwrap_or(1) < 1 {
@@ -97,6 +119,8 @@ impl JobQueryListRequest {
             app_name: self.app_name,
             like_description: self.like_description,
             like_handle_name: self.like_handle_name,
+            app_privilege: PrivilegeGroup::all(),
+            namespace_privilege: PrivilegeGroup::all(),
             offset,
             limit,
         }

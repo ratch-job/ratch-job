@@ -2,11 +2,14 @@ use std::collections::HashMap;
 use std::future::{ready, Ready};
 use std::sync::Arc;
 
-use crate::cache::actor_model::{CacheManagerLocalReq, CacheManagerRaftResult};
+use crate::cache::actor_model::{
+    CacheManagerLocalReq, CacheManagerRaftReq, CacheManagerRaftResult, SetInfo,
+};
 use crate::cache::model::{CacheKey, CacheType, CacheValue};
-use crate::common::datetime_utils::now_second_i32;
+use crate::common::datetime_utils::{now_millis_i64, now_second_i32, now_second_u32};
 use crate::common::model::{ApiResult, UserSession};
 use crate::common::share_data::ShareData;
+use crate::raft::store::ClientRequest;
 use crate::user::actor_model::{UserManagerRaftResult, UserManagerReq};
 use crate::user::model::{UserDto, UserInfo};
 use crate::user::permission::{UserRole, UserRoleHelper};
@@ -190,12 +193,50 @@ async fn get_user_session(
     let cache_key = CacheKey::new(CacheType::UserSession, token);
     let req = CacheManagerLocalReq::Get(cache_key.clone());
     match app_share_data.cache_manager.send(req).await?? {
-        CacheManagerRaftResult::Value(CacheValue::UserSession(session)) => Ok(Some(session)),
+        CacheManagerRaftResult::Value(CacheValue::UserSession(session)) => {
+            let now = now_second_u32();
+            if now < session.refresh_time + 5 {
+                //更新5秒内不判断更新,避免频繁更新
+                return Ok(Some(session));
+            }
+            let username = session.username.clone();
+            match app_share_data
+                .user_manager
+                .send(UserManagerReq::Query { name: username })
+                .await??
+            {
+                UserManagerRaftResult::QueryUser(Some(user)) => {
+                    let refresh_time = (session.refresh_time as i64) * 1000;
+                    if user.gmt_modified > refresh_time {
+                        let ttl = (std::cmp::max((now as i64) * 1000 - refresh_time, 10000) / 1000)
+                            as i32;
+                        let new_session = build_user_session(user);
+                        let set_info = SetInfo {
+                            key: cache_key,
+                            value: CacheValue::UserSession(new_session.clone()),
+                            ttl,
+                            now: now as i32,
+                            nx: false,
+                            xx: false,
+                        };
+                        let req = CacheManagerRaftReq::Set(set_info);
+                        //todo 这里更新缓存可以考虑切换为异步执行
+                        app_share_data
+                            .raft_request_route
+                            .request(ClientRequest::CacheReq { req })
+                            .await
+                            .ok();
+                        return Ok(Some(new_session));
+                    }
+                }
+                _ => {}
+            };
+            Ok(Some(session))
+        }
         _ => Ok(None),
     }
 }
 
-/*
 fn build_user_session(user: UserInfo) -> Arc<UserSession> {
     Arc::new(UserSession {
         username: user.username,
@@ -207,4 +248,3 @@ fn build_user_session(user: UserInfo) -> Arc<UserSession> {
         refresh_time: now_second_i32() as u32,
     })
 }
-*/

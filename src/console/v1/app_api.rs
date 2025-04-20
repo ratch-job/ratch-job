@@ -1,18 +1,28 @@
 use crate::app::model::{AppKey, AppManagerRaftReq, AppManagerReq, AppManagerResult, RegisterType};
-use crate::common::model::{ApiResult, PageResult};
+use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
 use crate::console::model::app::{AppInfoParam, AppQueryListRequest};
 use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
 use crate::raft::store::ClientRequest;
+use actix_http::HttpMessage;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
 
 pub(crate) async fn query_app_list(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Query(request): web::Query<AppQueryListRequest>,
 ) -> impl Responder {
-    let param = request.to_param();
+    let session = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    let param = request.to_param_with_session(&session);
     if let Ok(Ok(AppManagerResult::AppPageInfo(total_count, list))) = share_data
         .app_manager
         .send(AppManagerReq::QueryApp(param))

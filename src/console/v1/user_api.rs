@@ -1,4 +1,5 @@
 use crate::common::constant::EMPTY_STR;
+use crate::common::datetime_utils::now_millis_i64;
 use crate::common::get_app_version;
 use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
@@ -84,6 +85,7 @@ pub async fn reset_password(
                     let user_dto = UserDto {
                         username: username.clone(),
                         password: Some(param.new_password),
+                        gmt_modified: Some(now_millis_i64()),
                         ..Default::default()
                     };
                     let msg = UserManagerRaftReq::UpdateUser(user_dto);

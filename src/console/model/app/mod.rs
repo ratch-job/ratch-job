@@ -1,6 +1,8 @@
 use crate::app::app_index::AppQueryParam;
 use crate::app::model::{AppParam, RegisterType};
 use crate::common::datetime_utils::now_second_u32;
+use crate::common::model::privilege::PrivilegeGroup;
+use crate::common::model::UserSession;
 use crate::common::namespace_util::get_namespace_by_option;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -39,7 +41,7 @@ pub struct AppQueryListRequest {
 }
 
 impl AppQueryListRequest {
-    pub fn to_param(self) -> AppQueryParam {
+    pub fn to_param_with_session(self, session: &Arc<UserSession>) -> AppQueryParam {
         let limit = self.page_size.unwrap_or(0xffff_ffff);
         let page_no = if self.page_no.unwrap_or(1) < 1 {
             1
@@ -51,6 +53,8 @@ impl AppQueryListRequest {
             namespace: self.namespace,
             app_name: self.app_name,
             like_name: self.like_app_name,
+            namespace_privilege: session.namespace_privilege.clone(),
+            app_privilege: session.app_privilege.clone(),
             offset,
             limit,
         }

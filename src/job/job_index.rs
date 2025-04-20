@@ -1,3 +1,4 @@
+use crate::common::model::privilege::PrivilegeGroup;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -9,12 +10,17 @@ pub struct JobQueryParam {
     pub app_name: Option<Arc<String>>,
     pub like_description: Option<Arc<String>>,
     pub like_handle_name: Option<Arc<String>>,
+    pub namespace_privilege: PrivilegeGroup<Arc<String>>,
+    pub app_privilege: PrivilegeGroup<Arc<String>>,
     pub offset: usize,
     pub limit: usize,
 }
 
 impl JobQueryParam {
     pub fn match_namespace(&self, value: &Arc<String>) -> bool {
+        if !self.namespace_privilege.check_permission(&value) {
+            return false;
+        }
         if let Some(namespace) = &self.namespace {
             namespace.is_empty() || namespace == value
         } else {
@@ -23,6 +29,9 @@ impl JobQueryParam {
     }
 
     pub fn match_app_name(&self, value: &Arc<String>) -> bool {
+        if !self.app_privilege.check_permission(&value) {
+            return false;
+        }
         if let Some(app_name) = &self.app_name {
             app_name.is_empty() || app_name == value
         } else {
