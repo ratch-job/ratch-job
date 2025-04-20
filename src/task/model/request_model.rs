@@ -38,3 +38,21 @@ impl JobRunParam {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct JobLogParam {
+    pub log_id: u64,
+    #[serde(rename(serialize = "logDateTim", deserialize = "logDateTim"))]
+    pub log_date_time: Option<u64>,
+    pub from_line_num: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct JobLogInfo {
+    pub log_content: String,
+    pub from_line_num: i64,
+    pub to_line_num: i64,
+    pub is_end: bool,
+}
