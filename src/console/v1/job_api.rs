@@ -5,7 +5,7 @@ use crate::common::share_data::ShareData;
 use crate::console::model::job::{
     JobInfoParam, JobQueryListRequest, JobTaskLogQueryListRequest, TriggerJobParam,
 };
-use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
+use crate::console::v1::{ERROR_CODE_NO_APP_PERMISSION, ERROR_CODE_SYSTEM_ERROR};
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
 };
@@ -50,6 +50,7 @@ pub(crate) async fn query_job_list(
 }
 
 pub(crate) async fn query_job_info(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Query(param): web::Query<JobInfoParam>,
 ) -> impl Responder {
@@ -60,10 +61,25 @@ pub(crate) async fn query_job_info(
             Some("query_job_info error,the job id is invalid".to_string()),
         ));
     }
-    if let Ok(Ok(JobManagerResult::JobInfo(info))) =
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+
+    if let Ok(Ok(JobManagerResult::JobInfo(Some(info)))) =
         share_data.job_manager.send(JobManagerReq::GetJob(id)).await
     {
-        HttpResponse::Ok().json(ApiResult::success(info))
+        if !app_privilege.check_permission(&info.app_name) {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_NO_APP_PERMISSION.to_string(),
+                Some(format!("user no app permission:{}", &info.app_name)),
+            ));
+        }
+        HttpResponse::Ok().json(ApiResult::success(Some(info)))
     } else {
         HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
@@ -103,10 +119,27 @@ async fn do_create_job(
 }
 
 pub(crate) async fn create_job(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<JobInfoParam>,
 ) -> impl Responder {
     let param = param.to_param();
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    if let Some(app_name) = param.app_name.as_ref() {
+        if !app_privilege.check_permission(app_name) {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_NO_APP_PERMISSION.to_string(),
+                Some(format!("user no app permission:{}", app_name)),
+            ));
+        }
+    }
     match do_create_job(share_data, param).await {
         Ok(v) => v,
         Err(e) => {
@@ -121,6 +154,7 @@ pub(crate) async fn create_job(
 }
 
 pub(crate) async fn update_job(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<JobInfoParam>,
 ) -> impl Responder {
@@ -131,6 +165,32 @@ pub(crate) async fn update_job(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("update_job error,the job id is invalid".to_string()),
         ));
+    }
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    if let Some(app_name) = param.app_name.as_ref() {
+        if !app_privilege.check_permission(app_name) {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_NO_APP_PERMISSION.to_string(),
+                Some(format!("user no app permission:{}", app_name)),
+            ));
+        }
+    }
+    if let Ok(Ok(JobManagerResult::JobInfo(Some(info)))) =
+        share_data.job_manager.send(JobManagerReq::GetJob(id)).await
+    {
+        if !app_privilege.check_permission(&info.app_name) {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_NO_APP_PERMISSION.to_string(),
+                Some(format!("user no app permission:{}", &info.app_name)),
+            ));
+        }
     }
     if let Err(e) = param.check_valid() {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
@@ -155,6 +215,7 @@ pub(crate) async fn update_job(
 }
 
 pub(crate) async fn remove_job(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<JobInfoParam>,
 ) -> impl Responder {
@@ -164,6 +225,24 @@ pub(crate) async fn remove_job(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("remove_job error,the job id is invalid".to_string()),
         ));
+    }
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    if let Ok(Ok(JobManagerResult::JobInfo(Some(info)))) =
+        share_data.job_manager.send(JobManagerReq::GetJob(id)).await
+    {
+        if !app_privilege.check_permission(&info.app_name) {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_NO_APP_PERMISSION.to_string(),
+                Some(format!("user no app permission:{}", &info.app_name)),
+            ));
+        }
     }
     if let Ok(_) = share_data
         .raft_request_route
@@ -182,6 +261,7 @@ pub(crate) async fn remove_job(
 }
 
 pub(crate) async fn trigger_job(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<TriggerJobParam>,
 ) -> impl Responder {
@@ -192,9 +272,23 @@ pub(crate) async fn trigger_job(
             Some("trigger_job error,the job id is invalid".to_string()),
         ));
     }
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
     let job_info = if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) =
         share_data.job_manager.send(JobManagerReq::GetJob(id)).await
     {
+        if !app_privilege.check_permission(&job_info.app_name) {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_NO_APP_PERMISSION.to_string(),
+                Some(format!("user no app permission:{}", &job_info.app_name)),
+            ));
+        }
         job_info
     } else {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
@@ -224,10 +318,31 @@ pub(crate) async fn trigger_job(
 }
 
 pub(crate) async fn query_job_task_logs(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Query(request): web::Query<JobTaskLogQueryListRequest>,
 ) -> impl Responder {
     let param = request.to_param();
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    if let Ok(Ok(JobManagerResult::JobInfo(Some(info)))) = share_data
+        .job_manager
+        .send(JobManagerReq::GetJob(param.job_id))
+        .await
+    {
+        if !app_privilege.check_permission(&info.app_name) {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_NO_APP_PERMISSION.to_string(),
+                Some(format!("user no app permission:{}", &info.app_name)),
+            ));
+        }
+    }
     if let Ok(Ok(JobManagerResult::JobTaskLogPageInfo(total_count, list))) = share_data
         .job_manager
         .send(JobManagerReq::QueryJobTaskLog(param))

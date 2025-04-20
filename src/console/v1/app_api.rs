@@ -2,7 +2,7 @@ use crate::app::model::{AppKey, AppManagerRaftReq, AppManagerReq, AppManagerResu
 use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
 use crate::console::model::app::{AppInfoParam, AppQueryListRequest};
-use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
+use crate::console::v1::{ERROR_CODE_NO_APP_PERMISSION, ERROR_CODE_SYSTEM_ERROR};
 use crate::raft::store::ClientRequest;
 use actix_http::HttpMessage;
 use actix_web::web::Data;
@@ -38,6 +38,7 @@ pub(crate) async fn query_app_list(
 }
 
 pub(crate) async fn query_app_info(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Query(param): web::Query<AppInfoParam>,
 ) -> impl Responder {
@@ -46,6 +47,20 @@ pub(crate) async fn query_app_info(
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("app name is empty!".to_string()),
+        ));
+    }
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    if !app_privilege.check_permission(&param.app_name) {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_NO_APP_PERMISSION.to_string(),
+            Some(format!("user no app permission:{}", &param.app_name)),
         ));
     }
     if let Ok(Ok(AppManagerResult::AppInfo(info))) = share_data
@@ -63,6 +78,7 @@ pub(crate) async fn query_app_info(
 }
 
 pub(crate) async fn set_app(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<AppInfoParam>,
 ) -> impl Responder {
@@ -73,7 +89,20 @@ pub(crate) async fn set_app(
             Some("app name is empty!".to_string()),
         ));
     }
-
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    if !app_privilege.check_permission(&param.app_name) {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_NO_APP_PERMISSION.to_string(),
+            Some(format!("user no app permission:{}", &param.app_name)),
+        ));
+    }
     if let Ok(_) = share_data
         .raft_request_route
         .request(ClientRequest::AppReq {
@@ -91,10 +120,25 @@ pub(crate) async fn set_app(
 }
 
 pub(crate) async fn remove_app(
+    req: actix_web::HttpRequest,
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<AppInfoParam>,
 ) -> impl Responder {
     let param = param.to_param();
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    if !app_privilege.check_permission(&param.app_name) {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_NO_APP_PERMISSION.to_string(),
+            Some(format!("user no app permission:{}", &param.app_name)),
+        ));
+    }
     if let Ok(Ok(AppManagerResult::AppInfo(Some(info)))) = share_data
         .app_manager
         .send(AppManagerReq::GetApp(param.build_app_key()))

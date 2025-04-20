@@ -208,9 +208,11 @@ async fn get_user_session(
                 UserManagerRaftResult::QueryUser(Some(user)) => {
                     let refresh_time = (session.refresh_time as i64) * 1000;
                     if user.gmt_modified > refresh_time {
+                        let new_session = build_user_session(user);
+                        //这里更新缓存可以考虑切换为异步执行
+                        /*
                         let ttl = (std::cmp::max((now as i64) * 1000 - refresh_time, 10000) / 1000)
                             as i32;
-                        let new_session = build_user_session(user);
                         let set_info = SetInfo {
                             key: cache_key,
                             value: CacheValue::UserSession(new_session.clone()),
@@ -220,12 +222,12 @@ async fn get_user_session(
                             xx: false,
                         };
                         let req = CacheManagerRaftReq::Set(set_info);
-                        //todo 这里更新缓存可以考虑切换为异步执行
                         app_share_data
                             .raft_request_route
                             .request(ClientRequest::CacheReq { req })
                             .await
                             .ok();
+                         */
                         return Ok(Some(new_session));
                     }
                 }

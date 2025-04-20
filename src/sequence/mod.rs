@@ -36,7 +36,7 @@ impl SequenceManager {
 
     fn do_next_id(&mut self, key: &Arc<String>) -> (Option<u64>, bool) {
         if let Some(group) = self.seq_map.get_mut(key) {
-            log::info!("SequenceManager|group info:{:?}", group);
+            //log::info!("SequenceManager|group info:{:?}", group);
             let v = group.next_id();
             let need_apply = group.need_apply();
             (v, need_apply)
