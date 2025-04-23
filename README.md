@@ -7,9 +7,35 @@ ratch-job 是一个rust实现的分布式任务调度平台服务。
 ### 特性
 
 1. 自带raft分布式储存,不依赖外部数据库，可直接运行服务。
-2. 轻量、高性能，每秒运行1000任务持续超过6分钟，cpu使用单核38%，内存占用85M；
-3. 完全兼容xxl-job协议，支持使用xxl-job服务的应用平滑迁移到ratch-job；
-4. 支持open-api管理任务。
+2. 使用raft唯一主节点替代mysql锁，可大幅提升调度并发效率。
+3. 轻量、高性能，每秒运行1000任务持续超过6分钟，cpu使用单核38%，内存占用85M；
+4. 完全兼容xxl-job协议，支持使用xxl-job服务的应用平滑迁移到ratch-job；
+5. 支持open-api管理任务。
+
+## 架构
+
+![](https://github.com/ratch-job/ratch-job/raw/master/doc/assets/imgs/ratch-job_L2_v0.1.5.png)
+
+说明：
+
+1. ratch-job内部有应用、任务、任务调度3个核心功能模块；
+2. 内部使用raft管理的分布式数据库持久化；
+3. 集群部署时通过raft主节点统一管理任务调度，避免任务调度冲突.
+4. ratch-job提供web控制台，方便用户通过ui管理应用任务。
+5. ratch-job提供open-api,支持以api的方式管理应用任务。
+6. ratch-job完全兼容xxl-job协议，支持xxl-job client接入。
+
+
+## 核心调度流程
+
+![](https://github.com/ratch-job/ratch-job/raw/master/doc/assets/imgs/20250423083517.png)
+
+任务调度可分3个流程，流程之间可并行，第3个流程依赖前两个流程才能成功。
+
+1. 执行器通过xxl-job sdk反应用实例注册到ratch-job中；
+2. 管理员通过控制台(或open-api)创建应用任务；
+3. ratch-job调度器会自动根据任务的调度配置，在指定时间触发应用任务;
+
 
 ### 一、 安装运行 ratch-job
 
