@@ -1,6 +1,6 @@
 use crate::app::model::{AppInstanceParam, AppKey, AppManagerRaftReq, AppManagerReq};
 use crate::common::constant::DEFAULT_XXL_NAMESPACE;
-use crate::common::datetime_utils::now_second_u32;
+use crate::common::datetime_utils::{now_millis_i64, now_second_u32};
 use crate::common::share_data::ShareData;
 use crate::openapi::xxljob::model::server_request::{CallbackParam, RegistryParam};
 use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
@@ -75,9 +75,19 @@ pub(crate) async fn unregister(
 
 pub(crate) async fn callback(
     share_data: Data<Arc<ShareData>>,
-    web::Json(params): web::Json<Vec<CallbackParam>>,
+    web::Json(mut params): web::Json<Vec<CallbackParam>>,
 ) -> impl Responder {
-    let id_list: Vec<u64> = params.iter().map(|p| p.log_id).collect();
+    let now = now_millis_i64();
+    #[cfg(feature = "debug")]
+    log::info!("callback params:{:?}", &params);
+    let id_list: Vec<u64> = params
+        .iter_mut()
+        .map(|p| {
+            //回调时间定义是任务启动，这里统一设置为收到消息后的当前时间
+            p.log_date_time = now;
+            p.log_id
+        })
+        .collect();
     if let Ok(_) = share_data
         .batch_call_manager
         .send(BatchCallManagerReq::Callback(params))
