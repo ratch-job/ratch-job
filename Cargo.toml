@@ -1,6 +1,6 @@
 [package]
 name = "ratchjob"
-version = "0.1.5"
+version = "0.1.6-beta"
 edition = "2021"
 authors = ["heqingpan <heqingpan@126.com>"]
 license = "Apache-2.0"
