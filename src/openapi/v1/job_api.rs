@@ -91,6 +91,42 @@ pub(crate) async fn update_job(
     }
 }
 
+async fn do_remove_job(
+    share_data: Data<Arc<ShareData>>,
+    mut param: JobParam,
+) -> anyhow::Result<HttpResponse> {
+    let id = if let Some(id) = param.id {
+        id
+    }
+    else {
+        return Err(anyhow::anyhow!("job id is null"));
+    };
+    share_data
+        .raft_request_route
+        .request(ClientRequest::JobReq {
+            req: JobManagerRaftReq::Remove(id),
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(XxlApiResult::success(Some(()))))
+}
+
+pub(crate) async fn remove_job(
+    share_data: Data<Arc<ShareData>>,
+    web::Json(param): web::Json<JobParam>,
+) -> impl Responder {
+    match do_remove_job(share_data, param).await {
+        Ok(v) => v,
+        Err(e) => {
+            let error_msg = format!("remove_job error,{}", e);
+            log::error!("{}", &error_msg);
+            HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some(error_msg),
+            ))
+        }
+    }
+}
+
 pub(crate) async fn get_job_info(
     share_data: Data<Arc<ShareData>>,
     web::Query(param): web::Query<JobParam>,
