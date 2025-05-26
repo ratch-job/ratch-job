@@ -97,8 +97,7 @@ async fn do_remove_job(
 ) -> anyhow::Result<HttpResponse> {
     let id = if let Some(id) = param.id {
         id
-    }
-    else {
+    } else {
         return Err(anyhow::anyhow!("job id is null"));
     };
     share_data

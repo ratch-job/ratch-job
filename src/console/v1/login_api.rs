@@ -12,6 +12,7 @@ use captcha::Captcha;
 use crate::cache::actor_model::{
     CacheManagerLocalReq, CacheManagerRaftReq, CacheManagerRaftResult, SetInfo,
 };
+use crate::common::constant::CONSOLE_TOKEN_COOKIE_KEY;
 use crate::common::datetime_utils::{now_second_i32, now_second_u32};
 use crate::common::share_data::ShareData;
 use crate::console::model::login_model::{LoginParam, LoginToken};
@@ -30,7 +31,7 @@ pub async fn login(
     app: Data<Arc<ShareData>>,
     web::Form(param): web::Form<LoginParam>,
 ) -> actix_web::Result<impl Responder> {
-    let captcha_token = if let Some(ck) = request.cookie("captcha_token") {
+    let captcha_token = if let Some(ck) = request.cookie("ratch_captcha_token") {
         ck.value().to_owned()
     } else {
         String::new()
@@ -59,7 +60,7 @@ pub async fn login(
         if !captcha_check_result {
             return Ok(HttpResponse::Ok()
                 .cookie(
-                    Cookie::build("captcha_token", "")
+                    Cookie::build("ratch_captcha_token", "")
                         .path("/")
                         .http_only(true)
                         .finish(),
@@ -127,13 +128,13 @@ pub async fn login(
                 };
                 return Ok(HttpResponse::Ok()
                     .cookie(
-                        Cookie::build("token", token.as_str())
+                        Cookie::build(CONSOLE_TOKEN_COOKIE_KEY, token.as_str())
                             .path("/")
                             .http_only(true)
                             .finish(),
                     )
                     .cookie(
-                        Cookie::build("captcha_token", "")
+                        Cookie::build("ratch_captcha_token", "")
                             .path("/")
                             .http_only(true)
                             .finish(),
@@ -169,7 +170,7 @@ const HEIGHT: u32 = 120;
 
 pub async fn gen_captcha(app: Data<Arc<ShareData>>) -> actix_web::Result<impl Responder> {
     let token = uuid::Uuid::new_v4().to_string().replace('-', "");
-    let captcha_cookie = Cookie::build("captcha_token", token.as_str())
+    let captcha_cookie = Cookie::build("ratch_captcha_token", token.as_str())
         .path("/")
         .http_only(true)
         .finish();
@@ -219,7 +220,7 @@ pub async fn logout(
     request: HttpRequest,
     app: Data<Arc<ShareData>>,
 ) -> actix_web::Result<impl Responder> {
-    let token = if let Some(ck) = request.cookie("token") {
+    let token = if let Some(ck) = request.cookie(CONSOLE_TOKEN_COOKIE_KEY) {
         ck.value().to_owned()
     } else if let Some(v) = request.headers().get("Token") {
         v.to_str().unwrap_or_default().to_owned()
@@ -234,7 +235,7 @@ pub async fn logout(
         .ok();
     return Ok(HttpResponse::Ok()
         .cookie(
-            Cookie::build("token", "")
+            Cookie::build(CONSOLE_TOKEN_COOKIE_KEY, "")
                 .path("/")
                 .http_only(true)
                 .finish(),

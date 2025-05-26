@@ -7,6 +7,8 @@ pub const HTTP_METHOD_GET: &str = "GET";
 //pub const HTTP_METHOD_DELETE:&str= "DELETE";
 pub const HTTP_METHOD_ALL: &str = EMPTY_STR;
 
+pub const CONSOLE_TOKEN_COOKIE_KEY: &str = "ratch_job_token";
+
 lazy_static::lazy_static! {
     pub static ref EMPTY_ARC_STR: Arc<String> =  Arc::new("".to_string());
     pub static ref TRIGGER_FROM_SYSTEM: Arc<String> =  Arc::new("_".to_string());

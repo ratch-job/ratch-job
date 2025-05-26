@@ -6,6 +6,7 @@ use crate::cache::actor_model::{
     CacheManagerLocalReq, CacheManagerRaftReq, CacheManagerRaftResult, SetInfo,
 };
 use crate::cache::model::{CacheKey, CacheType, CacheValue};
+use crate::common::constant::CONSOLE_TOKEN_COOKIE_KEY;
 use crate::common::datetime_utils::{now_millis_i64, now_second_i32, now_second_u32};
 use crate::common::model::{ApiResult, UserSession};
 use crate::common::share_data::ShareData;
@@ -84,7 +85,7 @@ where
         let path = request.path();
         let is_check_path = !IGNORE_CHECK_LOGIN.contains(&path) && !STATIC_FILE_PATH.is_match(path);
         let is_page = !API_PATH.is_match(path);
-        let token = if let Some(ck) = request.cookie("token") {
+        let token = if let Some(ck) = request.cookie(CONSOLE_TOKEN_COOKIE_KEY) {
             ck.value().to_owned()
         } else if let Some(v) = request.headers().get("Token") {
             v.to_str().unwrap_or_default().to_owned()
