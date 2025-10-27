@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum ScheduleType {
     Cron,
     Interval,
-    //执行后延时，暂时不增加
-    //Delay,
+    Delay,
     None,
 }
 
@@ -30,7 +29,7 @@ impl ScheduleType {
         match self {
             ScheduleType::Cron => "CRON",
             ScheduleType::Interval => "INTERVAL",
-            //ScheduleType::Delay => "DELAY",
+            ScheduleType::Delay => "DELAY",
             ScheduleType::None => "",
         }
     }

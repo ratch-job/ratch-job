@@ -19,6 +19,7 @@ pub struct JobRunState {
     pub interval_second: u32,
     pub pre_trigger_time: u32,
     pub next_trigger_time: u32,
+    pub last_finish_time: u32,
     pub next_active: bool,
     pub version: u32,
     pub route_value: u32,
@@ -36,6 +37,7 @@ impl JobRunState {
             delay_second: source_job.delay_second,
             interval_second: source_job.interval_second,
             pre_trigger_time: 0,
+            last_finish_time: 0,
             next_trigger_time: 0,
             next_active: false,
             version: 0,
@@ -45,7 +47,10 @@ impl JobRunState {
     }
     pub fn calculate_first_trigger_time<T: TimeZone>(&self, datetime: &DateTime<T>) -> u32 {
         match self.schedule_type {
-            //ScheduleType::Delay => datetime.timestamp() as u32,
+            ScheduleType::Delay => {
+                let timestamp_seconds = datetime.timestamp() as u32;
+                std::cmp::max(self.last_finish_time + self.delay_second, timestamp_seconds)
+            }
             ScheduleType::None => 0,
             _ => self.calculate_next_trigger_time(datetime),
         }
@@ -81,6 +86,13 @@ impl JobRunState {
         change_schedule
     }
 
+    pub fn finish_job(&mut self, finish_time: u32) {
+        self.last_finish_time = finish_time;
+        if self.schedule_type == ScheduleType::Delay {
+            self.next_active = true;
+        }
+    }
+
     pub fn calculate_next_trigger_time<T: TimeZone>(&self, datetime: &DateTime<T>) -> u32 {
         let mut result = 0;
         let timestamp_seconds = datetime.timestamp() as u32;
@@ -98,11 +110,12 @@ impl JobRunState {
                     .rem_euclid(interval_second as i32);
                 result = (timestamp_seconds as i32 - remainder) as u32 + interval_second;
             }
-            /*
             ScheduleType::Delay => {
-                result = timestamp_seconds + self.delay_second;
+                if self.next_active {
+                    result =
+                        std::cmp::max(self.last_finish_time + self.delay_second, timestamp_seconds);
+                }
             }
-             */
             ScheduleType::None => {}
         }
         result

@@ -38,7 +38,7 @@ use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, Offset, TimeZone, Utc}
 use futures_util::TryFutureExt;
 use inner_mem_cache::TimeoutSet;
 use quick_protobuf::{BytesReader, Writer};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 #[bean(inject)]
@@ -210,7 +210,7 @@ impl ScheduleManager {
                     let next_trigger_time = job.calculate_next_trigger_time(&date_time);
                     if next_trigger_time > 0 {
                         self.active_job(item.job_id, next_trigger_time, job.version);
-                    } else {
+                    } else if job.schedule_type != ScheduleType::Delay {
                         log::info!("job next trigger is none,id:{}", &item.job_id);
                     }
                     self.update_job_trigger_time(item.job_id, item.trigger_time, next_trigger_time);
@@ -226,7 +226,9 @@ impl ScheduleManager {
                     );
                 }
             }
-            task_manager.do_send(TaskManagerReq::TriggerTaskList(trigger_list));
+            if !trigger_list.is_empty() {
+                task_manager.do_send(TaskManagerReq::TriggerTaskList(trigger_list));
+            }
         } else {
             log::error!("ScheduleManager|task manager is none");
         }
@@ -452,6 +454,7 @@ impl ScheduleManager {
             self.last_trigger_time = task_log.trigger_time;
         }
         let mut metrics_info = UpdateTaskMetricsInfo::default();
+        let mut finish_delay_job_id: Option<u64> = None;
         match &task_log.status {
             TaskStatusType::Init => {
                 //self.running_task.insert(task_log.task_id, task_log.clone());
@@ -475,9 +478,10 @@ impl ScheduleManager {
                 }
             }
             TaskStatusType::Success => {
-                if let Some(_v) = self.running_task.remove(&task_log.task_id) {
+                if let Some(v) = self.running_task.remove(&task_log.task_id) {
                     if task_log.finish_time >= self.app_start_second {
                         metrics_info.success_count += 1;
+                        finish_delay_job_id = Some(v.job_id);
                     }
                 }
             }
@@ -490,14 +494,24 @@ impl ScheduleManager {
                         RedoType::Retry,
                     );
                 } else {
-                    if let Some(_v) = self.running_task.remove(&task_log.task_id) {
+                    if let Some(v) = self.running_task.remove(&task_log.task_id) {
                         if task_log.finish_time >= self.app_start_second {
                             metrics_info.fail_count += 1;
+                            finish_delay_job_id = Some(v.job_id);
                         }
                     }
                 }
             }
         };
+        if let Some(job_id) = finish_delay_job_id {
+            if let Some(job) = self.job_run_state.get(&job_id) {
+                if job.schedule_type == ScheduleType::Delay {
+                    let next_trigger_time =
+                        std::cmp::max(job.last_finish_time + job.delay_second, now_second_u32());
+                    self.active_job(job_id, next_trigger_time, job.version);
+                }
+            }
+        }
         (task_log, metrics_info)
     }
 
@@ -621,16 +635,27 @@ impl ScheduleManager {
             now - 1,
         );
         let mut active_jobs: Vec<(u64, u32, u32)> = Vec::new();
-        if let Some(now_datetime) = get_datetime_by_second(start_second, &self.fixed_offset) {
+        let mut delay_job_ids = HashSet::new();
+        let now_datetime_option = if let Some(now_datetime) =
+            get_datetime_by_second(start_second, &self.fixed_offset)
+        {
             for (_, job_run_state) in &mut self.job_run_state {
+                if job_run_state.schedule_type == ScheduleType::Delay {
+                    delay_job_ids.insert(job_run_state.id);
+                    continue;
+                }
                 let next_trigger_time = job_run_state.calculate_first_trigger_time(&now_datetime);
                 if next_trigger_time > 0 {
                     job_run_state.next_trigger_time = next_trigger_time;
                     active_jobs.push((job_run_state.id, next_trigger_time, job_run_state.version));
                 }
             }
-        }
+            Some(now_datetime)
+        } else {
+            None
+        };
         let mut retry_list = Vec::new();
+        let mut running_jobs = HashSet::new();
         for task in self.running_task.values() {
             match task.status {
                 TaskStatusType::Init => {
@@ -646,6 +671,7 @@ impl ScheduleManager {
                         self.default_timeout_second
                     };
                     retry_list.push((task.task_id, task.trigger_time + timeout, RedoType::Timeout));
+                    running_jobs.insert(task.job_id);
                 }
                 TaskStatusType::Fail => {
                     if task.can_retry() {
@@ -654,9 +680,30 @@ impl ScheduleManager {
                             now + task.get_retry_interval(),
                             RedoType::Retry,
                         ));
+                        running_jobs.insert(task.job_id);
                     }
                 }
                 _ => {}
+            }
+        }
+        // init delay job
+        if let Some(now_datetime) = now_datetime_option {
+            for job_id in &delay_job_ids {
+                if !running_jobs.contains(job_id) {
+                    if let Some(job_run_state) = self.job_run_state.get_mut(job_id) {
+                        job_run_state.next_active = true;
+                        //上次完成时间
+                        job_run_state.last_finish_time = now;
+                        job_run_state.next_trigger_time =
+                            job_run_state.calculate_next_trigger_time(&now_datetime);
+                        active_jobs.push((
+                            *job_id,
+                            job_run_state.next_trigger_time,
+                            job_run_state.version,
+                        ));
+                        job_run_state.next_active = false;
+                    }
+                }
             }
         }
         for (job_id, next_trigger_time, version) in active_jobs {
