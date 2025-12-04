@@ -321,6 +321,6 @@ ratch-job控制台自带服务监控，包含服务应用cpu,内存水位、任�
 ### 七、open api
 
 
-[open api doc](https://github.com/ratch-job/ratch-job/blob/master/doc/open-api.md)
+[open api doc](https://ratch-job.github.io/docs/open-api.html)
 
 
