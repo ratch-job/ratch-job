@@ -19,7 +19,9 @@ impl ResponseWrap {
     }
 
     pub fn get_string_body(&self) -> String {
-        String::from_utf8(self.body.clone()).unwrap()
+        String::from_utf8(self.body.clone()).unwrap_or_else(|e| {
+            String::from_utf8_lossy(e.as_bytes()).into_owned()
+        })
     }
 
     pub fn get_map_headers(&self) -> HashMap<String, String> {
