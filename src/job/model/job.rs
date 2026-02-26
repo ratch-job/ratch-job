@@ -37,6 +37,8 @@ pub struct JobInfo {
     pub last_modified_millis: u64,
     pub create_time: u64,
     pub retry_interval: u32,
+    pub parent_job_id: u64,
+    pub child_job_ids: Vec<u64>,
 }
 
 impl JobInfo {
@@ -85,6 +87,12 @@ impl JobInfo {
         }
         if let Some(retry_interval) = job_param.retry_interval {
             self.retry_interval = retry_interval;
+        }
+        if let Some(parent_job_id) = job_param.parent_job_id {
+            self.parent_job_id = parent_job_id;
+        }
+        if let Some(child_job_ids) = job_param.child_job_ids {
+            self.child_job_ids = child_job_ids;
         }
         if let Some(update_time) = job_param.update_time {
             self.last_modified_millis = update_time;
@@ -157,6 +165,8 @@ impl JobInfo {
             last_modified_millis: self.last_modified_millis,
             create_time: self.create_time,
             retry_interval: self.retry_interval,
+            parent_job_id: self.parent_job_id,
+            child_job_ids: self.child_job_ids.clone(),
         }
     }
 }
@@ -186,6 +196,8 @@ impl<'a> From<JobDo<'a>> for JobInfo {
             last_modified_millis: job_do.last_modified_millis,
             create_time: job_do.create_time,
             retry_interval: job_do.retry_interval,
+            parent_job_id: job_do.parent_job_id,
+            child_job_ids: job_do.child_job_ids,
         }
     }
 }
@@ -260,6 +272,8 @@ pub struct JobParam {
     pub try_times: Option<u32>,
     pub update_time: Option<u64>,
     pub retry_interval: Option<u32>,
+    pub parent_job_id: Option<u64>,
+    pub child_job_ids: Option<Vec<u64>>,
 }
 
 impl JobParam {
@@ -325,6 +339,8 @@ impl From<JobParam> for JobInfo {
             last_modified_millis: job_param.update_time.unwrap_or(0),
             create_time: 0,
             retry_interval: job_param.interval_second.unwrap_or(0),
+            parent_job_id: job_param.parent_job_id.unwrap_or_default(),
+            child_job_ids: job_param.child_job_ids.unwrap_or_default(),
         }
     }
 }
@@ -361,6 +377,8 @@ pub struct JobInfoDto {
     pub last_modified_millis: u64,
     pub register_time: u64,
     pub retry_interval: u32,
+    pub parent_job_id: u64,
+    pub child_job_ids: Vec<u64>,
 }
 
 impl JobInfoDto {
@@ -387,6 +405,8 @@ impl JobInfoDto {
             last_modified_millis: job_info.last_modified_millis,
             register_time: job_info.create_time,
             retry_interval: job_info.retry_interval,
+            parent_job_id: job_info.parent_job_id,
+            child_job_ids: job_info.child_job_ids.clone(),
         }
     }
 }

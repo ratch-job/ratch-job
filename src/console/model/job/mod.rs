@@ -31,6 +31,8 @@ pub struct JobInfoParam {
     pub timeout_second: Option<u32>,
     pub try_times: Option<u32>,
     pub retry_interval: Option<u32>,
+    pub parent_job_id: Option<u64>,
+    pub child_job_ids: Option<Vec<u64>>,
 }
 
 impl JobInfoParam {
@@ -63,6 +65,8 @@ impl JobInfoParam {
             try_times: self.try_times,
             update_time: Some(now_millis()),
             retry_interval: self.retry_interval,
+            parent_job_id: self.parent_job_id,
+            child_job_ids: self.child_job_ids,
         }
     }
 }

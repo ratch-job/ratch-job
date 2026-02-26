@@ -40,6 +40,8 @@ pub struct JobDo<'a> {
     pub last_modified_millis: u64,
     pub create_time: u64,
     pub retry_interval: u32,
+    pub parent_job_id: u64,
+    pub child_job_ids: Vec<u64>,
 }
 
 impl<'a> MessageRead<'a> for JobDo<'a> {
@@ -68,6 +70,8 @@ impl<'a> MessageRead<'a> for JobDo<'a> {
                 Ok(152) => msg.last_modified_millis = r.read_uint64(bytes)?,
                 Ok(160) => msg.create_time = r.read_uint64(bytes)?,
                 Ok(168) => msg.retry_interval = r.read_uint32(bytes)?,
+                Ok(176) => msg.parent_job_id = r.read_uint64(bytes)?,
+                Ok(184) => msg.child_job_ids = r.read_packed(bytes, |r, bytes| r.read_uint64(bytes))?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -100,6 +104,8 @@ impl<'a> MessageWrite for JobDo<'a> {
         + if self.last_modified_millis == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.last_modified_millis) as u64) }
         + if self.create_time == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.create_time) as u64) }
         + if self.retry_interval == 0u32 { 0 } else { 2 + sizeof_varint(*(&self.retry_interval) as u64) }
+        + if self.parent_job_id == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.parent_job_id) as u64) }
+        + if self.child_job_ids.is_empty() { 0 } else { 2 + sizeof_len(self.child_job_ids.iter().map(|v| sizeof_varint(*v as u64)).sum::<usize>()) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -124,6 +130,8 @@ impl<'a> MessageWrite for JobDo<'a> {
         if self.last_modified_millis != 0u64 { w.write_with_tag(152, |w| w.write_uint64(*&self.last_modified_millis))?; }
         if self.create_time != 0u64 { w.write_with_tag(160, |w| w.write_uint64(*&self.create_time))?; }
         if self.retry_interval != 0u32 { w.write_with_tag(168, |w| w.write_uint32(*&self.retry_interval))?; }
+        if self.parent_job_id != 0u64 { w.write_with_tag(176, |w| w.write_uint64(*&self.parent_job_id))?; }
+        if !self.child_job_ids.is_empty() { w.write_with_tag(184, |w| w.write_packed(&self.child_job_ids, |w, v| w.write_uint64(*v)))?; }
         Ok(())
     }
 }

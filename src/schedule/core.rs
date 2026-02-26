@@ -340,6 +340,29 @@ impl ScheduleManager {
         );
     }
 
+    fn trigger_child_jobs(&mut self, child_job_ids: Vec<u64>) {
+        if let Some(task_manager) = self.task_manager.clone() {
+            let now_second = now_second_u32();
+            let mut trigger_list = Vec::new();
+            for child_job_id in child_job_ids {
+                if let Some(job_state) = self.job_run_state.get(&child_job_id) {
+                    let job = job_state.source_job.clone();
+                    if job.enable {
+                        log::info!("Triggering child job: {}, from parent job completion", child_job_id);
+                        trigger_list.push(TriggerItem::new(now_second, job));
+                    } else {
+                        log::warn!("Child job {} is disabled, skipping", child_job_id);
+                    }
+                } else {
+                    log::warn!("Child job {} not found in job_run_state, skipping", child_job_id);
+                }
+            }
+            if !trigger_list.is_empty() {
+                task_manager.do_send(TaskManagerReq::TriggerTaskList(trigger_list));
+            }
+        }
+    }
+
     fn task_callback(
         &mut self,
         params: Vec<TaskCallBackParam>,
@@ -348,6 +371,7 @@ impl ScheduleManager {
         let mut list = Vec::with_capacity(params.len());
         let mut metrics_info = UpdateTaskMetricsInfo::default();
         let mut metrics_request = vec![];
+        let mut child_jobs_to_trigger: Vec<u64> = Vec::new();
         for param in params {
             let update_time = param.task_date_time;
             let update_second = (update_time / 1000) as u32;
@@ -365,6 +389,18 @@ impl ScheduleManager {
                     ));
                     if param.success {
                         metrics_info.success_count += 1;
+                        // Check if this job has child jobs to trigger
+                        if let Some(job_state) = self.job_run_state.get(&task_instance.job_id) {
+                            let job = &job_state.source_job;
+                            if !job.child_job_ids.is_empty() {
+                                log::info!(
+                                    "Job {} completed successfully, triggering {} child jobs",
+                                    job.id,
+                                    job.child_job_ids.len()
+                                );
+                                child_jobs_to_trigger.extend(job.child_job_ids.clone());
+                            }
+                        }
                     } else {
                         metrics_info.fail_count += 1;
                     }
@@ -384,6 +420,10 @@ impl ScheduleManager {
                 self.finish_mark_group
                     .mark_finish(param.task_id, param.success);
             }
+        }
+        // Trigger child jobs
+        if !child_jobs_to_trigger.is_empty() && self.local_is_master {
+            self.trigger_child_jobs(child_jobs_to_trigger);
         }
         if !self.local_is_master {
             self.switch_finish_mark(now_second_u32());
