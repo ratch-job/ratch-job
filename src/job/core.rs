@@ -285,6 +285,20 @@ impl Handler<JobManagerReq> for JobManager {
                 };
                 return Ok(JobManagerResult::JobInfo(job_info));
             }
+            JobManagerReq::GetJobByTaskCode(task_code) => {
+                let job_info = self
+                    .job_map
+                    .values()
+                    .find(|job_wrap| {
+                        job_wrap
+                            .job
+                            .task_code
+                            .as_ref()
+                            .map_or(false, |c| c.as_str() == task_code.as_str())
+                    })
+                    .map(|job_wrap| job_wrap.job.clone());
+                return Ok(JobManagerResult::JobInfo(job_info));
+            }
             JobManagerReq::UpdateTask(task_info) => {
                 self.update_job_task(task_info);
             }

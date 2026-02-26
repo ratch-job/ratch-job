@@ -31,6 +31,7 @@ pub struct JobInfoParam {
     pub timeout_second: Option<u32>,
     pub try_times: Option<u32>,
     pub retry_interval: Option<u32>,
+    pub task_code: Option<Arc<String>>,
 }
 
 impl JobInfoParam {
@@ -63,6 +64,7 @@ impl JobInfoParam {
             try_times: self.try_times,
             update_time: Some(now_millis()),
             retry_interval: self.retry_interval,
+            task_code: self.task_code,
         }
     }
 }
@@ -71,6 +73,7 @@ impl JobInfoParam {
 #[serde(rename_all = "camelCase")]
 pub struct TriggerJobParam {
     pub job_id: Option<u64>,
+    pub task_code: Option<Arc<String>>,
     pub instance_addr: Option<Arc<String>>,
 }
 

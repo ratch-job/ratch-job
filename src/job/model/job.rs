@@ -37,6 +37,7 @@ pub struct JobInfo {
     pub last_modified_millis: u64,
     pub create_time: u64,
     pub retry_interval: u32,
+    pub task_code: Option<Arc<String>>,
 }
 
 impl JobInfo {
@@ -85,6 +86,13 @@ impl JobInfo {
         }
         if let Some(retry_interval) = job_param.retry_interval {
             self.retry_interval = retry_interval;
+        }
+        if let Some(task_code) = job_param.task_code {
+            self.task_code = if task_code.is_empty() {
+                None
+            } else {
+                Some(task_code)
+            };
         }
         if let Some(update_time) = job_param.update_time {
             self.last_modified_millis = update_time;
@@ -157,12 +165,18 @@ impl JobInfo {
             last_modified_millis: self.last_modified_millis,
             create_time: self.create_time,
             retry_interval: self.retry_interval,
+            task_code: Cow::Borrowed(self.task_code.as_deref().unwrap_or("")),
         }
     }
 }
 
 impl<'a> From<JobDo<'a>> for JobInfo {
     fn from(job_do: JobDo<'a>) -> Self {
+        let task_code = if job_do.task_code.is_empty() {
+            None
+        } else {
+            Some(Arc::new(job_do.task_code.to_string()))
+        };
         JobInfo {
             id: job_do.id,
             enable: job_do.enable,
@@ -186,6 +200,7 @@ impl<'a> From<JobDo<'a>> for JobInfo {
             last_modified_millis: job_do.last_modified_millis,
             create_time: job_do.create_time,
             retry_interval: job_do.retry_interval,
+            task_code,
         }
     }
 }
@@ -260,6 +275,7 @@ pub struct JobParam {
     pub try_times: Option<u32>,
     pub update_time: Option<u64>,
     pub retry_interval: Option<u32>,
+    pub task_code: Option<Arc<String>>,
 }
 
 impl JobParam {
@@ -325,6 +341,7 @@ impl From<JobParam> for JobInfo {
             last_modified_millis: job_param.update_time.unwrap_or(0),
             create_time: 0,
             retry_interval: job_param.interval_second.unwrap_or(0),
+            task_code: job_param.task_code.filter(|s| !s.is_empty()),
         }
     }
 }
@@ -361,6 +378,7 @@ pub struct JobInfoDto {
     pub last_modified_millis: u64,
     pub register_time: u64,
     pub retry_interval: u32,
+    pub task_code: Option<Arc<String>>,
 }
 
 impl JobInfoDto {
@@ -387,6 +405,7 @@ impl JobInfoDto {
             last_modified_millis: job_info.last_modified_millis,
             register_time: job_info.create_time,
             retry_interval: job_info.retry_interval,
+            task_code: job_info.task_code.clone(),
         }
     }
 }
