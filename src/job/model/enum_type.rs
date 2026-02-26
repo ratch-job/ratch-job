@@ -20,7 +20,7 @@ impl ScheduleType {
         match glue_type {
             "CRON" => ScheduleType::Cron,
             "INTERVAL" => ScheduleType::Interval,
-            //"DELAY" => ScheduleType::Delay,
+            "DELAY" => ScheduleType::Delay,
             _ => ScheduleType::None,
         }
     }
