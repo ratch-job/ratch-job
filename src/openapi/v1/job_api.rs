@@ -163,3 +163,81 @@ pub(crate) async fn query_job_list(
         ))
     }
 }
+
+/// 导出任务列表（JSON 格式）
+pub(crate) async fn export_jobs(
+    share_data: Data<Arc<ShareData>>,
+    web::Query(request): web::Query<JobQueryListRequest>,
+) -> impl Responder {
+    let mut param = request.to_param();
+    param.offset = 0;
+    param.limit = 0xffff_ffff;
+    if let Ok(Ok(JobManagerResult::JobPageInfo(_total_count, list))) = share_data
+        .job_manager
+        .send(JobManagerReq::QueryJob(param))
+        .await
+    {
+        HttpResponse::Ok()
+            .insert_header(("Content-Disposition", "attachment; filename=\"jobs.json\""))
+            .json(ApiResult::success(Some(list)))
+    } else {
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("export_jobs error".to_string()),
+        ))
+    }
+}
+
+/// 导入任务列表（JSON 格式）
+pub(crate) async fn import_jobs(
+    share_data: Data<Arc<ShareData>>,
+    web::Json(params): web::Json<Vec<JobParam>>,
+) -> impl Responder {
+    let mut success_count = 0u64;
+    let mut fail_count = 0u64;
+    let mut errors: Vec<String> = Vec::new();
+
+    for mut param in params {
+        // 为每个导入的任务分配新 id
+        match share_data
+            .sequence_manager
+            .send(SequenceRequest::GetNextId(SEQ_JOB_ID.clone()))
+            .await
+        {
+            Ok(Ok(SequenceResult::NextId(id))) => {
+                param.id = Some(id);
+                param.update_time = Some(now_millis());
+                match share_data
+                    .raft_request_route
+                    .request(ClientRequest::JobReq {
+                        req: JobManagerRaftReq::AddJob(param),
+                    })
+                    .await
+                {
+                    Ok(_) => success_count += 1,
+                    Err(e) => {
+                        fail_count += 1;
+                        errors.push(format!("add job error: {}", e));
+                    }
+                }
+            }
+            _ => {
+                fail_count += 1;
+                errors.push("get job id error".to_string());
+            }
+        }
+    }
+
+    let msg = format!(
+        "import done: {} success, {} failed",
+        success_count, fail_count
+    );
+    if fail_count > 0 {
+        HttpResponse::Ok().json(ApiResult::<String>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some(format!("{}, errors: {:?}", msg, errors)),
+        ))
+    } else {
+        HttpResponse::Ok().json(ApiResult::success(Some(msg)))
+    }
+}
