@@ -9,23 +9,26 @@ use mime_guess::from_path;
 use ratchjob_web_dist_wrap::get_embedded_file;
 use std::sync::Arc;
 
-fn handle_embedded_file(path: &str) -> HttpResponse {
+fn handle_embedded_file_inner(path: &str, cache: bool) -> HttpResponse {
     match get_embedded_file(path) {
-        Some(content) => HttpResponse::Ok()
-            .content_type(from_path(path).first_or_octet_stream().as_ref())
-            .body(content.data.into_owned()),
+        Some(content) => {
+            let mut resp = HttpResponse::Ok();
+            resp.content_type(from_path(path).first_or_octet_stream().as_ref());
+            if cache {
+                resp.insert_header(("Cache-Control", "max-age=604800, public"));
+            }
+            resp.body(content.data.into_owned())
+        }
         None => HttpResponse::NotFound().body("404 Not Found"),
     }
 }
 
+fn handle_embedded_file(path: &str) -> HttpResponse {
+    handle_embedded_file_inner(path, false)
+}
+
 fn handle_embedded_file_with_cache(path: &str) -> HttpResponse {
-    match get_embedded_file(path) {
-        Some(content) => HttpResponse::Ok()
-            .content_type(from_path(path).first_or_octet_stream().as_ref())
-            .insert_header(("Cache-Control", "max-age=604800, public"))
-            .body(content.data.into_owned()),
-        None => HttpResponse::NotFound().body("404 Not Found"),
-    }
+    handle_embedded_file_inner(path, true)
 }
 
 pub(crate) async fn index() -> impl Responder {
