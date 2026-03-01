@@ -255,7 +255,9 @@ impl Actor for CacheManager {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         log::info!("CacheManager actor started");
-        self.heartbeat(ctx);
+        ctx.run_later(std::time::Duration::from_millis(500), |act, ctx| {
+            act.heartbeat(ctx);
+        });
     }
 }
 

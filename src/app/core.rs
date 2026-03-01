@@ -384,7 +384,9 @@ impl Actor for AppManager {
 
     fn started(&mut self, ctx: &mut Context<Self>) {
         log::info!("AppManager started");
-        self.heartbeat(ctx);
+        ctx.run_later(std::time::Duration::from_millis(500), |act, ctx| {
+            act.heartbeat(ctx);
+        });
     }
 }
 
