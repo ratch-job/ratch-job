@@ -266,10 +266,10 @@ pub(crate) async fn trigger_job(
     web::Json(param): web::Json<TriggerJobParam>,
 ) -> impl Responder {
     let id = param.job_id.unwrap_or_default();
-    if id == 0 {
+    if id == 0 && param.task_code.is_none() {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
-            Some("trigger_job error,the job id is invalid".to_string()),
+            Some("trigger_job error,the job id and task_code are both invalid".to_string()),
         ));
     }
     let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
@@ -280,22 +280,42 @@ pub(crate) async fn trigger_job(
             Some("user session is invalid".to_string()),
         ));
     };
-    let job_info = if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) =
-        share_data.job_manager.send(JobManagerReq::GetJob(id)).await
-    {
-        if !app_privilege.check_permission(&job_info.app_name) {
+    let job_info = if id > 0 {
+        if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) =
+            share_data.job_manager.send(JobManagerReq::GetJob(id)).await
+        {
+            job_info
+        } else {
             return HttpResponse::Ok().json(ApiResult::<()>::error(
-                ERROR_CODE_NO_APP_PERMISSION.to_string(),
-                Some(format!("user no app permission:{}", &job_info.app_name)),
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some("query_job_info error".to_string()),
             ));
         }
-        job_info
+    } else if let Some(task_code) = param.task_code {
+        if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) = share_data
+            .job_manager
+            .send(JobManagerReq::GetJobByTaskCode(task_code))
+            .await
+        {
+            job_info
+        } else {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some("query_job_info by task_code error, job not found".to_string()),
+            ));
+        }
     } else {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
-            Some("query_job_info error".to_string()),
+            Some("trigger_job error,the job id and task_code are both invalid".to_string()),
         ));
     };
+    if !app_privilege.check_permission(&job_info.app_name) {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_NO_APP_PERMISSION.to_string(),
+            Some(format!("user no app permission:{}", &job_info.app_name)),
+        ));
+    }
     let task_item = TriggerItem::new_with_user(
         now_second_u32(),
         job_info,

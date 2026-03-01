@@ -1,5 +1,5 @@
-use crate::common::constant::SEQ_JOB_ID;
-use crate::common::datetime_utils::now_millis;
+use crate::common::constant::{EMPTY_ARC_STR, SEQ_JOB_ID};
+use crate::common::datetime_utils::{now_millis, now_second_u32};
 use crate::common::model::{ApiResult, PageResult};
 use crate::common::share_data::ShareData;
 use crate::console::model::job::JobQueryListRequest;
@@ -11,10 +11,20 @@ use crate::job::model::job::JobParam;
 use crate::openapi::xxljob::model::XxlApiResult;
 use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::sequence::{SequenceRequest, SequenceResult};
+use crate::task::model::actor_model::{TaskManagerReq, TriggerItem};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
+use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::sync::Arc;
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerJobParam {
+    pub job_id: Option<u64>,
+    pub task_code: Option<Arc<String>>,
+    pub instance_addr: Option<Arc<String>>,
+}
 
 async fn do_create_job(
     share_data: Data<Arc<ShareData>>,
@@ -160,6 +170,68 @@ pub(crate) async fn query_job_list(
         HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("query_job_list error".to_string()),
+        ))
+    }
+}
+
+pub(crate) async fn trigger_job(
+    share_data: Data<Arc<ShareData>>,
+    web::Json(param): web::Json<TriggerJobParam>,
+) -> impl Responder {
+    let id = param.job_id.unwrap_or_default();
+    if id == 0 && param.task_code.is_none() {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("trigger_job error,the job id and task_code are both invalid".to_string()),
+        ));
+    }
+    let job_info = if id > 0 {
+        if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) =
+            share_data.job_manager.send(JobManagerReq::GetJob(id)).await
+        {
+            job_info
+        } else {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some("query_job_info error".to_string()),
+            ));
+        }
+    } else if let Some(task_code) = param.task_code {
+        if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) = share_data
+            .job_manager
+            .send(JobManagerReq::GetJobByTaskCode(task_code))
+            .await
+        {
+            job_info
+        } else {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some("query_job_info by task_code error, job not found".to_string()),
+            ));
+        }
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("trigger_job error,the job id and task_code are both invalid".to_string()),
+        ));
+    };
+    let task_item = TriggerItem::new_with_user(
+        now_second_u32(),
+        job_info,
+        param.instance_addr.unwrap_or(EMPTY_ARC_STR.clone()),
+        EMPTY_ARC_STR.clone(),
+    );
+    log::info!("trigger_job task_item:{:?}", &task_item);
+    if let Ok(Ok(_)) = share_data
+        .task_manager
+        .send(TaskManagerReq::TriggerTaskList(vec![task_item]))
+        .await
+    {
+        HttpResponse::Ok().json(ApiResult::success(Some(())))
+    } else {
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("trigger_job error".to_string()),
         ))
     }
 }
