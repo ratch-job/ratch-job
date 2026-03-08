@@ -310,6 +310,127 @@ curl -X GET "http://127.0.0.1:8725/ratch/v1/job/list?namespace=xxl&pageNo=1&page
 
 ---
 
+## 6. 查询任务执行记录列表
+
+**接口地址：** `GET /ratch/v1/job/task/list`
+
+**接口描述：** 分页查询指定任务的执行记录
+
+### 请求参数
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| jobId | number | 是 | 任务ID |
+| pageNo | number | 否 | 页码，默认1 |
+| pageSize | number | 否 | 每页大小，默认10 |
+
+### 响应参数
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data | object | 分页结果对象 |
+| data.totalCount | number | 总记录数 |
+| data.list | array | 任务执行记录列表 |
+| data.list[].taskId | number | 任务ID |
+| data.list[].jobId | number | 任务ID |
+| data.list[].triggerTime | number | 触发时间（Unix时间戳，秒） |
+| data.list[].instanceAddr | string | 执行实例地址 |
+| data.list[].triggerMessage | string | 触发消息 |
+| data.list[].status | string | 任务状态：Init、Running、Success、Fail |
+| data.list[].finishTime | number | 完成时间（Unix时间戳，秒） |
+| data.list[].callbackMessage | string | 回调消息 |
+| data.list[].executionTime | number | 执行耗时（秒） |
+| data.list[].triggerFrom | string | 触发来源 |
+| data.list[].tryTimes | number | 重试次数 |
+| data.list[].tryLogs | array | 重试记录列表 |
+| data.list[].tryLogs[].executionTime | number | 执行时间（秒） |
+| data.list[].tryLogs[].addr | string | 执行地址 |
+| data.list[].retryInterval | number | 重试间隔（秒） |
+| data.list[].retryCount | number | 已重试次数 |
+| data.list[].timeoutSecond | number | 超时时间（秒） |
+| success | boolean | 是否成功 |
+| code | string | 错误码 |
+| message | string | 错误信息 |
+
+### 示例
+
+```sh
+curl -X GET "http://127.0.0.1:8725/ratch/v1/job/task/list?jobId=2&pageNo=1&pageSize=10"
+```
+
+响应信息为:
+
+```json
+{"data":{"totalCount":1,"list":[{"taskId":1001,"jobId":2,"triggerTime":1743353820,"instanceAddr":"192.168.1.100:9999","triggerMessage":"","status":"Success","finishTime":1743353825,"callbackMessage":"","executionTime":5,"triggerFrom":"SYSTEM","tryTimes":3,"tryLogs":[],"retryInterval":10,"retryCount":0,"timeoutSecond":60}]},"success":true,"code":null,"message":null}
+```
+
+---
+
+## 7. 查询最新任务历史记录
+
+**接口地址：** `GET /ratch/v1/job/task/latest-history`
+
+**接口描述：** 分页查询指定任务的最新历史执行记录
+
+### 请求参数
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| jobId | number | 是 | 任务ID |
+| pageNo | number | 否 | 页码，默认1 |
+| pageSize | number | 否 | 每页大小，默认10 |
+
+### 响应参数
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data | object | 分页结果对象 |
+| data.totalCount | number | 总记录数 |
+| data.list | array | 任务执行记录列表 |
+| data.list[].taskId | number | 任务ID |
+| data.list[].jobId | number | 任务ID |
+| data.list[].triggerTime | number | 触发时间（Unix时间戳，秒） |
+| data.list[].instanceAddr | string | 执行实例地址 |
+| data.list[].triggerMessage | string | 触发消息 |
+| data.list[].status | string | 任务状态：Init、Running、Success、Fail |
+| data.list[].finishTime | number | 完成时间（Unix时间戳，秒） |
+| data.list[].callbackMessage | string | 回调消息 |
+| data.list[].executionTime | number | 执行耗时（秒） |
+| data.list[].triggerFrom | string | 触发来源 |
+| data.list[].tryTimes | number | 重试次数 |
+| data.list[].tryLogs | array | 重试记录列表 |
+| data.list[].tryLogs[].executionTime | number | 执行时间（秒） |
+| data.list[].tryLogs[].addr | string | 执行地址 |
+| data.list[].retryInterval | number | 重试间隔（秒） |
+| data.list[].retryCount | number | 已重试次数 |
+| data.list[].timeoutSecond | number | 超时时间（秒） |
+| success | boolean | 是否成功 |
+| code | string | 错误码 |
+| message | string | 错误信息 |
+
+### 示例
+
+```sh
+curl -X GET "http://127.0.0.1:8725/ratch/v1/job/task/latest-history?jobId=2&pageNo=1&pageSize=10"
+```
+
+响应信息为:
+
+```json
+{"data":{"totalCount":1,"list":[{"taskId":1001,"jobId":2,"triggerTime":1743353820,"instanceAddr":"192.168.1.100:9999","triggerMessage":"","status":"Success","finishTime":1743353825,"callbackMessage":"","executionTime":5,"triggerFrom":"SYSTEM","tryTimes":3,"tryLogs":[],"retryInterval":10,"retryCount":0,"timeoutSecond":60}]},"success":true,"code":null,"message":null}
+```
+
+---
+
+## 任务状态说明 (status)
+
+- `Init`: 初始化状态
+- `Running`: 运行中
+- `Success`: 执行成功
+- `Fail`: 执行失败
+
+---
+
 ## 错误码说明
 
 - `200`: 成功
