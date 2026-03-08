@@ -21,7 +21,6 @@ jobs:
         target:
           - x86_64-unknown-linux-musl
           - x86_64-unknown-linux-gnu
-          - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
           - i686-pc-windows-msvc
           - aarch64-pc-windows-msvc
@@ -33,9 +32,6 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             name: ratchjob-x86_64-unknown-linux-gnu-${GITHUB_REF#refs/*/}.tar.gz
-          - target: x86_64-apple-darwin
-            os: macos-13
-            name: ratchjob-x86_64-apple-darwin-${GITHUB_REF#refs/*/}.tar.gz
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             name: ratchjob-x86_64-pc-windows-msvc-${GITHUB_REF#refs/*/}.zip
