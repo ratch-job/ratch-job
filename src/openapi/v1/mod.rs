@@ -37,6 +37,13 @@ pub fn v1_api_config(config: &mut ServiceConfig) {
             .service(web::resource("/job/list").route(web::get().to(job_api::query_job_list)))
             .service(web::resource("/job/export").route(web::get().to(job_api::export_jobs)))
             .service(web::resource("/job/import").route(web::post().to(job_api::import_jobs)))
+            .service(
+                web::resource("/job/task/list").route(web::get().to(job_api::query_job_task_list)),
+            )
+            .service(
+                web::resource("/job/task/latest-history")
+                    .route(web::get().to(job_api::query_latest_task_history)),
+            )
             .service(web::resource("/raft/metrics").route(web::get().to(raft_api::metrics)))
             .service(web::resource("/about").route(web::get().to(about_info))),
     );

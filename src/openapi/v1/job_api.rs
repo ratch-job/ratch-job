@@ -8,8 +8,10 @@ use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
 };
 use crate::job::model::job::JobParam;
+use crate::openapi::v1::model::job_model::{JobTaskHistoryRequest, JobTaskListRequest};
 use crate::openapi::xxljob::model::XxlApiResult;
 use crate::raft::store::{ClientRequest, ClientResponse};
+use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
 use crate::sequence::{SequenceRequest, SequenceResult};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
@@ -239,5 +241,43 @@ pub(crate) async fn import_jobs(
         ))
     } else {
         HttpResponse::Ok().json(ApiResult::success(Some(msg)))
+    }
+}
+
+pub(crate) async fn query_job_task_list(
+    share_data: Data<Arc<ShareData>>,
+    web::Query(request): web::Query<JobTaskListRequest>,
+) -> impl Responder {
+    let param = request.to_param();
+    if let Ok(Ok(JobManagerResult::JobTaskLogPageInfo(total_count, list))) = share_data
+        .job_manager
+        .send(JobManagerReq::QueryJobTaskLog(param))
+        .await
+    {
+        HttpResponse::Ok().json(ApiResult::success(Some(PageResult { total_count, list })))
+    } else {
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("query_job_task_list error".to_string()),
+        ))
+    }
+}
+
+pub(crate) async fn query_latest_task_history(
+    share_data: Data<Arc<ShareData>>,
+    web::Query(request): web::Query<JobTaskHistoryRequest>,
+) -> impl Responder {
+    let param = request.to_param();
+    if let Ok(Ok(ScheduleManagerResult::JobTaskLogPageInfo(total_count, list))) = share_data
+        .schedule_manager
+        .send(ScheduleManagerReq::QueryJobTaskLog(param))
+        .await
+    {
+        HttpResponse::Ok().json(ApiResult::success(Some(PageResult { total_count, list })))
+    } else {
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("query_latest_task_history error".to_string()),
+        ))
     }
 }
