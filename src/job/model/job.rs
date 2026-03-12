@@ -42,6 +42,9 @@ pub struct JobInfo {
 
 impl JobInfo {
     pub fn update_param(&mut self, job_param: JobParam) {
+        if let Some(key) = job_param.key {
+            self.key = key;
+        }
         if let Some(description) = job_param.description {
             self.description = description;
         }

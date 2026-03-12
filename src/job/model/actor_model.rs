@@ -1,5 +1,5 @@
 use crate::job::job_index::JobQueryParam;
-use crate::job::model::job::{JobInfo, JobInfoDto, JobParam, JobTaskLogQueryParam};
+use crate::job::model::job::{JobInfo, JobInfoDto, JobKey, JobParam, JobTaskLogQueryParam};
 use crate::task::model::task::JobTaskInfo;
 use actix::Message;
 use serde::{Deserialize, Serialize};
@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub enum JobManagerReq {
     UpdateTask(Arc<JobTaskInfo>),
     GetJob(u64),
+    GetJobIdByKey(JobKey),
     QueryJob(JobQueryParam),
     QueryJobTaskLog(JobTaskLogQueryParam),
 }
@@ -17,6 +18,7 @@ pub enum JobManagerReq {
 #[derive(Debug, Clone)]
 pub enum JobManagerResult {
     JobInfo(Option<Arc<JobInfo>>),
+    JobId(Option<u64>),
     JobPageInfo(usize, Vec<JobInfoDto>),
     JobTaskLogPageInfo(usize, Vec<Arc<JobTaskInfo>>),
     None,

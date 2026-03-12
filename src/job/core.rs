@@ -6,7 +6,9 @@ use crate::job::job_index::JobQueryParam;
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
 };
-use crate::job::model::job::{JobInfo, JobInfoDto, JobParam, JobTaskLogQueryParam, JobWrap};
+use crate::job::model::job::{
+    JobInfo, JobInfoDto, JobKey, JobParam, JobTaskLogQueryParam, JobWrap,
+};
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse};
 use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
@@ -26,6 +28,7 @@ use std::sync::Arc;
 pub struct JobManager {
     pub(crate) job_map: BTreeMap<u64, JobWrap>,
     schedule_manager: Option<Addr<ScheduleManager>>,
+    job_key_map: HashMap<JobKey, u64>,
     job_task_log_limit: usize,
 }
 
@@ -33,6 +36,7 @@ impl JobManager {
     pub fn new() -> Self {
         JobManager {
             job_map: BTreeMap::new(),
+            job_key_map: HashMap::new(),
             schedule_manager: None,
             job_task_log_limit: 100,
         }
@@ -55,6 +59,10 @@ impl JobManager {
         job_info.create_time = now;
         let value = Arc::new(job_info);
         self.job_map.insert(value.id, JobWrap::new(value.clone()));
+        if !value.key.is_empty() {
+            let job_key = value.build_job_key();
+            self.job_key_map.insert(job_key, value.id);
+        }
         if let Some(schedule_manager) = self.schedule_manager.as_ref() {
             schedule_manager.do_send(ScheduleManagerReq::UpdateJob(value.clone()));
         }
@@ -68,10 +76,24 @@ impl JobManager {
         }
         if let Some(job_wrap) = self.job_map.get_mut(&id) {
             let job_info = &job_wrap.job;
+            let old_job_key = if job_info.key.is_empty() {
+                None
+            } else {
+                Some(job_info.build_job_key())
+            };
             let mut new_job = job_info.as_ref().clone();
             new_job.update_param(job_param);
             job_info.check_valid()?;
             let value = Arc::new(new_job);
+
+            if let Some(old_key) = old_job_key {
+                self.job_key_map.remove(&old_key);
+            }
+            if !value.key.is_empty() {
+                let new_job_key = value.build_job_key();
+                self.job_key_map.insert(new_job_key, value.id);
+            }
+
             job_wrap.job = value.clone();
             if let Some(schedule_manager) = self.schedule_manager.as_ref() {
                 schedule_manager.do_send(ScheduleManagerReq::UpdateJob(value.clone()));
@@ -83,6 +105,12 @@ impl JobManager {
     }
 
     fn remove_job(&mut self, id: u64) {
+        if let Some(job_wrap) = self.job_map.get(&id) {
+            if !job_wrap.job.key.is_empty() {
+                let job_key = job_wrap.job.build_job_key();
+                self.job_key_map.remove(&job_key);
+            }
+        }
         self.job_map.remove(&id);
         if let Some(schedule_manager) = self.schedule_manager.as_ref() {
             schedule_manager.do_send(ScheduleManagerReq::RemoveJob(id));
@@ -91,9 +119,21 @@ impl JobManager {
 
     fn do_update_job(&mut self, job: Arc<JobInfo>) {
         if let Some(job_wrap) = self.job_map.get_mut(&job.id) {
-            job_wrap.job = job;
+            if !job_wrap.job.key.is_empty() {
+                let old_job_key = job_wrap.job.build_job_key();
+                self.job_key_map.remove(&old_job_key);
+            }
+            job_wrap.job = job.clone();
+            if !job.key.is_empty() {
+                let new_job_key = job.build_job_key();
+                self.job_key_map.insert(new_job_key, job.id);
+            }
         } else {
             self.job_map.insert(job.id, JobWrap::new(job.clone()));
+            if !job.key.is_empty() {
+                let job_key = job.build_job_key();
+                self.job_key_map.insert(job_key, job.id);
+            }
             if let Some(schedule_manager) = self.schedule_manager.as_ref() {
                 schedule_manager.do_send(ScheduleManagerReq::UpdateJob(job));
             }
@@ -284,6 +324,10 @@ impl Handler<JobManagerReq> for JobManager {
                     None
                 };
                 return Ok(JobManagerResult::JobInfo(job_info));
+            }
+            JobManagerReq::GetJobIdByKey(job_key) => {
+                let job_id = self.job_key_map.get(&job_key).copied();
+                return Ok(JobManagerResult::JobId(job_id));
             }
             JobManagerReq::UpdateTask(task_info) => {
                 self.update_job_task(task_info);
