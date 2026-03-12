@@ -20,6 +20,7 @@ pub struct JobInfo {
     pub enable: bool,
     pub app_name: Arc<String>,
     pub namespace: Arc<String>,
+    pub key: Arc<String>,
     pub description: Arc<String>,
     pub schedule_type: ScheduleType,
     pub cron_value: Arc<String>,
@@ -120,6 +121,14 @@ impl JobInfo {
         }
     }
 
+    pub fn build_job_key(&self) -> JobKey {
+        JobKey::new_by_arc(
+            self.namespace.clone(),
+            self.app_name.clone(),
+            self.key.clone(),
+        )
+    }
+
     pub fn is_valid(&self) -> bool {
         if self.id == 0 || self.namespace.is_empty() || self.app_name.is_empty() {
             false
@@ -140,6 +149,7 @@ impl JobInfo {
             enable: self.enable,
             app_name: Cow::Borrowed(&self.app_name),
             namespace: Cow::Borrowed(&self.namespace),
+            job_key: Cow::Borrowed(&self.key),
             description: Cow::Borrowed(&self.description),
             schedule_type: Cow::Borrowed(self.schedule_type.to_str()),
             cron_value: Cow::Borrowed(&self.cron_value),
@@ -168,6 +178,7 @@ impl<'a> From<JobDo<'a>> for JobInfo {
             enable: job_do.enable,
             app_name: Arc::new(job_do.app_name.to_string()),
             namespace: Arc::new(job_do.namespace.to_string()),
+            key: Arc::new(job_do.job_key.to_string()),
             description: Arc::new(job_do.description.to_string()),
             schedule_type: ScheduleType::from_str(&job_do.schedule_type),
             cron_value: Arc::new(job_do.cron_value.to_string()),
@@ -238,6 +249,49 @@ impl JobWrap {
     }
 }
 
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct JobKey {
+    pub namespace: Arc<String>,
+    pub app_name: Arc<String>,
+    pub job_key: Arc<String>,
+}
+
+impl JobKey {
+    pub fn new(namespace: &str, app_name: &str, job_key: &str) -> JobKey {
+        JobKey {
+            namespace: Arc::new(namespace.to_owned()),
+            app_name: Arc::new(app_name.to_owned()),
+            job_key: Arc::new(job_key.to_owned()),
+        }
+    }
+
+    pub fn new_by_arc(
+        namespace: Arc<String>,
+        app_name: Arc<String>,
+        job_key: Arc<String>,
+    ) -> JobKey {
+        JobKey {
+            namespace,
+            app_name,
+            job_key,
+        }
+    }
+
+    ///
+    /// 是否合法的key
+    /// 暂时只用于接口层面判断,以支持对部分场景不校验
+    ///
+    pub fn is_valid(&self) -> anyhow::Result<()> {
+        if self.job_key.is_empty() {
+            return Err(anyhow::anyhow!(
+                "the job_key is invalid : {}",
+                self.job_key.as_str()
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobParam {
@@ -245,6 +299,7 @@ pub struct JobParam {
     pub enable: Option<bool>,
     pub app_name: Option<Arc<String>>,
     pub namespace: Option<Arc<String>>,
+    pub key: Option<Arc<String>>,
     pub description: Option<Arc<String>>,
     pub schedule_type: Option<ScheduleType>,
     pub cron_value: Option<Arc<String>>,
@@ -302,6 +357,7 @@ impl From<JobParam> for JobInfo {
             enable: job_param.enable.unwrap_or(true),
             app_name: job_param.app_name.unwrap_or_default(),
             namespace: job_param.namespace.unwrap_or_default(),
+            key: job_param.key.unwrap_or_default(),
             handle_name: job_param.handle_name.unwrap_or(EMPTY_ARC_STR.clone()),
             description: job_param.description.unwrap_or(EMPTY_ARC_STR.clone()),
             schedule_type: job_param.schedule_type.unwrap_or(ScheduleType::None),
