@@ -1,4 +1,4 @@
-use crate::job::model::job::JobTaskLogQueryParam;
+use crate::job::model::job::{JobKey, JobTaskLogQueryParam};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -48,5 +48,27 @@ impl JobTaskHistoryRequest {
             offset,
             limit,
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct JobKeyQueryRequest {
+    pub namespace: Option<String>,
+    pub app_name: Option<String>,
+    pub job_key: Option<String>,
+}
+
+impl JobKeyQueryRequest {
+    pub fn to_job_key(self) -> Option<JobKey> {
+        let namespace = self.namespace?;
+        let app_name = self.app_name?;
+        let job_key = self.job_key?;
+
+        if namespace.is_empty() || app_name.is_empty() || job_key.is_empty() {
+            return None;
+        }
+
+        Some(JobKey::new(&namespace, &app_name, &job_key))
     }
 }

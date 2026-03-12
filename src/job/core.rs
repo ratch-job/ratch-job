@@ -326,6 +326,9 @@ impl Handler<JobManagerReq> for JobManager {
                 return Ok(JobManagerResult::JobInfo(job_info));
             }
             JobManagerReq::GetJobIdByKey(job_key) => {
+                if job_key.job_key.is_empty() {
+                    return Ok(JobManagerResult::JobId(None));
+                }
                 let job_id = self.job_key_map.get(&job_key).copied();
                 return Ok(JobManagerResult::JobId(job_id));
             }

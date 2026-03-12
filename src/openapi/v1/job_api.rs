@@ -8,7 +8,9 @@ use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
 };
 use crate::job::model::job::JobParam;
-use crate::openapi::v1::model::job_model::{JobTaskHistoryRequest, JobTaskListRequest};
+use crate::openapi::v1::model::job_model::{
+    JobKeyQueryRequest, JobTaskHistoryRequest, JobTaskListRequest,
+};
 use crate::openapi::xxljob::model::XxlApiResult;
 use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
@@ -279,5 +281,69 @@ pub(crate) async fn query_latest_task_history(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("query_latest_task_history error".to_string()),
         ))
+    }
+}
+
+pub(crate) async fn get_job_id_by_key(
+    share_data: Data<Arc<ShareData>>,
+    web::Query(request): web::Query<JobKeyQueryRequest>,
+) -> impl Responder {
+    match request.to_job_key() {
+        Some(job_key) => {
+            if let Ok(Ok(JobManagerResult::JobId(job_id))) = share_data
+                .job_manager
+                .send(JobManagerReq::GetJobIdByKey(job_key))
+                .await
+            {
+                HttpResponse::Ok().json(ApiResult::success(job_id))
+            } else {
+                let error_msg = "get_job_id_by_key error";
+                log::error!("{}", error_msg);
+                HttpResponse::Ok().json(ApiResult::<u64>::error(
+                    ERROR_CODE_SYSTEM_ERROR.to_string(),
+                    Some(error_msg.to_string()),
+                ))
+            }
+        }
+        None => HttpResponse::Ok().json(ApiResult::<u64>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("invalid job key parameters".to_string()),
+        )),
+    }
+}
+
+pub(crate) async fn get_job_info_by_key(
+    share_data: Data<Arc<ShareData>>,
+    web::Query(request): web::Query<JobKeyQueryRequest>,
+) -> impl Responder {
+    match request.to_job_key() {
+        Some(job_key) => {
+            if let Ok(Ok(JobManagerResult::JobId(Some(job_id)))) = share_data
+                .job_manager
+                .send(JobManagerReq::GetJobIdByKey(job_key))
+                .await
+            {
+                if let Ok(Ok(JobManagerResult::JobInfo(job_info))) = share_data
+                    .job_manager
+                    .send(JobManagerReq::GetJob(job_id))
+                    .await
+                {
+                    HttpResponse::Ok().json(ApiResult::success(job_info))
+                } else {
+                    let error_msg = format!("get_job_info error, job_id:{}", job_id);
+                    log::error!("{}", &error_msg);
+                    HttpResponse::Ok().json(ApiResult::<()>::error(
+                        ERROR_CODE_SYSTEM_ERROR.to_string(),
+                        Some(error_msg),
+                    ))
+                }
+            } else {
+                HttpResponse::Ok().json(ApiResult::<()>::success(None))
+            }
+        }
+        None => HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("invalid job key parameters".to_string()),
+        )),
     }
 }
