@@ -5,11 +5,13 @@ use crate::common::share_data::ShareData;
 use crate::console::model::job::{
     JobInfoParam, JobQueryListRequest, JobTaskLogQueryListRequest, TriggerJobParam,
 };
-use crate::console::v1::{ERROR_CODE_NO_APP_PERMISSION, ERROR_CODE_SYSTEM_ERROR};
+use crate::console::v1::{
+    ERROR_CODE_JOB_KEY_DUPLICATE, ERROR_CODE_NO_APP_PERMISSION, ERROR_CODE_SYSTEM_ERROR,
+};
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
 };
-use crate::job::model::job::JobParam;
+use crate::job::model::job::{JobKey, JobParam};
 use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
 use crate::sequence::{SequenceRequest, SequenceResult};
@@ -93,6 +95,34 @@ async fn do_create_job(
     mut param: JobParam,
 ) -> anyhow::Result<HttpResponse> {
     param.check_valid()?;
+
+    if param.key.is_none() || param.key.as_ref().unwrap().is_empty() {
+        param.key = Some(Arc::new(uuid::Uuid::new_v4().to_string().replace('-', "")));
+    }
+
+    if let Some(ref key) = param.key {
+        if !key.is_empty() {
+            let job_key = JobKey::new(
+                &param.namespace.as_ref().unwrap(),
+                &param.app_name.as_ref().unwrap(),
+                key,
+            );
+
+            if let Ok(Ok(JobManagerResult::JobId(Some(_)))) = share_data
+                .job_manager
+                .send(JobManagerReq::GetJobIdByKey(job_key))
+                .await
+            {
+                return Err(anyhow::anyhow!(
+                    "job key already exists: namespace={}, app_name={}, key={}",
+                    param.namespace.as_ref().unwrap(),
+                    param.app_name.as_ref().unwrap(),
+                    key
+                ));
+            }
+        }
+    }
+
     if let SequenceResult::NextId(id) = share_data
         .sequence_manager
         .send(SequenceRequest::GetNextId(SEQ_JOB_ID.clone()))
@@ -182,7 +212,8 @@ pub(crate) async fn update_job(
             ));
         }
     }
-    if let Ok(Ok(JobManagerResult::JobInfo(Some(info)))) =
+
+    let original_job_info = if let Ok(Ok(JobManagerResult::JobInfo(Some(info)))) =
         share_data.job_manager.send(JobManagerReq::GetJob(id)).await
     {
         if !app_privilege.check_permission(&info.app_name) {
@@ -191,7 +222,50 @@ pub(crate) async fn update_job(
                 Some(format!("user no app permission:{}", &info.app_name)),
             ));
         }
+        Some(info)
+    } else {
+        None
+    };
+
+    if let Some(ref key) = param.key {
+        if !key.is_empty() {
+            let (namespace, app_name) = match (&param.namespace, &param.app_name) {
+                (Some(ns), Some(app)) => (ns.clone(), app.clone()),
+                _ => {
+                    if let Some(ref info) = original_job_info {
+                        (info.namespace.clone(), info.app_name.clone())
+                    } else {
+                        return HttpResponse::Ok().json(ApiResult::<()>::error(
+                            ERROR_CODE_SYSTEM_ERROR.to_string(),
+                            Some(
+                                "update_job error,namespace/app_name is required when key is set"
+                                    .to_string(),
+                            ),
+                        ));
+                    }
+                }
+            };
+
+            let job_key = JobKey::new(&namespace, &app_name, key);
+
+            if let Ok(Ok(JobManagerResult::JobId(Some(existing_id)))) = share_data
+                .job_manager
+                .send(JobManagerReq::GetJobIdByKey(job_key))
+                .await
+            {
+                if existing_id != id {
+                    return HttpResponse::Ok().json(ApiResult::<()>::error(
+                        ERROR_CODE_JOB_KEY_DUPLICATE.to_string(),
+                        Some(format!(
+                            "job key already exists: namespace={}, app_name={}, key={}",
+                            namespace, app_name, key
+                        )),
+                    ));
+                }
+            }
+        }
     }
+
     if let Err(e) = param.check_valid() {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),

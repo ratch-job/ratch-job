@@ -7,7 +7,7 @@ use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
 };
-use crate::job::model::job::JobParam;
+use crate::job::model::job::{JobKey, JobParam};
 use crate::openapi::v1::model::job_model::{
     JobKeyQueryRequest, JobTaskHistoryRequest, JobTaskListRequest,
 };
@@ -30,6 +30,39 @@ async fn do_create_job(
         .await??
     {
         param.id = Some(id);
+
+        if param.key.is_none() || param.key.as_ref().unwrap().is_empty() {
+            param.key = Some(Arc::new(uuid::Uuid::new_v4().to_string().replace('-', "")));
+        }
+
+        if let Some(ref key) = param.key {
+            if !key.is_empty() {
+                let namespace = param
+                    .namespace
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("namespace is required when key is set"))?;
+                let app_name = param
+                    .app_name
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("app_name is required when key is set"))?;
+
+                let job_key = JobKey::new(namespace, app_name, key);
+
+                if let Ok(Ok(JobManagerResult::JobId(Some(_)))) = share_data
+                    .job_manager
+                    .send(JobManagerReq::GetJobIdByKey(job_key))
+                    .await
+                {
+                    return Err(anyhow::anyhow!(
+                        "job key already exists: namespace={}, app_name={}, key={}",
+                        namespace,
+                        app_name,
+                        key
+                    ));
+                }
+            }
+        }
+
         param.update_time = Some(now_millis());
         if let ClientResponse::JobResp {
             resp: JobManagerRaftResult::JobInfo(job),
@@ -69,6 +102,52 @@ async fn do_update_job(
     share_data: Data<Arc<ShareData>>,
     mut param: JobParam,
 ) -> anyhow::Result<HttpResponse> {
+    let id = param.id.unwrap_or_default();
+    if id == 0 {
+        return Err(anyhow::anyhow!("job id is null"));
+    }
+
+    let original_job_info = if param.namespace.is_none() || param.app_name.is_none() {
+        match share_data.job_manager.send(JobManagerReq::GetJob(id)).await {
+            Ok(Ok(JobManagerResult::JobInfo(Some(info)))) => Some(info),
+            _ => return Err(anyhow::anyhow!("job not found, id={}", id)),
+        }
+    } else {
+        None
+    };
+
+    if let Some(ref key) = param.key {
+        if !key.is_empty() {
+            let (namespace, app_name) = match (&param.namespace, &param.app_name) {
+                (Some(ns), Some(app)) => (ns.clone(), app.clone()),
+                _ => {
+                    let info = original_job_info
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("namespace/app_name is required"))?;
+                    (info.namespace.clone(), info.app_name.clone())
+                }
+            };
+
+            let job_key = JobKey::new(&namespace, &app_name, key);
+
+            if let Ok(Ok(JobManagerResult::JobId(Some(existing_id)))) = share_data
+                .job_manager
+                .send(JobManagerReq::GetJobIdByKey(job_key))
+                .await
+            {
+                if existing_id != id {
+                    return Err(anyhow::anyhow!(
+                        "job key already exists: namespace={}, app_name={}, key={}, existing_id={}",
+                        namespace,
+                        app_name,
+                        key,
+                        existing_id
+                    ));
+                }
+            }
+        }
+    }
+
     param.update_time = Some(now_millis());
     share_data
         .raft_request_route

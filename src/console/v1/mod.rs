@@ -12,6 +12,7 @@ use actix_web::web::ServiceConfig;
 pub const ERROR_CODE_SYSTEM_ERROR: &str = "SYSTEM_ERROR";
 pub const ERROR_CODE_NO_PERMISSION: &str = "NO_PERMISSION";
 pub const ERROR_CODE_NO_APP_PERMISSION: &str = "NO_APP_PERMISSION";
+pub const ERROR_CODE_JOB_KEY_DUPLICATE: &str = "JOB_KEY_DUPLICATE";
 
 pub fn console_api_v1(config: &mut ServiceConfig) {
     config.service(
