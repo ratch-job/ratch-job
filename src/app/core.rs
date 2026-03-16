@@ -263,6 +263,16 @@ impl AppManager {
         (size, info_list)
     }
 
+    fn query_namespace_list(&self) -> Vec<Arc<String>> {
+        let mut namespaces = std::collections::HashSet::new();
+        for key in self.app_map.keys() {
+            namespaces.insert(key.namespace.clone());
+        }
+        let mut list: Vec<Arc<String>> = namespaces.into_iter().collect();
+        list.sort();
+        list
+    }
+
     fn get_app_info(&self, key: &AppKey, with_addrs: bool) -> Option<AppInfoDto> {
         self.app_map
             .get(key)
@@ -438,6 +448,10 @@ impl Handler<AppManagerReq> for AppManager {
                 return Ok(AppManagerResult::AppRouteResponse(
                     self.app_route_request(req)?,
                 ));
+            }
+            AppManagerReq::QueryNamespaceList => {
+                let list = self.query_namespace_list();
+                return Ok(AppManagerResult::NamespaceList(list));
             }
         }
         Ok(AppManagerResult::None)

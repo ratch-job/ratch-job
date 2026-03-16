@@ -6,3 +6,10 @@ pub struct AppQueryParam {
     pub app_name: Option<String>,
     pub namespace: Option<String>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamespaceDto {
+    pub namespace: String,
+    pub namespace_desc: String,
+}

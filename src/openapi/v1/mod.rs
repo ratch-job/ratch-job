@@ -37,6 +37,10 @@ pub fn v1_api_config(config: &mut ServiceConfig) {
                 web::resource("/app/instance/addrs")
                     .route(web::get().to(app_api::query_app_instance_addrs)),
             )
+            .service(
+                web::resource("/namespace/list")
+                    .route(web::get().to(app_api::query_namespace_list)),
+            )
             .service(web::resource("/job/create").route(web::post().to(job_api::create_job)))
             .service(web::resource("/job/update").route(web::post().to(job_api::update_job)))
             .service(web::resource("/job/remove").route(web::post().to(job_api::remove_job)))

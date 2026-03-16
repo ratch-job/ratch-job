@@ -347,6 +347,7 @@ pub enum AppManagerReq {
     GetAllInstanceAddrs,
     QueryApp(AppQueryParam),
     AppRouteRequest(AppRouteRequest),
+    QueryNamespaceList,
 }
 
 #[derive(Debug, Clone)]
@@ -357,6 +358,7 @@ pub enum AppManagerResult {
     AppPageInfo(usize, Vec<AppInfoDto>),
     AllInstanceAddrs(Vec<AppInstanceDto>),
     AppRouteResponse(AppRouteResponse),
+    NamespaceList(Vec<Arc<String>>),
 }
 
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]
