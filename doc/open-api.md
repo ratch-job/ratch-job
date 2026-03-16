@@ -20,6 +20,7 @@
 |--------|------|------|------|
 | appName | string | 是 | 应用名称 |
 | namespace | string | 是 | 命名空间 |
+| key | string | 否 | 任务唯一标识键（不填时自动生成UUID） |
 | handleName | string | 是 | 任务处理器名称（当runMode为BEAN时必填） |
 | scheduleType | string | 否 | 调度类型：CRON、INTERVAL、DELAY、NONE |
 | cronValue | string | 否 | CRON表达式（当scheduleType为CRON时必填） |
@@ -45,6 +46,7 @@
 | content.enable | boolean | 是否启用 |
 | content.appName | string | 应用名称 |
 | content.namespace | string | 命名空间 |
+| content.key | string | 任务唯一标识键 |
 | content.description | string | 任务描述 |
 | content.scheduleType | string | 调度类型 |
 | content.cronValue | string | CRON表达式 |
@@ -102,6 +104,7 @@ curl -X POST "http://127.0.0.1:8725/ratch/v1/job/create" -H 'Content-Type: appli
 | id | number | 是 | 任务ID |
 | appName | string | 否 | 应用名称 |
 | namespace | string | 否 | 命名空间 |
+| key | string | 否 | 任务唯一标识键 |
 | handleName | string | 否 | 任务处理器名称 |
 | scheduleType | string | 否 | 调度类型 |
 | cronValue | string | 否 | CRON表达式 |
@@ -195,6 +198,7 @@ curl -X POST "http://127.0.0.1:8725/ratch/v1/job/remove" -H 'Content-Type: appli
 | data.enable | boolean | 是否启用 |
 | data.appName | string | 应用名称 |
 | data.namespace | string | 命名空间 |
+| data.key | string | 任务唯一标识键 |
 | data.description | string | 任务描述 |
 | data.scheduleType | string | 调度类型 |
 | data.cronValue | string | CRON表达式 |
@@ -428,6 +432,172 @@ curl -X GET "http://127.0.0.1:8725/ratch/v1/job/task/latest-history?jobId=2&page
 - `Running`: 运行中
 - `Success`: 执行成功
 - `Fail`: 执行失败
+
+---
+
+---
+
+## 8. 根据Key查询任务ID
+
+**接口地址：** `GET /ratch/v1/job/queryIdByKey`
+
+**接口描述：** 根据namespace、app_name和key查询任务ID
+
+### 请求参数
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| namespace | string | 是 | 命名空间 |
+| appName | string | 是 | 应用名称 |
+| key | string | 是 | 任务唯一标识键 |
+
+### 响应参数
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data | number | 任务ID |
+| success | boolean | 是否成功 |
+| code | string | 错误码 |
+| message | string | 错误信息 |
+
+### 示例
+
+```sh
+curl -X GET "http://127.0.0.1:8725/ratch/v1/job/queryIdByKey?namespace=xxl&appName=xxl-job-executor-sample&key=your-job-key"
+```
+
+响应信息为:
+
+```json
+{"data":2,"success":true,"code":null,"message":null}
+```
+
+---
+
+## 9. 根据Key查询任务详情
+
+**接口地址：** `GET /ratch/v1/job/queryJobByKey`
+
+**接口描述：** 根据namespace、app_name和key查询任务详细信息
+
+### 请求参数
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| namespace | string | 是 | 命名空间 |
+| appName | string | 是 | 应用名称 |
+| key | string | 是 | 任务唯一标识键 |
+
+### 响应参数
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data | object | 任务信息对象 |
+| data.id | number | 任务ID |
+| data.enable | boolean | 是否启用 |
+| data.appName | string | 应用名称 |
+| data.namespace | string | 命名空间 |
+| data.key | string | 任务唯一标识键 |
+| data.description | string | 任务描述 |
+| data.scheduleType | string | 调度类型 |
+| data.cronValue | string | CRON表达式 |
+| data.delaySecond | number | 延迟秒数 |
+| data.intervalSecond | number | 间隔秒数 |
+| data.runMode | string | 运行模式 |
+| data.handleName | string | 任务处理器名称 |
+| data.triggerParam | string | 触发参数 |
+| data.routerStrategy | string | 路由策略 |
+| data.pastDueStrategy | string | 过期策略 |
+| data.blockingStrategy | string | 阻塞策略 |
+| data.timeoutSecond | number | 超时秒数 |
+| data.tryTimes | number | 重试次数 |
+| data.versionId | number | 版本ID |
+| data.lastModifiedMillis | number | 最后修改时间戳 |
+| data.createTime | number | 创建时间戳 |
+| data.retryInterval | number | 重试间隔 |
+| success | boolean | 是否成功 |
+| code | string | 错误码 |
+| message | string | 错误信息 |
+
+### 示例
+
+```sh
+curl -X GET "http://127.0.0.1:8725/ratch/v1/job/queryJobByKey?namespace=xxl&appName=xxl-job-executor-sample&key=your-job-key"
+```
+
+响应信息为:
+
+```json
+{"data":{"id":2,"enable":true,"appName":"xxl-job-executor-sample","namespace":"xxl","key":"your-job-key","description":"","scheduleType":"CRON","cronValue":"0/15 * * * * *","delaySecond":0,"intervalSecond":0,"runMode":"BEAN","handleName":"demoJobHandler","triggerParam":"","routerStrategy":"ROUND_ROBIN","pastDueStrategy":"DEFAULT","blockingStrategy":"SERIAL_EXECUTION","timeoutSecond":0,"tryTimes":0,"versionId":0,"lastModifiedMillis":1743353817624,"createTime":1743353817624,"retryInterval":0},"success":true,"code":null,"message":null}
+```
+
+---
+
+## 10. 查询命名空间列表
+
+**接口地址：** `GET /ratch/v1/namespace/list`
+
+**接口描述：** 查询所有可用的命名空间列表
+
+### 请求参数
+
+无
+
+### 响应参数
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data | array | 命名空间列表 |
+| data[].namespace | string | 命名空间名称 |
+| data[].namespaceDesc | string | 命名空间描述 |
+| success | boolean | 是否成功 |
+| code | string | 错误码 |
+| message | string | 错误信息 |
+
+### 示例
+
+```sh
+curl -X GET "http://127.0.0.1:8725/ratch/v1/namespace/list"
+```
+
+响应信息为:
+
+```json
+{"data":[{"namespace":"xxl","namespaceDesc":"xxl"},{"namespace":"default","namespaceDesc":"default"}],"success":true,"code":null,"message":null}
+```
+
+---
+
+## 11. 查询应用列表
+
+**接口地址：** `GET /ratch/v1/app/list`
+
+**接口描述：** 查询所有可用的应用名称列表
+
+### 请求参数
+
+无
+
+### 响应参数
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data | array | 应用名称列表 |
+| success | boolean | 是否成功 |
+| code | string | 错误码 |
+| message | string | 错误信息 |
+
+### 示例
+
+```sh
+curl -X GET "http://127.0.0.1:8725/ratch/v1/app/list"
+```
+
+响应信息为:
+
+```json
+{"data":["xxl-job-executor-sample","demo-app"],"success":true,"code":null,"message":null}
+```
 
 ---
 
