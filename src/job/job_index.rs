@@ -10,6 +10,7 @@ pub struct JobQueryParam {
     pub app_name: Option<Arc<String>>,
     pub like_description: Option<Arc<String>>,
     pub like_handle_name: Option<Arc<String>>,
+    pub like_key: Option<Arc<String>>,
     pub namespace_privilege: PrivilegeGroup<Arc<String>>,
     pub app_privilege: PrivilegeGroup<Arc<String>>,
     pub offset: usize,
@@ -50,6 +51,14 @@ impl JobQueryParam {
     pub fn match_handle_name(&self, value: &Arc<String>) -> bool {
         if let Some(like_handle_name) = &self.like_handle_name {
             like_handle_name.is_empty() || value.as_str().contains(like_handle_name.as_str())
+        } else {
+            true
+        }
+    }
+
+    pub fn match_key(&self, value: &Arc<String>) -> bool {
+        if let Some(like_key) = &self.like_key {
+            like_key.is_empty() || value.as_str().contains(like_key.as_str())
         } else {
             true
         }

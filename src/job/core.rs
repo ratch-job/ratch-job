@@ -193,6 +193,7 @@ impl JobManager {
                 && query_param.match_app_name(&job_info.app_name)
                 && query_param.match_description(&job_info.description)
                 && query_param.match_handle_name(&job_info.handle_name)
+                && query_param.match_key(&job_info.key)
             {
                 if index >= query_param.offset && index < end_index {
                     rlist.push(JobInfoDto::new_from(job_info));

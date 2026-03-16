@@ -56,14 +56,14 @@ impl JobTaskHistoryRequest {
 pub struct JobKeyQueryRequest {
     pub namespace: Option<String>,
     pub app_name: Option<String>,
-    pub job_key: Option<String>,
+    pub key: Option<String>,
 }
 
 impl JobKeyQueryRequest {
     pub fn to_job_key(self) -> Option<JobKey> {
         let namespace = self.namespace?;
         let app_name = self.app_name?;
-        let job_key = self.job_key?;
+        let job_key = self.key?;
 
         if namespace.is_empty() || app_name.is_empty() || job_key.is_empty() {
             return None;

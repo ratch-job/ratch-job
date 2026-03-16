@@ -183,9 +183,12 @@ lazy_static::lazy_static! {
         //WebResource
         R::WebResource("/manage/job"),
         R::WebResource("/manage/task/latest"),
+        R::WebResource("/manage/job/task"),
+        R::WebResource("/ratchjob/manage/job/task"),
         //path
         R::Path("/ratchjob/manage/job",HTTP_METHOD_GET),
         R::Path("/ratchjob/manage/task/latest",HTTP_METHOD_GET),
+        R::Path("/ratchjob/manage/job/task",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/job/list",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/job/info",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/job/task/list",HTTP_METHOD_GET),

@@ -83,6 +83,7 @@ pub struct JobQueryListRequest {
     pub app_name: Option<Arc<String>>,
     pub like_description: Option<Arc<String>>,
     pub like_handle_name: Option<Arc<String>>,
+    pub like_key: Option<Arc<String>>,
     pub page_no: Option<usize>,
     pub page_size: Option<usize>,
 }
@@ -101,6 +102,7 @@ impl JobQueryListRequest {
             app_name: self.app_name,
             like_description: self.like_description,
             like_handle_name: self.like_handle_name,
+            like_key: self.like_key,
             app_privilege: session.app_privilege.clone(),
             namespace_privilege: session.namespace_privilege.clone(),
             offset,
@@ -121,6 +123,7 @@ impl JobQueryListRequest {
             app_name: self.app_name,
             like_description: self.like_description,
             like_handle_name: self.like_handle_name,
+            like_key: self.like_key,
             app_privilege: PrivilegeGroup::all(),
             namespace_privilege: PrivilegeGroup::all(),
             offset,

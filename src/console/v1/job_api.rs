@@ -174,11 +174,13 @@ pub(crate) async fn create_job(
         Ok(v) => v,
         Err(e) => {
             let error_msg = format!("create_job error,{}", e);
+            let error_code = if error_msg.find("job key already exists").is_some() {
+                ERROR_CODE_JOB_KEY_DUPLICATE.to_string()
+            } else {
+                ERROR_CODE_SYSTEM_ERROR.to_string()
+            };
             //log::error!("{}", &error_msg);
-            HttpResponse::Ok().json(ApiResult::<()>::error(
-                ERROR_CODE_SYSTEM_ERROR.to_string(),
-                Some(error_msg),
-            ))
+            HttpResponse::Ok().json(ApiResult::<()>::error(error_code, Some(error_msg)))
         }
     }
 }
