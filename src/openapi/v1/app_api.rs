@@ -58,3 +58,20 @@ pub(crate) async fn query_namespace_list(share_data: Data<Arc<ShareData>>) -> im
         ))
     }
 }
+
+pub(crate) async fn query_appname_all_list(share_data: Data<Arc<ShareData>>) -> impl Responder {
+    if let Ok(Ok(AppManagerResult::AppNameList(app_names))) = share_data
+        .app_manager
+        .send(AppManagerReq::QueryAppNameList)
+        .await
+    {
+        HttpResponse::Ok().json(ApiResult::success(Some(app_names)))
+    } else {
+        let error_msg = "query_appname_all_list error".to_string();
+        log::error!("{}", &error_msg);
+        HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some(error_msg),
+        ))
+    }
+}

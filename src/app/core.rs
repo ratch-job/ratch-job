@@ -273,6 +273,16 @@ impl AppManager {
         list
     }
 
+    fn query_app_name_list(&self) -> Vec<Arc<String>> {
+        let mut app_names = std::collections::HashSet::new();
+        for key in self.app_map.keys() {
+            app_names.insert(key.app_name.clone());
+        }
+        let mut list: Vec<Arc<String>> = app_names.into_iter().collect();
+        list.sort();
+        list
+    }
+
     fn get_app_info(&self, key: &AppKey, with_addrs: bool) -> Option<AppInfoDto> {
         self.app_map
             .get(key)
@@ -452,6 +462,10 @@ impl Handler<AppManagerReq> for AppManager {
             AppManagerReq::QueryNamespaceList => {
                 let list = self.query_namespace_list();
                 return Ok(AppManagerResult::NamespaceList(list));
+            }
+            AppManagerReq::QueryAppNameList => {
+                let list = self.query_app_name_list();
+                return Ok(AppManagerResult::AppNameList(list));
             }
         }
         Ok(AppManagerResult::None)
