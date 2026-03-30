@@ -187,7 +187,7 @@ impl JobManager {
         let end_index = query_param.offset + query_param.limit;
         let mut index = 0;
 
-        for job_wrap in self.job_map.values() {
+        for (_, job_wrap) in self.job_map.iter().rev() {
             let job_info = &job_wrap.job;
             if query_param.match_namespace(&job_info.namespace)
                 && query_param.match_app_name(&job_info.app_name)
