@@ -51,6 +51,8 @@ message JobTaskDo {
     uint32 retry_interval = 13;
     uint32 retry_count = 14;
     uint32 timeout_second = 15;
+    bool from_outside = 16;
+    string trigger_user = 17;
 }
 
 

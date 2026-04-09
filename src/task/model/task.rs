@@ -33,6 +33,10 @@ pub struct JobTaskInfo {
     pub retry_interval: u32,
     pub retry_count: u32,
     pub timeout_second: u32,
+    #[serde(default)]
+    pub from_outside: bool,
+    #[serde(default)]
+    pub trigger_user: Arc<String>,
 }
 
 impl JobTaskInfo {
@@ -53,6 +57,8 @@ impl JobTaskInfo {
             retry_interval: job.retry_interval,
             retry_count: 0,
             timeout_second: job.timeout_second,
+            from_outside: false,
+            trigger_user: EMPTY_ARC_STR.clone(),
         }
     }
 
@@ -112,6 +118,8 @@ impl JobTaskInfo {
             retry_interval: self.retry_interval,
             retry_count: self.retry_count,
             timeout_second: self.timeout_second,
+            from_outside: self.from_outside,
+            trigger_user: Cow::Borrowed(&self.trigger_user),
         }
     }
 }
@@ -141,6 +149,8 @@ impl<'a> From<JobTaskDo<'a>> for JobTaskInfo {
             retry_interval: task_do.retry_interval,
             retry_count: task_do.retry_count,
             timeout_second: task_do.timeout_second,
+            from_outside: task_do.from_outside,
+            trigger_user: Arc::new(task_do.trigger_user.to_string()),
         }
     }
 }
