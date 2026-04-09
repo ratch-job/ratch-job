@@ -2,17 +2,15 @@ use std::collections::HashMap;
 use std::future::{ready, Ready};
 use std::sync::Arc;
 
-use crate::cache::actor_model::{
-    CacheManagerLocalReq, CacheManagerRaftReq, CacheManagerRaftResult, SetInfo,
-};
+use crate::cache::actor_model::{CacheManagerLocalReq, CacheManagerRaftResult};
 use crate::cache::model::{CacheKey, CacheType, CacheValue};
 use crate::common::constant::CONSOLE_TOKEN_COOKIE_KEY;
-use crate::common::datetime_utils::{now_millis_i64, now_second_i32, now_second_u32};
+use crate::common::datetime_utils::{now_second_i32, now_second_u32};
 use crate::common::model::{ApiResult, UserSession};
 use crate::common::share_data::ShareData;
-use crate::raft::store::ClientRequest;
+
 use crate::user::actor_model::{UserManagerRaftResult, UserManagerReq};
-use crate::user::model::{UserDto, UserInfo};
+use crate::user::model::UserInfo;
 use crate::user::permission::{UserRole, UserRoleHelper};
 use actix_http::{HttpMessage, StatusCode};
 use actix_web::{

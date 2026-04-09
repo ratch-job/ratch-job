@@ -51,7 +51,7 @@ impl TaskHistoryManager {
 impl Actor for TaskHistoryManager {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
+    fn started(&mut self, _ctx: &mut Self::Context) {
         log::info!("TaskHistoryManager started!");
     }
 }

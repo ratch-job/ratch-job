@@ -63,6 +63,7 @@ impl AppIndex {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn remove(
         &mut self,
         namespace: &Arc<String>,

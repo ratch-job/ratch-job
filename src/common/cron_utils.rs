@@ -1,7 +1,6 @@
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use cron::Schedule;
 use std::str::FromStr;
-use std::time::SystemTime;
 
 pub struct CronUtil;
 

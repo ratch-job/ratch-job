@@ -17,7 +17,6 @@ use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerRes
 use crate::sequence::{SequenceRequest, SequenceResult};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
-use std::future::Future;
 use std::sync::Arc;
 
 async fn do_create_job(
@@ -176,7 +175,7 @@ pub(crate) async fn update_job(
 
 async fn do_remove_job(
     share_data: Data<Arc<ShareData>>,
-    mut param: JobParam,
+    param: JobParam,
 ) -> anyhow::Result<HttpResponse> {
     let id = if let Some(id) = param.id {
         id

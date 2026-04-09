@@ -57,6 +57,7 @@ pub(crate) async fn console_assets(path: web::Path<String>) -> impl Responder {
     handle_embedded_file_with_cache(&file)
 }
 
+#[allow(dead_code)]
 async fn disable_no_auth_console_index() -> impl Responder {
     let body = "<!DOCTYPE html>
 <html lang='en'>

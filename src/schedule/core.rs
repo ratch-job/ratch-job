@@ -1,14 +1,13 @@
 use crate::common::byte_utils::id_to_bin;
 use crate::common::constant::{
     EMPTY_ARC_STR, ERR_MSG_JOB_DISABLE, ERR_MSG_TASK_TIMEOUT, JOB_TASK_HISTORY_TABLE_NAME,
-    JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME,
+    JOB_TASK_RUNNING_TABLE_NAME,
 };
 use crate::common::datetime_utils::{
-    get_datetime_by_second, get_datetime_millis, get_local_offset, now_millis, now_millis_i64,
-    now_second_u32,
+    get_datetime_by_second, get_local_offset, now_millis, now_millis_i64, now_second_u32,
 };
 use crate::common::pb::data_object::JobTaskDo;
-use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerReq};
+use crate::job::model::actor_model::JobManagerRaftReq;
 use crate::job::model::enum_type::ScheduleType;
 use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
 use crate::metrics::core::MetricsManager;
@@ -31,11 +30,8 @@ use crate::task::model::actor_model::{RedoTaskItem, TaskManagerReq, TriggerItem}
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam, UpdateTaskMetricsInfo};
 use actix::prelude::*;
-use actix_web::cookie::time::macros::datetime;
-use anyhow::anyhow;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
-use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, Offset, TimeZone, Utc};
-use futures_util::TryFutureExt;
+use chrono::FixedOffset;
 use inner_mem_cache::TimeoutSet;
 use quick_protobuf::{BytesReader, Writer};
 use std::collections::{HashMap, HashSet};
@@ -61,6 +57,7 @@ pub struct ScheduleManager {
     local_is_master: bool,
     app_start_second: u32,
     last_trigger_time: u32,
+    #[allow(dead_code)]
     last_retry_time: u32,
     running_heartbeat: bool,
     default_timeout_second: u32,

@@ -15,9 +15,7 @@ use crate::job::model::job::{JobKey, JobParam};
 use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
 use crate::sequence::{SequenceRequest, SequenceResult};
-use crate::task::model::actor_model::{
-    TaskHistoryManagerReq, TaskHistoryManagerResult, TaskManagerReq, TriggerItem,
-};
+use crate::task::model::actor_model::{TaskManagerReq, TriggerItem};
 use actix_http::HttpMessage;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
@@ -190,7 +188,7 @@ pub(crate) async fn update_job(
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<JobInfoParam>,
 ) -> impl Responder {
-    let mut param = param.to_param();
+    let param = param.to_param();
     let id = param.id.clone().unwrap_or_default();
     if id == 0 {
         return HttpResponse::Ok().json(ApiResult::<()>::error(

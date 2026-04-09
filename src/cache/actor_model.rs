@@ -1,7 +1,6 @@
 use crate::cache::model::{CacheKey, CacheValue};
 use actix::Message;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SetInfo {

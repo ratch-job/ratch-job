@@ -55,7 +55,7 @@ impl UserInfo {
         }
     }
 
-    pub fn to_do(&self) -> UserInfoDo {
+    pub fn to_do(&self) -> UserInfoDo<'_> {
         UserInfoDo {
             username: Cow::Borrowed(&self.username),
             nickname: Cow::Borrowed(&self.nickname),

@@ -1,9 +1,6 @@
 use crate::common::app_config::AppConfig;
 use crate::common::datetime_utils::now_second_u32;
 use crate::common::get_app_version;
-use crate::job::model::actor_model::JobManagerRaftReq;
-use crate::raft::cluster::route::RaftRequestRoute;
-use crate::raft::store::ClientRequest;
 use crate::schedule::batch_call::{BatchCallManager, BatchUpdateTaskManagerReq};
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobRunParam;
@@ -95,7 +92,7 @@ impl TaskRequestActor {
 
 impl Actor for TaskRequestActor {
     type Context = Context<Self>;
-    fn started(&mut self, ctx: &mut Self::Context) {
+    fn started(&mut self, _ctx: &mut Self::Context) {
         println!("TaskRequestActor started");
     }
 }

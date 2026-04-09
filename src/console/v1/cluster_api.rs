@@ -4,7 +4,7 @@ use crate::common::model::ApiResult;
 use crate::common::share_data::ShareData;
 use crate::console::model::cluster_model::ClusterNodeInfo;
 use crate::raft::cluster::node_manager::{ClusterNode, NodeManageRequest, NodeManageResponse};
-use actix_web::{http::header, web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder};
 
 async fn get_all_valid_nodes(app: &Arc<ShareData>) -> anyhow::Result<Vec<ClusterNode>> {
     if let NodeManageResponse::AllNodes(v) = app

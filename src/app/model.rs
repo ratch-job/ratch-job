@@ -76,7 +76,7 @@ impl AppInfo {
         AppKey::new(self.app_name.clone(), self.namespace.clone())
     }
 
-    pub fn to_do(&self) -> AppInfoDo {
+    pub fn to_do(&self) -> AppInfoDo<'_> {
         let mut instances = vec![];
         for (_, instance) in self.instance_map.iter() {
             instances.push(instance.to_do());
@@ -145,7 +145,7 @@ impl AppInstance {
         }
     }
 
-    pub fn to_do(&self) -> AppInstanceDo {
+    pub fn to_do(&self) -> AppInstanceDo<'_> {
         AppInstanceDo {
             addr: Cow::Borrowed(&self.addr),
             last_modified_time: self.last_modified_time,
@@ -339,9 +339,9 @@ pub enum AppRouteResponse {
 #[rtype(result = "anyhow::Result<AppManagerResult>")]
 pub enum AppManagerReq {
     GetApp(AppKey),
-    #[deprecated]
+    //#[deprecated]
     RegisterAppInstance(AppKey, Arc<String>),
-    #[deprecated]
+    //#[deprecated]
     UnregisterAppInstance(AppKey, Arc<String>),
     GetAppInstanceAddrs(AppKey),
     GetAllInstanceAddrs,

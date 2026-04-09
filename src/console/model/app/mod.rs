@@ -1,7 +1,7 @@
 use crate::app::app_index::AppQueryParam;
 use crate::app::model::{AppParam, RegisterType};
 use crate::common::datetime_utils::now_second_u32;
-use crate::common::model::privilege::PrivilegeGroup;
+
 use crate::common::model::UserSession;
 use crate::common::namespace_util::get_namespace_by_option;
 use serde::{Deserialize, Serialize};

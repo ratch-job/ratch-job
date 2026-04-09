@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 
 /// A fictional versioning CLI
 #[derive(Debug, Parser)] // requires `derive` feature

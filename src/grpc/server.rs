@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tonic::{Request, Status};
 
 pub struct RequestServerImpl {
+    #[allow(dead_code)]
     pub(crate) share_data: Arc<ShareData>,
     invoker: InvokerHandler,
 }

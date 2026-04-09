@@ -5,9 +5,7 @@ use crate::metrics::counter::CounterManager;
 use crate::metrics::gauge::GaugeManager;
 use crate::metrics::histogram::HistogramManager;
 use crate::metrics::metrics_key::MetricsKey;
-use crate::metrics::model::{
-    MetricsItem, MetricsQuery, MetricsRecord, MetricsRequest, MetricsResponse,
-};
+use crate::metrics::model::{MetricsItem, MetricsRecord, MetricsRequest, MetricsResponse};
 use crate::metrics::summary::SummaryManager;
 use crate::metrics::timeline::core::MetricsTimelineManager;
 use crate::metrics::timeline::model::{MetricsSnapshot, TimelineGroupType};

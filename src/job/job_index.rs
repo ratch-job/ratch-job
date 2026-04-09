@@ -1,6 +1,6 @@
 use crate::common::model::privilege::PrivilegeGroup;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -79,10 +79,12 @@ pub struct JobIndex {
 }
 
 impl JobIndex {
+    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
         Default::default()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn insert(
         &mut self,
         namespace: Arc<String>,
@@ -98,6 +100,7 @@ impl JobIndex {
             .is_none()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn remove(
         &mut self,
         namespace: &Arc<String>,

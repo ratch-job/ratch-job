@@ -4,7 +4,6 @@ use crate::common::model::ApiResult;
 use crate::common::share_data::ShareData;
 use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
 use crate::openapi::v1::model::app_model::{AppQueryParam, NamespaceDto};
-use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;

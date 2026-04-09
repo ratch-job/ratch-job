@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use self::model::LogRecordDto;
 use crate::app::model::{AppManagerRaftReq, AppManagerRaftResult};
 use crate::cache::actor_model::{CacheManagerRaftReq, CacheManagerRaftResult};

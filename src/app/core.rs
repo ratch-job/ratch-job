@@ -5,9 +5,8 @@ use crate::app::model::{
     AppRouteResponse, InstanceTimeoutInfo, RegisterType,
 };
 use crate::common::app_config::AppConfig;
-use crate::common::byte_utils::id_to_bin;
-use crate::common::constant::{APP_INFO_TABLE_NAME, EMPTY_ARC_STR, JOB_TABLE_NAME};
-use crate::common::datetime_utils::{now_millis, now_second_u32};
+use crate::common::constant::{APP_INFO_TABLE_NAME, EMPTY_ARC_STR};
+use crate::common::datetime_utils::now_second_u32;
 use crate::common::pb::data_object::AppInfoDo;
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse};
@@ -18,7 +17,7 @@ use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use inner_mem_cache::TimeoutSet;
 use quick_protobuf::{BytesReader, Writer};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[bean(inject)]

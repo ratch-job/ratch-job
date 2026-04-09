@@ -42,7 +42,7 @@ impl<'a> XxlClient<'a> {
     }
 
     async fn request(&self, body: Vec<u8>, sub_url: &str) -> anyhow::Result<()> {
-        let mut registry_success = false;
+        let mut _registry_success = false;
         let url = if self.is_addr_end_bias {
             format!("{}{}", self.addr, &sub_url)
         } else {
@@ -59,7 +59,7 @@ impl<'a> XxlClient<'a> {
         .await?;
         if let Ok(v) = Self::convert(&resp) {
             if v.is_success() {
-                registry_success = true;
+                _registry_success = true;
                 return Ok(());
             } else {
                 return Err(anyhow::anyhow!(

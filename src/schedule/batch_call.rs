@@ -6,7 +6,6 @@ use crate::schedule::model::actor_model::ScheduleManagerRaftReq;
 use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
-use futures_util::task::SpawnExt;
 use std::sync::Arc;
 use tokio::sync::oneshot::Sender;
 

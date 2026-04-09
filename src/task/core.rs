@@ -6,7 +6,7 @@ use crate::common::constant::{
 use crate::common::datetime_utils::now_second_u32;
 use crate::common::get_app_version;
 use crate::job::core::JobManager;
-use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerReq};
+use crate::job::model::actor_model::JobManagerRaftReq;
 use crate::job::model::job::JobInfo;
 use crate::metrics::core::MetricsManager;
 use crate::metrics::metrics_key::MetricsKey;
@@ -22,7 +22,7 @@ use crate::task::model::actor_model::{
 use crate::task::model::app_instance::{AppInstanceStateGroup, InstanceAddrSelectResult};
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobRunParam;
-use crate::task::model::task::{JobTaskInfo, TaskCallBackParam, TaskWrap};
+use crate::task::model::task::{JobTaskInfo, TaskWrap};
 use crate::task::model::task_request::{TaskRequestCmd, TaskRequestResult};
 use crate::task::request_actor::TaskRequestActor;
 use crate::task::request_client::XxlClient;
@@ -111,7 +111,7 @@ impl TaskManager {
         let raft_request_route = self.raft_request_route.clone().unwrap();
         Self::init_tasks(trigger_items, raft_request_route, sequence_manager)
             .into_actor(self)
-            .then(|result, act, ctx| {
+            .then(|result, act, _ctx| {
                 let list = result.unwrap_or_default();
                 let (task_list, notify_task_list) = act.build_task_wrap(list);
                 let raft_request_route = act.raft_request_route.clone().unwrap();
@@ -166,7 +166,7 @@ impl TaskManager {
             notify_task_list.len()
         );
         let raft_request_route = self.raft_request_route.clone().unwrap();
-        let xxl_request_header = self.xxl_request_header.clone();
+        let _xxl_request_header = self.xxl_request_header.clone();
         let task_request_parallel = self.task_request_parallel;
         let task_request_actor = self.task_request_actor.clone().unwrap();
         async move {
@@ -449,6 +449,7 @@ impl TaskManager {
     }
      */
 
+    #[allow(dead_code)]
     async fn do_run_task(
         instance_addr: Arc<String>,
         param: &JobRunParam,
@@ -470,7 +471,7 @@ impl TaskManager {
 impl Actor for TaskManager {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
+    fn started(&mut self, _ctx: &mut Self::Context) {
         log::info!("TaskManager started")
     }
 }

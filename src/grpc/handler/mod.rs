@@ -3,7 +3,6 @@ use crate::grpc::handler::raft_append::RaftAppendRequestHandler;
 use crate::grpc::handler::raft_route::RaftRouteRequestHandler;
 use crate::grpc::handler::raft_snapshot::RaftSnapshotRequestHandler;
 use crate::grpc::handler::raft_vote::RaftVoteRequestHandler;
-use crate::grpc::payload_utils::PayloadUtils;
 use crate::grpc::ratch_server_proto::Payload;
 use crate::grpc::{HandlerResult, PayloadHandler, RequestMeta};
 use async_trait::async_trait;
@@ -21,6 +20,7 @@ pub(crate) const RAFT_VOTE_REQUEST: &str = "RaftVoteRequest";
 pub(crate) const RAFT_ROUTE_REQUEST: &str = "RaftRouteRequest";
 
 pub struct InvokerHandler {
+    #[allow(dead_code)]
     app: Arc<ShareData>,
     handlers: Vec<(String, Box<dyn PayloadHandler + Send + Sync + 'static>)>,
 }

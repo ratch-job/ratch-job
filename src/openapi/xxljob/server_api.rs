@@ -1,4 +1,4 @@
-use crate::app::model::{AppInstanceParam, AppKey, AppManagerRaftReq, AppManagerReq};
+use crate::app::model::{AppInstanceParam, AppKey, AppManagerRaftReq};
 use crate::common::constant::DEFAULT_XXL_NAMESPACE;
 use crate::common::datetime_utils::{now_millis_i64, now_second_u32};
 use crate::common::share_data::ShareData;
@@ -6,11 +6,8 @@ use crate::openapi::xxljob::model::server_request::{CallbackParam, RegistryParam
 use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
 use crate::raft::store::ClientRequest;
 use crate::schedule::batch_call::BatchCallManagerReq;
-use crate::schedule::model::actor_model::ScheduleManagerRaftReq;
-use crate::task::model::actor_model::TaskManagerReq;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
-use log::log;
 use std::sync::Arc;
 
 pub(crate) async fn register(

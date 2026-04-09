@@ -1,21 +1,19 @@
-use crate::app::model::AppInfo;
 use crate::cache::actor_model::{
     CacheManagerLocalReq, CacheManagerRaftReq, CacheManagerRaftResult, SetInfo,
 };
 use crate::cache::model::{CacheKey, CacheValue};
 use crate::common::constant::CACHE_TABLE_NAME;
 use crate::common::datetime_utils::now_second_i32;
-use crate::common::pb::data_object::{AppInfoDo, CacheItemDo};
-use crate::job::model::enum_type::PastDueStrategy::Default;
+use crate::common::pb::data_object::CacheItemDo;
+
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse};
 use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
 use actix::prelude::*;
 use bean_factory::{bean, Inject};
-use inner_mem_cache::{MemCache, TimeoutSet};
+use inner_mem_cache::TimeoutSet;
 use quick_protobuf::{BytesReader, Writer};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 pub struct CacheItem {
     pub expire: i32,

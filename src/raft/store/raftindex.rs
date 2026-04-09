@@ -17,7 +17,7 @@ use crate::common::{
     byte_utils::{bin_to_id, id_to_bin},
     protobuf_utils::FileMessageReader,
 };
-use crate::raft::cluster::node_manager::{ClusterInnerNode, ClusterNodeManager, NodeManageRequest};
+use crate::raft::cluster::node_manager::{ClusterNodeManager, NodeManageRequest};
 
 pub struct RaftIndexInnerManager {
     file: tokio::fs::File,
@@ -117,7 +117,6 @@ pub struct RaftIndexManager {
 
 impl Drop for RaftIndexManager {
     fn drop(&mut self) {
-        use fs2::FileExt;
         let _ = self.lock_file.unlock();
     }
 }

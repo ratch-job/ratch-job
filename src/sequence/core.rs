@@ -5,7 +5,6 @@ use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse}
 use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
 use crate::sequence::model::{SequenceRaftReq, SequenceRaftResult};
 use actix::prelude::*;
-use bean_factory::bean;
 use std::collections::HashMap;
 use std::sync::Arc;
 

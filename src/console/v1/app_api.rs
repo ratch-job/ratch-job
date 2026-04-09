@@ -1,4 +1,4 @@
-use crate::app::model::{AppKey, AppManagerRaftReq, AppManagerReq, AppManagerResult, RegisterType};
+use crate::app::model::{AppManagerRaftReq, AppManagerReq, AppManagerResult, RegisterType};
 use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
 use crate::console::model::app::{AppInfoParam, AppQueryListRequest};

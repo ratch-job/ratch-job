@@ -1,7 +1,6 @@
 use crate::common::model::ApiResult;
 use crate::common::share_data::ShareData;
 use crate::console::model::metrics_model::TimelineQueryRequest;
-use crate::grpc::PayloadUtils;
 use crate::metrics::model::{MetricsRequest, MetricsResponse};
 use crate::metrics::timeline::model::TimelineQueryParam;
 use crate::raft::cluster::model::RouterResponse;

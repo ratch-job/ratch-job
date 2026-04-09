@@ -1,14 +1,12 @@
 use std::{fmt::Debug, sync::Arc};
 
 use super::model::{RouteAddr, RouterRequest, RouterResponse};
-use crate::grpc::handler::RAFT_ROUTE_REQUEST;
 use crate::raft::cluster::router_request;
+use crate::raft::network::factory::RaftClusterRequestSender;
 use crate::raft::store::core::Store;
 use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::raft::RatchRaft;
-use crate::{grpc::PayloadUtils, raft::network::factory::RaftClusterRequestSender};
-use actix::prelude::*;
-use async_raft_ext::raft::{ClientWriteRequest, ClientWriteResponse};
+use async_raft_ext::raft::ClientWriteRequest;
 
 #[derive(Clone)]
 pub struct RaftAddrRouter {

@@ -14,7 +14,7 @@ impl ResponseWrap {
         self.status == 200
     }
 
-    pub fn get_lossy_string_body(&self) -> Cow<str> {
+    pub fn get_lossy_string_body(&self) -> Cow<'_, str> {
         String::from_utf8_lossy(&self.body)
     }
 

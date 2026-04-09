@@ -13,7 +13,7 @@ use crate::cache::actor_model::{
     CacheManagerLocalReq, CacheManagerRaftReq, CacheManagerRaftResult, SetInfo,
 };
 use crate::common::constant::CONSOLE_TOKEN_COOKIE_KEY;
-use crate::common::datetime_utils::{now_second_i32, now_second_u32};
+use crate::common::datetime_utils::now_second_i32;
 use crate::common::share_data::ShareData;
 use crate::console::model::login_model::{LoginParam, LoginToken};
 use crate::raft::store::ClientRequest;

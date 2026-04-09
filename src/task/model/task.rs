@@ -94,7 +94,7 @@ impl JobTaskInfo {
         }
     }
 
-    pub fn to_do(&self) -> JobTaskDo {
+    pub fn to_do(&self) -> JobTaskDo<'_> {
         JobTaskDo {
             task_id: self.task_id,
             job_id: self.job_id,

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 pub struct PayloadUtils;
 
 impl PayloadUtils {
-    pub fn build_error_payload(error_code: u16, error_msg: String) -> Payload {
+    pub fn build_error_payload(_error_code: u16, error_msg: String) -> Payload {
         //let error_val = BaseResponse::build_error_response(error_code, error_msg).to_json_string();
         let error_val = error_msg.into_bytes();
         Self::build_payload("ErrorResponse", error_val)

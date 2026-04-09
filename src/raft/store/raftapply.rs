@@ -11,14 +11,10 @@ use super::{
     },
     StoreUtils,
 };
-use crate::common::constant::{
-    JOB_TABLE_NAME, JOB_TASK_HISTORY_TABLE_NAME, JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME,
-    SEQUENCE_TABLE_NAME,
-};
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftdata::RaftDataHandler;
 use crate::raft::store::raftsnapshot::SnapshotWriterActor;
-use crate::raft::store::{ClientRequest, ClientResponse};
+use crate::raft::store::ClientResponse;
 use actix::prelude::*;
 use async_raft::raft::EntryPayload;
 use async_raft_ext as async_raft;

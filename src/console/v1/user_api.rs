@@ -176,7 +176,7 @@ pub async fn remove_user(
         .request(ClientRequest::UserReq { req: msg })
         .await
     {
-        Ok(r) => Ok(HttpResponse::Ok().json(ApiResult::success(Some(true)))),
+        Ok(_) => Ok(HttpResponse::Ok().json(ApiResult::success(Some(true)))),
         Err(e) => Ok(HttpResponse::Ok().json(ApiResult::<()>::error(
             "SYSTEM_ERROR".to_owned(),
             Some(e.to_string()),

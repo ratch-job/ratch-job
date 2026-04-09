@@ -1,7 +1,7 @@
 use crate::app::model::{AppInstanceKey, AppKey};
 use crate::common::constant::{EMPTY_ARC_STR, TRIGGER_FROM_SYSTEM};
 use crate::job::model::job::{JobInfo, JobTaskLogQueryParam};
-use crate::task::model::task::{JobTaskInfo, TaskCallBackParam};
+use crate::task::model::task::JobTaskInfo;
 use actix::Message;
 use std::sync::Arc;
 

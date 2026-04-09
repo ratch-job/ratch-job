@@ -1,5 +1,5 @@
 use crate::common::byte_utils::id_to_bin;
-use crate::common::constant::{JOB_TABLE_NAME, JOB_TASK_TABLE_NAME, SEQUENCE_TABLE_NAME};
+use crate::common::constant::{JOB_TABLE_NAME, JOB_TASK_TABLE_NAME};
 use crate::common::datetime_utils::now_millis;
 use crate::common::pb::data_object::{JobDo, JobTaskDo};
 use crate::job::job_index::JobQueryParam;
@@ -15,9 +15,7 @@ use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterReques
 use crate::schedule::core::ScheduleManager;
 use crate::schedule::model::actor_model::ScheduleManagerReq;
 use crate::schedule::model::DelayFinishTasks;
-use crate::task::model::actor_model::TaskHistoryManagerReq;
 use crate::task::model::task::JobTaskInfo;
-use crate::task::task_history::TaskHistoryManager;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use quick_protobuf::{BytesReader, Writer};

@@ -146,7 +146,7 @@ impl JobInfo {
         }
     }
 
-    pub fn to_do(&self) -> JobDo {
+    pub fn to_do(&self) -> JobDo<'_> {
         JobDo {
             id: self.id,
             enable: self.enable,

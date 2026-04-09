@@ -1,10 +1,9 @@
 use crate::app::model::AppRouteRequest;
 use crate::common::datetime_utils::now_millis;
-use crate::raft::cluster::model::{RouterRequest, RouterResponse, VoteChangeRequest, VoteInfo};
+use crate::raft::cluster::model::{RouterRequest, VoteChangeRequest, VoteInfo};
 use crate::raft::cluster::router_request;
 use crate::raft::network::factory::RaftClusterRequestSender;
 use crate::schedule::core::ScheduleManager;
-use crate::schedule::model::actor_model::ScheduleManagerRaftReq;
 use crate::user::core::UserManager;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
@@ -44,6 +43,7 @@ pub struct ClusterInnerNode {
 }
 
 impl ClusterInnerNode {
+    #[allow(dead_code)]
     pub(crate) fn is_valid(&self) -> bool {
         self.is_local || self.status == NodeStatus::Valid
     }
