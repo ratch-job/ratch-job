@@ -346,14 +346,15 @@ pub(crate) async fn trigger_job(
             Some("trigger_job error,the job id is invalid".to_string()),
         ));
     }
-    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
-        session.app_privilege.clone()
+    let session = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.clone()
     } else {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("user session is invalid".to_string()),
         ));
     };
+    let app_privilege = &session.app_privilege;
     let job_info = if let Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) =
         share_data.job_manager.send(JobManagerReq::GetJob(id)).await
     {
@@ -374,7 +375,7 @@ pub(crate) async fn trigger_job(
         now_second_u32(),
         job_info,
         param.instance_addr.unwrap_or(EMPTY_ARC_STR.clone()),
-        EMPTY_ARC_STR.clone(),
+        session.username.clone(),
     );
     log::info!("trigger_job task_item:{:?}", &task_item);
     if let Ok(Ok(_)) = share_data

@@ -1,7 +1,7 @@
 use crate::common::constant::EMPTY_ARC_STR;
 use crate::common::pb::data_object::{JobTaskDo, TaskTryLogDo};
 use crate::job::model::job::JobInfo;
-use crate::task::model::actor_model::TriggerSourceInfo;
+use crate::task::model::actor_model::{TriggerItem, TriggerSourceInfo, TriggerSourceType};
 use crate::task::model::app_instance::InstanceAddrSelectResult;
 use crate::task::model::enum_type::TaskStatusType;
 use serde::{Deserialize, Serialize};
@@ -40,11 +40,15 @@ pub struct JobTaskInfo {
 }
 
 impl JobTaskInfo {
-    pub fn from_job(trigger_time: u32, job: &Arc<JobInfo>) -> Self {
+    pub fn from_job_trigger(trigger_item: &TriggerItem) -> Self {
+        let (from_outside, trigger_user) = match &trigger_item.trigger_source.source_type {
+            TriggerSourceType::System => (false, EMPTY_ARC_STR.clone()),
+            TriggerSourceType::User(trigger_user) => (true, trigger_user.clone()),
+        };
         JobTaskInfo {
             task_id: 0,
-            job_id: job.id,
-            trigger_time,
+            job_id: trigger_item.job_info.id,
+            trigger_time: trigger_item.trigger_time,
             instance_addr: EMPTY_ARC_STR.clone(),
             trigger_message: EMPTY_ARC_STR.clone(),
             status: TaskStatusType::Init,
@@ -52,13 +56,13 @@ impl JobTaskInfo {
             callback_message: EMPTY_ARC_STR.clone(),
             execution_time: 0,
             trigger_from: EMPTY_ARC_STR.clone(),
-            try_times: job.try_times,
+            try_times: trigger_item.job_info.try_times,
             try_logs: vec![],
-            retry_interval: job.retry_interval,
+            retry_interval: trigger_item.job_info.retry_interval,
             retry_count: 0,
-            timeout_second: job.timeout_second,
-            from_outside: false,
-            trigger_user: EMPTY_ARC_STR.clone(),
+            timeout_second: trigger_item.job_info.timeout_second,
+            from_outside,
+            trigger_user,
         }
     }
 

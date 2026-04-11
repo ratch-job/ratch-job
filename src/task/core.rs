@@ -197,7 +197,7 @@ impl TaskManager {
         let mut notify_task_list = Vec::with_capacity(trigger_items.len());
         let now = now_second_u32();
         for item in trigger_items {
-            let mut task_instance = JobTaskInfo::from_job(item.trigger_time, &item.job_info);
+            let mut task_instance = JobTaskInfo::from_job_trigger(&item);
             if let TriggerSourceType::User(_) = &item.trigger_source.source_type {
                 task_instance.try_times = 0;
             }

@@ -24,6 +24,8 @@ pub struct JobRunState {
     pub version: u32,
     pub route_value: u32,
     pub source_job: Arc<JobInfo>,
+    /// 已标记下次触发任务
+    pub marked_delay_trigger: bool,
 }
 
 impl JobRunState {
@@ -43,6 +45,7 @@ impl JobRunState {
             version: 0,
             route_value: 0,
             source_job,
+            marked_delay_trigger: false,
         }
     }
     pub fn calculate_first_trigger_time<T: TimeZone>(&self, datetime: &DateTime<T>) -> u32 {

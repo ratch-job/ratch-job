@@ -138,6 +138,7 @@ impl ScheduleManager {
         if let Some(job) = self.job_run_state.get_mut(&job_id) {
             job.pre_trigger_time = last_time;
             job.next_trigger_time = next_time;
+            job.marked_delay_trigger = false;
         }
     }
 
@@ -161,6 +162,9 @@ impl ScheduleManager {
                 if let Some(now_datetime) = get_datetime_by_second(reset_time, &self.fixed_offset) {
                     let next_trigger_time =
                         job_run_state.calculate_first_trigger_time(&now_datetime);
+                    if job_run_state.schedule_type == ScheduleType::Delay {
+                        job_run_state.marked_delay_trigger = true;
+                    }
                     job_run_state.next_trigger_time = next_trigger_time;
                     active_job_param = Some((next_trigger_time, job_run_state.version))
                 }
@@ -171,6 +175,9 @@ impl ScheduleManager {
             {
                 let next_trigger_time = job_run_state.calculate_first_trigger_time(&now_datetime);
                 job_run_state.next_trigger_time = next_trigger_time;
+                if job_run_state.schedule_type == ScheduleType::Delay {
+                    job_run_state.marked_delay_trigger = true;
+                }
                 active_job_param = Some((next_trigger_time, job_run_state.version))
             }
             self.job_run_state.insert(job_id, job_run_state);
@@ -451,7 +458,7 @@ impl ScheduleManager {
             self.last_trigger_time = task_log.trigger_time;
         }
         let mut metrics_info = UpdateTaskMetricsInfo::default();
-        let mut finish_delay_job_id: Option<u64> = None;
+        let mut finish_job_id: Option<u64> = None;
         match &task_log.status {
             TaskStatusType::Init => {
                 //self.running_task.insert(task_log.task_id, task_log.clone());
@@ -460,6 +467,7 @@ impl ScheduleManager {
             TaskStatusType::Running => {
                 if let Some(v) = self.finish_mark_group.get_value(task_log.task_id) {
                     log::warn!("task_id:{} is finish buy delay handle", task_log.task_id);
+                    finish_job_id = Some(task_log.job_id);
                     if v {
                         metrics_info.success_count += 1;
                     } else {
@@ -475,10 +483,10 @@ impl ScheduleManager {
                 }
             }
             TaskStatusType::Success => {
-                if let Some(v) = self.running_task.remove(&task_log.task_id) {
+                finish_job_id = Some(task_log.job_id);
+                if let Some(_v) = self.running_task.remove(&task_log.task_id) {
                     if task_log.finish_time >= self.app_start_second {
                         metrics_info.success_count += 1;
-                        finish_delay_job_id = Some(v.job_id);
                     }
                 }
             }
@@ -491,24 +499,39 @@ impl ScheduleManager {
                         RedoType::Retry,
                     );
                 } else {
-                    if let Some(v) = self.running_task.remove(&task_log.task_id) {
+                    finish_job_id = Some(task_log.job_id);
+                    if let Some(_v) = self.running_task.remove(&task_log.task_id) {
                         if task_log.finish_time >= self.app_start_second {
                             metrics_info.fail_count += 1;
-                            finish_delay_job_id = Some(v.job_id);
                         }
                     }
                 }
             }
         };
-        if let Some(job_id) = finish_delay_job_id {
-            if let Some(job) = self.job_run_state.get(&job_id) {
-                if job.schedule_type == ScheduleType::Delay {
-                    let next_trigger_time =
-                        std::cmp::max(job.last_finish_time + job.delay_second, now_second_u32());
-                    self.active_job(job_id, next_trigger_time, job.version);
+        if let Some(job_id) = finish_job_id {
+            let mut next_trigger_time = 0;
+            let mut job_version = 0;
+            if let Some(job) = self.job_run_state.get_mut(&job_id) {
+                job.last_finish_time = task_log.finish_time;
+                let now_second = now_second_u32();
+                if task_log.finish_time == 0 {
+                    job.last_finish_time = now_second;
+                }
+                if job.schedule_type == ScheduleType::Delay
+                    && !task_log.from_outside
+                    && !job.marked_delay_trigger
+                {
+                    job.marked_delay_trigger = true;
+                    next_trigger_time =
+                        std::cmp::max(job.last_finish_time + job.delay_second, now_second);
+                    job_version = job.version;
                 }
             }
+            if next_trigger_time > 0 {
+                self.active_job(job_id, next_trigger_time, job_version);
+            }
         }
+        //log::info!("update_running_task end,{},{},{},{}",&task_log.job_id,&task_log.task_id,task_log.finish_time,task_log.status.to_str());
         (task_log, metrics_info)
     }
 
@@ -691,6 +714,7 @@ impl ScheduleManager {
                         job_run_state.next_active = true;
                         //上次完成时间
                         job_run_state.last_finish_time = now;
+                        job_run_state.marked_delay_trigger = true;
                         job_run_state.next_trigger_time =
                             job_run_state.calculate_next_trigger_time(&now_datetime);
                         active_jobs.push((
