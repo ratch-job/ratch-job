@@ -3,6 +3,7 @@ use crate::cache::core::CacheManager;
 use crate::common::app_config::AppConfig;
 use crate::job::core::JobManager;
 use crate::metrics::core::MetricsManager;
+use crate::namespace::core::NamespaceManager;
 use crate::raft::cluster::node_manager::ClusterNodeManager;
 use crate::raft::cluster::route::RaftRequestRoute;
 use crate::raft::store::core::Store;
@@ -29,6 +30,7 @@ pub struct ShareData {
     pub task_manager: Addr<TaskManager>,
     pub task_history_manager: Addr<TaskHistoryManager>,
     pub metrics_manager: Addr<MetricsManager>,
+    pub namespace_manager: Addr<NamespaceManager>,
     pub raft_request_route: Arc<RaftRequestRoute>,
     pub factory_data: FactoryData,
     pub raft: Arc<RatchRaft>,

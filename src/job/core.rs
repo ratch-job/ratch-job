@@ -342,6 +342,14 @@ impl Handler<JobManagerReq> for JobManager {
                 let (size, list) = self.query_job_task_logs(&query_param);
                 return Ok(JobManagerResult::JobTaskLogPageInfo(size, list));
             }
+            JobManagerReq::CountJobsByNamespace(namespace) => {
+                let count = self
+                    .job_map
+                    .values()
+                    .filter(|job| job.job.namespace.as_str() == namespace)
+                    .count();
+                return Ok(JobManagerResult::Count(count));
+            }
         }
         Ok(JobManagerResult::None)
     }

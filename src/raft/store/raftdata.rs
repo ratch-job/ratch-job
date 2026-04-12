@@ -2,9 +2,11 @@ use crate::app::core::AppManager;
 use crate::cache::core::CacheManager;
 use crate::common::constant::{
     APP_INFO_TABLE_NAME, CACHE_TABLE_NAME, JOB_TABLE_NAME, JOB_TASK_HISTORY_TABLE_NAME,
-    JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME, SEQUENCE_TABLE_NAME, USER_TABLE_NAME,
+    JOB_TASK_RUNNING_TABLE_NAME, JOB_TASK_TABLE_NAME, NAMESPACE_TABLE_NAME, SEQUENCE_TABLE_NAME,
+    USER_TABLE_NAME,
 };
 use crate::job::core::JobManager;
+use crate::namespace::core::NamespaceManager;
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftapply::RaftApplyDataRequest;
 use crate::raft::store::raftindex::{RaftIndexManager, RaftIndexRequest};
@@ -23,6 +25,7 @@ pub struct RaftDataHandler {
     pub schedule_manager: Addr<ScheduleManager>,
     pub cache_manager: Addr<CacheManager>,
     pub user_manager: Addr<UserManager>,
+    pub namespace_manager: Addr<NamespaceManager>,
 }
 
 impl RaftDataHandler {
@@ -46,6 +49,9 @@ impl RaftDataHandler {
             .await??;
         self.user_manager
             .send(RaftApplyDataRequest::BuildSnapshot(writer.clone()))
+            .await??;
+        self.namespace_manager
+            .send(RaftApplyDataRequest::BuildSnapshot(writer))
             .await??;
         Ok(())
     }
@@ -82,6 +88,10 @@ impl RaftDataHandler {
                 let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
                 self.user_manager.send(req).await??;
             }
+            ref tree if *tree == NAMESPACE_TABLE_NAME.as_str() => {
+                let req = RaftApplyDataRequest::LoadSnapshotRecord(record);
+                self.namespace_manager.send(req).await??;
+            }
             _ => {
                 log::warn!(
                     "RaftDataHandler|load_snapshot|ignore_data|tree={}",
@@ -105,6 +115,8 @@ impl RaftDataHandler {
         self.cache_manager
             .do_send(RaftApplyDataRequest::LoadCompleted);
         self.user_manager
+            .do_send(RaftApplyDataRequest::LoadCompleted);
+        self.namespace_manager
             .do_send(RaftApplyDataRequest::LoadCompleted);
         Ok(())
     }
@@ -149,6 +161,9 @@ impl RaftDataHandler {
             }
             ClientRequest::UserReq { req } => {
                 self.user_manager.send(req).await.ok();
+            }
+            ClientRequest::NamespaceReq { req } => {
+                self.namespace_manager.send(req).await.ok();
             }
         }
         Ok(())
@@ -198,6 +213,10 @@ impl RaftDataHandler {
                 let r = self.user_manager.send(req).await??;
                 Ok(ClientResponse::UserResp { resp: r })
             }
+            ClientRequest::NamespaceReq { req } => {
+                let r = self.namespace_manager.send(req).await??;
+                Ok(ClientResponse::NamespaceResp { resp: r })
+            }
         }
     }
 
@@ -235,6 +254,9 @@ impl RaftDataHandler {
             }
             ClientRequest::UserReq { req } => {
                 self.user_manager.do_send(req);
+            }
+            ClientRequest::NamespaceReq { req } => {
+                self.namespace_manager.do_send(req);
             }
         }
         Ok(())

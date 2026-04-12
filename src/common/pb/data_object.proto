@@ -99,3 +99,9 @@ message UserInfoDo {
     PrivilegeGroupDo namespace_privilege = 10;
     PrivilegeGroupDo app_privilege = 11;
 }
+
+message NamespaceDo {
+    string id = 1;
+    string name = 2;
+    string type = 3;
+}

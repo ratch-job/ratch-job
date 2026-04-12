@@ -5,3 +5,5 @@ Cargo.lock
 cluster_example/
 tmp/
 *.DS_Store
+docs/
+docs_tmp/

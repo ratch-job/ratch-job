@@ -13,6 +13,7 @@ pub enum JobManagerReq {
     GetJobIdByKey(JobKey),
     QueryJob(JobQueryParam),
     QueryJobTaskLog(JobTaskLogQueryParam),
+    CountJobsByNamespace(String),
 }
 
 #[derive(Debug, Clone)]
@@ -21,6 +22,7 @@ pub enum JobManagerResult {
     JobId(Option<u64>),
     JobPageInfo(usize, Vec<JobInfoDto>),
     JobTaskLogPageInfo(usize, Vec<Arc<JobTaskInfo>>),
+    Count(usize),
     None,
 }
 

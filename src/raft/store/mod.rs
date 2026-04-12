@@ -3,6 +3,7 @@ use self::model::LogRecordDto;
 use crate::app::model::{AppManagerRaftReq, AppManagerRaftResult};
 use crate::cache::actor_model::{CacheManagerRaftReq, CacheManagerRaftResult};
 use crate::job::model::actor_model::{JobManagerRaftReq, JobManagerRaftResult};
+use crate::namespace::model::actor_model::{NamespaceManagerRaftReq, NamespaceManagerRaftResult};
 use crate::schedule::model::actor_model::{ScheduleManagerRaftReq, ScheduleManagerRaftResult};
 use crate::sequence::model::{SequenceRaftReq, SequenceRaftResult};
 use crate::user::actor_model::{UserManagerRaftReq, UserManagerRaftResult};
@@ -32,6 +33,7 @@ pub enum ClientRequest {
     ScheduleReq { req: ScheduleManagerRaftReq },
     CacheReq { req: CacheManagerRaftReq },
     UserReq { req: UserManagerRaftReq },
+    NamespaceReq { req: NamespaceManagerRaftReq },
 }
 
 impl AppData for ClientRequest {}
@@ -62,6 +64,9 @@ pub enum ClientResponse {
     },
     UserResp {
         resp: UserManagerRaftResult,
+    },
+    NamespaceResp {
+        resp: NamespaceManagerRaftResult,
     },
 }
 

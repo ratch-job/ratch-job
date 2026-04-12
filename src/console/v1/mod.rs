@@ -18,8 +18,24 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
     config.service(
         web::scope("/ratchjob/api/console/v1")
             .service(
-                web::resource("/namespaces/list")
+                web::resource("/namespace/list")
                     .route(web::get().to(namespace_api::query_namespace_list)),
+            )
+            .service(
+                web::resource("/namespace/info")
+                    .route(web::get().to(namespace_api::query_namespace_info)),
+            )
+            .service(
+                web::resource("/namespace/create")
+                    .route(web::post().to(namespace_api::create_namespace)),
+            )
+            .service(
+                web::resource("/namespace/update")
+                    .route(web::post().to(namespace_api::update_namespace)),
+            )
+            .service(
+                web::resource("/namespace/remove")
+                    .route(web::post().to(namespace_api::remove_namespace)),
             )
             .service(web::resource("/login/login").route(web::post().to(login_api::login)))
             .service(web::resource("/login/captcha").route(web::get().to(login_api::gen_captcha)))
