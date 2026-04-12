@@ -8,6 +8,8 @@ use crate::common::app_config::AppConfig;
 use crate::common::constant::{APP_INFO_TABLE_NAME, EMPTY_ARC_STR};
 use crate::common::datetime_utils::now_second_u32;
 use crate::common::pb::data_object::AppInfoDo;
+use crate::namespace::core::NamespaceManager;
+use crate::namespace::model::actor_model::NamespaceManagerReq;
 use crate::raft::store::model::SnapshotRecordDto;
 use crate::raft::store::raftapply::{RaftApplyDataRequest, RaftApplyDataResponse};
 use crate::raft::store::raftsnapshot::{SnapshotWriterActor, SnapshotWriterRequest};
@@ -17,7 +19,7 @@ use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
 use inner_mem_cache::TimeoutSet;
 use quick_protobuf::{BytesReader, Writer};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 #[bean(inject)]
@@ -28,6 +30,7 @@ pub struct AppManager {
     app_index: AppIndex,
     app_instance_timeout: TimeoutSet<InstanceTimeoutInfo>,
     instance_timeout: u32,
+    namespace_manager: Option<Addr<NamespaceManager>>,
 }
 
 impl AppManager {
@@ -39,6 +42,7 @@ impl AppManager {
             app_index: AppIndex::new(),
             instance_timeout: 180,
             app_instance_timeout: TimeoutSet::new(),
+            namespace_manager: None,
         }
     }
 
@@ -71,7 +75,26 @@ impl AppManager {
                 app_param.instance_addrs,
                 app_param.last_modified_time,
             );
+            if let Some(namespace_manager) = self.namespace_manager.as_ref() {
+                namespace_manager.do_send(NamespaceManagerReq::SetWeak(key.namespace.clone()));
+            }
             self.app_map.insert(key, app_info);
+        }
+    }
+
+    fn remove_app(&mut self, key: AppKey) {
+        self.app_map.remove(&key);
+        let mut has_namespace = false;
+        for app_key in self.app_map.keys() {
+            if app_key.namespace == key.namespace {
+                has_namespace = true;
+                break;
+            }
+        }
+        if !has_namespace {
+            if let Some(namespace_manager) = self.namespace_manager.as_ref() {
+                namespace_manager.do_send(NamespaceManagerReq::RemoveWeak(key.namespace.clone()));
+            }
         }
     }
 
@@ -357,7 +380,9 @@ impl AppManager {
         let now = now_second_u32();
         let start_time = now - self.instance_timeout;
         let mut add_keys = vec![];
+        let mut namespace_id_set = HashSet::new();
         for (app_key, app_info) in self.app_map.iter() {
+            namespace_id_set.insert(app_key.namespace.clone());
             if !app_info.is_auto() {
                 // 非自动注册的应用，不处理
                 continue;
@@ -384,6 +409,11 @@ impl AppManager {
         if let Some(task_manager) = self.task_manager.as_ref() {
             if !add_keys.is_empty() {
                 task_manager.do_send(TaskManagerReq::AddAppInstances(add_keys));
+            }
+        }
+        if let Some(namespace_manager) = self.namespace_manager.as_ref() {
+            for id in namespace_id_set {
+                namespace_manager.do_send(NamespaceManagerReq::SetWeak(id));
             }
         }
         Ok(())
@@ -419,6 +449,7 @@ impl Inject for AppManager {
         _ctx: &mut Self::Context,
     ) {
         self.task_manager = factory_data.get_actor();
+        self.namespace_manager = factory_data.get_actor();
         self.app_config = factory_data.get_bean();
         if let Some(config) = &self.app_config {
             self.instance_timeout = config.app_instance_health_timeout + 1;
@@ -480,7 +511,7 @@ impl Handler<AppManagerRaftReq> for AppManager {
                 self.update_app(param);
             }
             AppManagerRaftReq::RemoveApp(key) => {
-                self.app_map.remove(&key);
+                self.remove_app(key);
             }
             AppManagerRaftReq::RegisterInstance(param) => {
                 self.register_app_instance(

@@ -22,7 +22,6 @@ impl NamespaceHandleRequest {
         NamespaceParam {
             id: self.namespace_id,
             name: self.namespace_name.unwrap_or_default(),
-            r#type: "0".to_string(),
         }
     }
 }

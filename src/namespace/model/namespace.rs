@@ -36,7 +36,6 @@ impl<'a> From<NamespaceDo<'a>> for Namespace {
 pub struct NamespaceParam {
     pub id: Option<Arc<String>>,
     pub name: String,
-    pub r#type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

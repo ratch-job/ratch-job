@@ -47,7 +47,11 @@ impl NamespaceManager {
         }
     }
 
-    fn update_namespace(&mut self, param: NamespaceParam) -> anyhow::Result<Arc<NamespaceInfo>> {
+    fn update_namespace(
+        &mut self,
+        param: NamespaceParam,
+        from_weak: bool,
+    ) -> anyhow::Result<Arc<NamespaceInfo>> {
         let id = match param.id {
             Some(ref id) if !id.is_empty() => id.clone(),
             _ => return Err(anyhow::anyhow!("namespace id cannot be empty")),
@@ -59,14 +63,15 @@ impl NamespaceManager {
             log::error!("Failed to update namespace: name is empty, id={}", id);
             return Err(anyhow::anyhow!("namespace name cannot be empty"));
         }
-        if param.r#type.is_empty() {
-            log::error!("Failed to update namespace: type is empty, id={}", id);
-            return Err(anyhow::anyhow!("namespace type cannot be empty"));
-        }
+        let from_type = if from_weak {
+            "weak".to_string()
+        } else {
+            "0".to_string()
+        };
         if let Some(wrap) = self.namespace_map.get_mut(&id) {
             let ns = Arc::make_mut(&mut wrap.namespace);
             ns.name = param.name;
-            ns.r#type = param.r#type;
+            ns.r#type = from_type.clone();
             let info = NamespaceInfo::from_namespace(&wrap.namespace);
             log::info!(
                 "Updated namespace: id={}, name={}, type={}",
@@ -79,7 +84,7 @@ impl NamespaceManager {
         let namespace = Namespace {
             id: id.clone(),
             name: param.name,
-            r#type: param.r#type,
+            r#type: from_type,
         };
         let wrap = NamespaceWrap::new(Arc::new(namespace), self.version);
         self.version += 1;
@@ -143,9 +148,8 @@ impl NamespaceManager {
         let param = NamespaceParam {
             id: Some(id.clone()),
             name: id.to_string(),
-            r#type: "weak".to_string(),
         };
-        self.update_namespace(param).ok();
+        self.update_namespace(param, true).ok();
     }
 
     fn remove_weak(&mut self, id: Arc<String>) {
@@ -225,7 +229,7 @@ impl Handler<NamespaceManagerRaftReq> for NamespaceManager {
     fn handle(&mut self, msg: NamespaceManagerRaftReq, _ctx: &mut Self::Context) -> Self::Result {
         match msg {
             NamespaceManagerRaftReq::UpdateNamespace(param) => {
-                self.update_namespace(param).ok();
+                self.update_namespace(param, false).ok();
                 Ok(NamespaceManagerRaftResult::None)
             }
             NamespaceManagerRaftReq::Remove(id) => {
