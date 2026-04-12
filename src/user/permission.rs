@@ -145,7 +145,7 @@ lazy_static::lazy_static! {
         R::Path("/ratchjob/api/console/v1/user/info",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/user/web_resources",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/user/reset_password",HTTP_METHOD_ALL),
-        R::Path("/ratchjob/api/console/v1/namespaces/list",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/namespace/list",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/app/list",HTTP_METHOD_GET),
 
     ]);
@@ -165,6 +165,30 @@ lazy_static::lazy_static! {
         R::Path("/ratchjob/manage/app",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/app/list",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/app/info",HTTP_METHOD_GET),
+    ]);
+
+    static ref M_NAMESPACE_VISITOR: ModuleResource = ModuleResource::new(vec![
+        //WebResource
+        R::WebResource("/manage/namespace"),
+        R::WebResource("/ratchjob/manage/namespace"),
+        //path
+        R::Path("/ratchjob/manage/namespace",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/namespace/info",HTTP_METHOD_ALL),
+        R::Path("/ratchjob/api/console/v1/namespace/list",HTTP_METHOD_ALL),
+    ]);
+
+    static ref M_NAMESPACE_MANAGE: ModuleResource = ModuleResource::new(vec![
+        //WebResource
+        R::WebResource("/manage/namespace"),
+        R::WebResource("/ratchjob/manage/namespace"),
+        R::WebResource("NAMESPACE_UPDATE"),
+        //path
+        R::Path("/ratchjob/manage/namespace",HTTP_METHOD_GET),
+
+        R::Path("/ratchjob/api/console/v1/namespace/add",HTTP_METHOD_ALL),
+        R::Path("/ratchjob/api/console/v1/namespace/create",HTTP_METHOD_ALL),
+        R::Path("/ratchjob/api/console/v1/namespace/update",HTTP_METHOD_ALL),
+        R::Path("/ratchjob/api/console/v1/namespace/remove",HTTP_METHOD_ALL),
     ]);
 
     static ref M_APP_MANAGER: ModuleResource = ModuleResource::new(vec![
@@ -244,23 +268,28 @@ lazy_static::lazy_static! {
         &M_JOB_VISITOR,
         &M_CLUSTER_VISITOR,
         &M_METRICS_VISITOR,
+        &M_NAMESPACE_VISITOR,
     ]));
 
     static ref R_DEVELOPER: Arc<GroupResource> = Arc::new(GroupResource::new(vec![
         &M_BASE,
         &M_APP_MANAGER,
         &M_JOB_MANAGER,
+        &M_NAMESPACE_MANAGE,
         &M_CLUSTER_VISITOR,
         &M_METRICS_VISITOR,
+        &M_NAMESPACE_VISITOR,
     ]));
 
     static ref R_MANAGER: Arc<GroupResource> = Arc::new(GroupResource::new(vec![
         &M_BASE,
         &M_APP_MANAGER,
         &M_JOB_MANAGER,
+        &M_NAMESPACE_MANAGE,
         &M_CLUSTER_VISITOR,
         &M_METRICS_VISITOR,
         &M_USER_MANAGE,
+        &M_NAMESPACE_VISITOR,
     ]));
 
 }

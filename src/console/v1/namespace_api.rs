@@ -1,13 +1,12 @@
 use crate::common::model::ApiResult;
 use crate::common::share_data::ShareData;
 use crate::common::string_utils::StringUtils;
-use crate::console::model::namespace_model::NamespaceInfo;
+use crate::console::model::namespace_model::{NamespaceHandleRequest, NamespaceInfo};
 use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
 use crate::namespace::model::actor_model::{
     NamespaceManagerRaftReq, NamespaceManagerRaftResult, NamespaceManagerReq,
     NamespaceManagerResult,
 };
-use crate::namespace::model::namespace::NamespaceParam;
 use crate::raft::store::ClientRequest;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
@@ -83,21 +82,20 @@ pub async fn query_namespace_info(
 
 pub async fn update_namespace(
     app: Data<Arc<ShareData>>,
-    web::Json(mut param): web::Json<NamespaceParam>,
+    web::Json(mut param): web::Json<NamespaceHandleRequest>,
 ) -> impl Responder {
-    if param.name.is_empty() {
+    if StringUtils::is_option_empty(&param.namespace_name) {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             "INVALID_PARAMETER".to_string(),
             Some("Namespace name cannot be empty".to_string()),
         ));
     }
-    if StringUtils::is_option_empty_arc(&param.id) {
-        param.id = Some(Arc::new(uuid::Uuid::new_v4().to_string()));
+    if StringUtils::is_option_empty_arc(&param.namespace_id) {
+        param.namespace_id = Some(Arc::new(uuid::Uuid::new_v4().to_string()));
     }
-    let id = param.id.clone();
-    param.r#type = "0".to_string();
+    let id = param.namespace_id.clone();
 
-    let msg = NamespaceManagerRaftReq::UpdateNamespace(param);
+    let msg = NamespaceManagerRaftReq::UpdateNamespace(param.to_param());
     match app
         .raft_request_route
         .request(ClientRequest::NamespaceReq { req: msg })

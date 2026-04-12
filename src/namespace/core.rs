@@ -95,6 +95,9 @@ impl NamespaceManager {
     }
 
     fn remove_namespace(&mut self, id: Arc<String>) -> anyhow::Result<()> {
+        if id.as_str() == DEFAULT_XXL_NAMESPACE.as_str() {
+            return Ok(());
+        }
         self.namespace_map.remove(&id).ok_or_else(|| {
             log::error!("Failed to remove namespace: namespace not found, id={}", id);
             anyhow::anyhow!("namespace not found")
@@ -134,7 +137,7 @@ impl NamespaceManager {
             .collect()
     }
     fn set_weak(&mut self, id: Arc<String>) {
-        if let Some(ns) = self.namespace_map.get(&id) {
+        if let Some(_ns) = self.namespace_map.get(&id) {
             return;
         }
         let param = NamespaceParam {
