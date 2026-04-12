@@ -6,7 +6,7 @@ use std::sync::Arc;
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Namespace {
-    pub id: String,
+    pub id: Arc<String>,
     pub name: String,
     pub r#type: String,
 }
@@ -24,7 +24,7 @@ impl Namespace {
 impl<'a> From<NamespaceDo<'a>> for Namespace {
     fn from(ns_do: NamespaceDo<'a>) -> Self {
         Namespace {
-            id: ns_do.id.to_string(),
+            id: Arc::new(ns_do.id.to_string()),
             name: ns_do.name.to_string(),
             r#type: ns_do.type_pb.to_string(),
         }
@@ -34,7 +34,7 @@ impl<'a> From<NamespaceDo<'a>> for Namespace {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NamespaceParam {
-    pub id: Option<String>,
+    pub id: Option<Arc<String>>,
     pub name: String,
     pub r#type: String,
 }
@@ -50,7 +50,7 @@ pub struct NamespaceInfo {
 impl NamespaceInfo {
     pub fn from_namespace(ns: &Namespace) -> Self {
         NamespaceInfo {
-            id: Arc::new(ns.id.clone()),
+            id: ns.id.clone(),
             name: ns.name.clone(),
             r#type: ns.r#type.clone(),
         }
@@ -67,18 +67,11 @@ pub struct NamespaceQueryParam {
 
 pub struct NamespaceWrap {
     pub namespace: Arc<Namespace>,
-    pub name_lower: String,
-    pub type_lower: String,
+    pub version: u64,
 }
 
 impl NamespaceWrap {
-    pub fn new(namespace: Arc<Namespace>) -> Self {
-        let name_lower = namespace.name.to_lowercase();
-        let type_lower = namespace.r#type.to_lowercase();
-        NamespaceWrap {
-            namespace,
-            name_lower,
-            type_lower,
-        }
+    pub fn new(namespace: Arc<Namespace>, version: u64) -> Self {
+        NamespaceWrap { namespace, version }
     }
 }

@@ -27,7 +27,7 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
             )
             .service(
                 web::resource("/namespace/create")
-                    .route(web::post().to(namespace_api::create_namespace)),
+                    .route(web::post().to(namespace_api::update_namespace)),
             )
             .service(
                 web::resource("/namespace/update")

@@ -1,22 +1,23 @@
-use crate::common::model::{ApiResult, PageResult};
+use crate::common::model::ApiResult;
 use crate::common::share_data::ShareData;
+use crate::common::string_utils::StringUtils;
 use crate::console::model::namespace_model::NamespaceInfo;
 use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
-use crate::namespace::model::actor_model::{NamespaceManagerRaftReq, NamespaceManagerReq, NamespaceManagerResult, NamespaceManagerRaftResult};
-use crate::namespace::model::namespace::{NamespaceParam, NamespaceQueryParam};
+use crate::namespace::model::actor_model::{
+    NamespaceManagerRaftReq, NamespaceManagerRaftResult, NamespaceManagerReq,
+    NamespaceManagerResult,
+};
+use crate::namespace::model::namespace::NamespaceParam;
 use crate::raft::store::ClientRequest;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
 
-pub async fn query_namespace_list(
-    app: Data<Arc<ShareData>>,
-    web::Query(param): web::Query<NamespaceQueryParam>,
-) -> impl Responder {
-    let req = NamespaceManagerReq::QueryNamespace(param);
+pub async fn query_namespace_list(app: Data<Arc<ShareData>>) -> impl Responder {
+    let req = NamespaceManagerReq::QueryList;
     match app.namespace_manager.send(req).await {
         Ok(Ok(result)) => match result {
-                NamespaceManagerResult::NamespacePageInfo(total, list) => {
+            NamespaceManagerResult::NamespaceList(list) => {
                 let list: Vec<NamespaceInfo> = list
                     .into_iter()
                     .map(|ns| NamespaceInfo {
@@ -25,10 +26,7 @@ pub async fn query_namespace_list(
                         r#type: Some(ns.r#type.clone()),
                     })
                     .collect();
-                HttpResponse::Ok().json(ApiResult::success(Some(PageResult {
-                    total_count: total,
-                    list,
-                })))
+                HttpResponse::Ok().json(ApiResult::success(Some(list)))
             }
             _ => HttpResponse::Ok().json(ApiResult::<()>::error(
                 "QUERY_NAMESPACE_ERROR".to_string(),
@@ -50,7 +48,7 @@ pub async fn query_namespace_info(
     app: Data<Arc<ShareData>>,
     web::Query(id): web::Query<String>,
 ) -> impl Responder {
-    let req = NamespaceManagerReq::GetNamespace(id);
+    let req = NamespaceManagerReq::GetNamespace(Arc::new(id));
     match app.namespace_manager.send(req).await {
         Ok(Ok(result)) => match result {
             NamespaceManagerResult::NamespaceInfo(Some(ns)) => {
@@ -83,77 +81,21 @@ pub async fn query_namespace_info(
     }
 }
 
-pub async fn create_namespace(
-    app: Data<Arc<ShareData>>,
-    web::Json(param): web::Json<NamespaceParam>,
-) -> impl Responder {
-    if param.name.is_empty() {
-        return HttpResponse::Ok().json(ApiResult::<()>::error(
-            "INVALID_PARAMETER".to_string(),
-            Some("Namespace name cannot be empty".to_string()),
-        ));
-    }
-    if param.r#type.is_empty() {
-        return HttpResponse::Ok().json(ApiResult::<()>::error(
-            "INVALID_PARAMETER".to_string(),
-            Some("Namespace type cannot be empty".to_string()),
-        ));
-    }
-
-    let msg = NamespaceManagerRaftReq::AddNamespace(param);
-    match app
-        .raft_request_route
-        .request(ClientRequest::NamespaceReq { req: msg })
-        .await
-    {
-        Ok(resp) => match resp {
-            crate::raft::store::ClientResponse::NamespaceResp { resp } => match resp {
-                NamespaceManagerRaftResult::NamespaceInfo(ns) => {
-                    let info = NamespaceInfo {
-                        namespace_id: Some(ns.id.clone()),
-                        namespace_name: Some(ns.name.clone()),
-                        r#type: Some(ns.r#type.clone()),
-                    };
-                    HttpResponse::Ok().json(ApiResult::success(Some(info)))
-                }
-                NamespaceManagerRaftResult::None => {
-                    HttpResponse::Ok().json(ApiResult::success(Some(true)))
-                }
-            },
-            _ => HttpResponse::Ok().json(ApiResult::<()>::error(
-                "CREATE_NAMESPACE_ERROR".to_string(),
-                Some("Invalid response type".to_string()),
-            )),
-        },
-        Err(e) => HttpResponse::Ok().json(ApiResult::<()>::error(
-            "SYSTEM_ERROR".to_string(),
-            Some(e.to_string()),
-        )),
-    }
-}
-
 pub async fn update_namespace(
     app: Data<Arc<ShareData>>,
-    web::Json(param): web::Json<NamespaceParam>,
+    web::Json(mut param): web::Json<NamespaceParam>,
 ) -> impl Responder {
-    if param.id.is_none() {
-        return HttpResponse::Ok().json(ApiResult::<()>::error(
-            "INVALID_PARAMETER".to_string(),
-            Some("Namespace id cannot be empty".to_string()),
-        ));
-    }
     if param.name.is_empty() {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             "INVALID_PARAMETER".to_string(),
             Some("Namespace name cannot be empty".to_string()),
         ));
     }
-    if param.r#type.is_empty() {
-        return HttpResponse::Ok().json(ApiResult::<()>::error(
-            "INVALID_PARAMETER".to_string(),
-            Some("Namespace type cannot be empty".to_string()),
-        ));
+    if StringUtils::is_option_empty_arc(&param.id) {
+        param.id = Some(Arc::new(uuid::Uuid::new_v4().to_string()));
     }
+    let id = param.id.clone();
+    param.r#type = "0".to_string();
 
     let msg = NamespaceManagerRaftReq::UpdateNamespace(param);
     match app
@@ -163,16 +105,8 @@ pub async fn update_namespace(
     {
         Ok(resp) => match resp {
             crate::raft::store::ClientResponse::NamespaceResp { resp } => match resp {
-                NamespaceManagerRaftResult::NamespaceInfo(ns) => {
-                    let info = NamespaceInfo {
-                        namespace_id: Some(ns.id.clone()),
-                        namespace_name: Some(ns.name.clone()),
-                        r#type: Some(ns.r#type.clone()),
-                    };
-                    HttpResponse::Ok().json(ApiResult::success(Some(info)))
-                }
                 NamespaceManagerRaftResult::None => {
-                    HttpResponse::Ok().json(ApiResult::success(Some(true)))
+                    HttpResponse::Ok().json(ApiResult::success(Some(id)))
                 }
             },
             _ => HttpResponse::Ok().json(ApiResult::<()>::error(
@@ -189,18 +123,19 @@ pub async fn update_namespace(
 
 pub async fn remove_namespace(
     app: Data<Arc<ShareData>>,
-    web::Query(id): web::Query<String>,
+    web::Json(param): web::Json<NamespaceInfo>,
 ) -> impl Responder {
-    if id.is_empty() {
+    if StringUtils::is_option_empty_arc(&param.namespace_id) {
         return HttpResponse::Ok().json(ApiResult::<()>::error(
             "INVALID_PARAMETER".to_string(),
             Some("Namespace id cannot be empty".to_string()),
         ));
     }
+    let id = param.namespace_id.unwrap();
 
     match app
         .job_manager
-        .send(JobManagerReq::CountJobsByNamespace(id.clone()))
+        .send(JobManagerReq::CountJobsByNamespace(id.as_str().to_string()))
         .await
     {
         Ok(Ok(JobManagerResult::Count(count))) => {

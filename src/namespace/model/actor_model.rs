@@ -6,27 +6,29 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Message, Deserialize, Serialize)]
 #[rtype(result = "anyhow::Result<NamespaceManagerRaftResult>")]
 pub enum NamespaceManagerRaftReq {
-    AddNamespace(NamespaceParam),
     UpdateNamespace(NamespaceParam),
-    Remove(String),
+    Remove(Arc<String>),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum NamespaceManagerRaftResult {
-    NamespaceInfo(Arc<NamespaceInfo>),
     None,
 }
 
 #[derive(Debug, Message)]
 #[rtype(result = "anyhow::Result<NamespaceManagerResult>")]
 pub enum NamespaceManagerReq {
-    GetNamespace(String),
+    GetNamespace(Arc<String>),
+    SetWeak(Arc<String>),
+    RemoveWeak(Arc<String>),
     QueryNamespace(NamespaceQueryParam),
+    QueryList,
 }
 
 #[derive(Debug, Clone)]
 pub enum NamespaceManagerResult {
     NamespaceInfo(Option<Arc<NamespaceInfo>>),
     NamespacePageInfo(usize, Vec<NamespaceInfo>),
+    NamespaceList(Vec<NamespaceInfo>),
     None,
 }

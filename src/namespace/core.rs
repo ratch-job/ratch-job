@@ -1,3 +1,4 @@
+use crate::common::constant::DEFAULT_XXL_NAMESPACE;
 use crate::common::pb::data_object::NamespaceDo;
 use crate::job::core::JobManager;
 use crate::namespace::model::actor_model::{
@@ -18,39 +19,54 @@ use std::sync::Arc;
 
 #[bean(inject)]
 pub struct NamespaceManager {
-    namespace_map: BTreeMap<String, NamespaceWrap>,
+    namespace_map: BTreeMap<Arc<String>, NamespaceWrap>,
     data_load_completed: bool,
     job_manager: Option<Addr<JobManager>>,
+    version: u64,
 }
 
 impl NamespaceManager {
     pub fn new() -> Self {
+        let mut namespace_map = BTreeMap::new();
+        namespace_map.insert(
+            DEFAULT_XXL_NAMESPACE.clone(),
+            NamespaceWrap::new(
+                Arc::new(Namespace {
+                    id: DEFAULT_XXL_NAMESPACE.clone(),
+                    name: DEFAULT_XXL_NAMESPACE.to_string(),
+                    r#type: "0".to_string(),
+                }),
+                0,
+            ),
+        );
         NamespaceManager {
-            namespace_map: BTreeMap::new(),
+            namespace_map,
             data_load_completed: false,
             job_manager: None,
+            version: 1,
         }
     }
 
-    fn add_namespace(&mut self, param: NamespaceParam) -> anyhow::Result<Arc<NamespaceInfo>> {
+    fn update_namespace(&mut self, param: NamespaceParam) -> anyhow::Result<Arc<NamespaceInfo>> {
         let id = match param.id {
             Some(ref id) if !id.is_empty() => id.clone(),
-            _ => uuid::Uuid::new_v4().to_string(),
+            _ => return Err(anyhow::anyhow!("namespace id cannot be empty")),
         };
+        if id.as_str() == DEFAULT_XXL_NAMESPACE.as_str() {
+            return Err(anyhow::anyhow!("jump default namespace"));
+        }
         if param.name.is_empty() {
-            log::error!("Failed to add namespace: name is empty, id={}", id);
+            log::error!("Failed to update namespace: name is empty, id={}", id);
             return Err(anyhow::anyhow!("namespace name cannot be empty"));
         }
         if param.r#type.is_empty() {
-            log::error!("Failed to add namespace: type is empty, id={}", id);
+            log::error!("Failed to update namespace: type is empty, id={}", id);
             return Err(anyhow::anyhow!("namespace type cannot be empty"));
         }
         if let Some(wrap) = self.namespace_map.get_mut(&id) {
             let ns = Arc::make_mut(&mut wrap.namespace);
             ns.name = param.name;
             ns.r#type = param.r#type;
-            wrap.name_lower = ns.name.to_lowercase();
-            wrap.type_lower = ns.r#type.to_lowercase();
             let info = NamespaceInfo::from_namespace(&wrap.namespace);
             log::info!(
                 "Updated namespace: id={}, name={}, type={}",
@@ -65,7 +81,8 @@ impl NamespaceManager {
             name: param.name,
             r#type: param.r#type,
         };
-        let wrap = NamespaceWrap::new(Arc::new(namespace));
+        let wrap = NamespaceWrap::new(Arc::new(namespace), self.version);
+        self.version += 1;
         let info = NamespaceInfo::from_namespace(&wrap.namespace);
         self.namespace_map.insert(id.clone(), wrap);
         log::info!(
@@ -77,34 +94,7 @@ impl NamespaceManager {
         Ok(Arc::new(info))
     }
 
-    fn update_namespace(&mut self, param: NamespaceParam) -> anyhow::Result<Arc<NamespaceInfo>> {
-        let id = match param.id {
-            Some(ref id) if !id.is_empty() => id.clone(),
-            _ => {
-                log::error!("Failed to update namespace: id is empty");
-                return Err(anyhow::anyhow!("namespace id cannot be empty"));
-            }
-        };
-        let wrap = self.namespace_map.get_mut(&id).ok_or_else(|| {
-            log::error!("Failed to update namespace: namespace not found, id={}", id);
-            anyhow::anyhow!("namespace not found")
-        })?;
-        let ns = Arc::make_mut(&mut wrap.namespace);
-        ns.name = param.name;
-        ns.r#type = param.r#type;
-        wrap.name_lower = ns.name.to_lowercase();
-        wrap.type_lower = ns.r#type.to_lowercase();
-        let info = NamespaceInfo::from_namespace(&wrap.namespace);
-        log::info!(
-            "Updated namespace: id={}, name={}, type={}",
-            id,
-            info.name,
-            info.r#type
-        );
-        Ok(Arc::new(info))
-    }
-
-    fn remove_namespace(&mut self, id: String) -> anyhow::Result<()> {
+    fn remove_namespace(&mut self, id: Arc<String>) -> anyhow::Result<()> {
         self.namespace_map.remove(&id).ok_or_else(|| {
             log::error!("Failed to remove namespace: namespace not found, id={}", id);
             anyhow::anyhow!("namespace not found")
@@ -113,17 +103,16 @@ impl NamespaceManager {
         Ok(())
     }
 
-    fn get_namespace(&self, id: &str) -> Option<Arc<NamespaceInfo>> {
+    fn get_namespace(&self, id: &Arc<String>) -> Option<Arc<NamespaceInfo>> {
         self.namespace_map
             .get(id)
             .map(|w| Arc::new(NamespaceInfo::from_namespace(&w.namespace)))
     }
 
-    fn query_namespace(&self, param: NamespaceQueryParam) -> (usize, Vec<NamespaceInfo>) {
+    fn query_namespace_page(&self, param: NamespaceQueryParam) -> (usize, Vec<NamespaceInfo>) {
         let mut list: Vec<&NamespaceWrap> = self.namespace_map.values().collect();
         if let Some(ref ns_type) = param.r#type {
-            let type_lower = ns_type.to_lowercase();
-            list.retain(|w| w.type_lower == type_lower);
+            list.retain(|w| &w.namespace.r#type == ns_type);
         }
         let total = list.len();
         let page = param.page.unwrap_or(1).max(1) as usize;
@@ -138,8 +127,40 @@ impl NamespaceManager {
         (total, paged)
     }
 
+    fn query_list(&self) -> Vec<NamespaceInfo> {
+        self.namespace_map
+            .values()
+            .map(|w| NamespaceInfo::from_namespace(&w.namespace))
+            .collect()
+    }
+    fn set_weak(&mut self, id: Arc<String>) {
+        if let Some(ns) = self.namespace_map.get(&id) {
+            return;
+        }
+        let param = NamespaceParam {
+            id: Some(id.clone()),
+            name: id.to_string(),
+            r#type: "weak".to_string(),
+        };
+        self.update_namespace(param).ok();
+    }
+
+    fn remove_weak(&mut self, id: Arc<String>) {
+        if let Some(ns) = self.namespace_map.get(&id) {
+            if ns.namespace.r#type.as_str() == "weak" {
+                self.namespace_map.remove(&id);
+            }
+        }
+    }
+
     fn build_snapshot(&self, writer: Addr<SnapshotWriterActor>) -> anyhow::Result<()> {
         for (key, wrap) in self.namespace_map.iter() {
+            if wrap.namespace.id.as_str() == DEFAULT_XXL_NAMESPACE.as_str() {
+                continue;
+            }
+            if wrap.namespace.r#type.as_str() == "weak" {
+                continue;
+            }
             let mut buf = Vec::new();
             {
                 let mut pb_writer = Writer::new(&mut buf);
@@ -161,7 +182,8 @@ impl NamespaceManager {
         let mut reader = BytesReader::from_bytes(&record.value);
         let ns_do: NamespaceDo = reader.read_message(&record.value)?;
         let namespace: Namespace = ns_do.into();
-        let wrap = NamespaceWrap::new(Arc::new(namespace.clone()));
+        let wrap = NamespaceWrap::new(Arc::new(namespace.clone()), self.version);
+        self.version += 1;
         self.namespace_map.insert(namespace.id, wrap);
         Ok(())
     }
@@ -199,13 +221,9 @@ impl Handler<NamespaceManagerRaftReq> for NamespaceManager {
 
     fn handle(&mut self, msg: NamespaceManagerRaftReq, _ctx: &mut Self::Context) -> Self::Result {
         match msg {
-            NamespaceManagerRaftReq::AddNamespace(param) => {
-                let info = self.add_namespace(param)?;
-                Ok(NamespaceManagerRaftResult::NamespaceInfo(info))
-            }
             NamespaceManagerRaftReq::UpdateNamespace(param) => {
-                let info = self.update_namespace(param)?;
-                Ok(NamespaceManagerRaftResult::NamespaceInfo(info))
+                self.update_namespace(param).ok();
+                Ok(NamespaceManagerRaftResult::None)
             }
             NamespaceManagerRaftReq::Remove(id) => {
                 self.remove_namespace(id)?;
@@ -224,9 +242,21 @@ impl Handler<NamespaceManagerReq> for NamespaceManager {
                 let info = self.get_namespace(&id);
                 Ok(NamespaceManagerResult::NamespaceInfo(info))
             }
+            NamespaceManagerReq::SetWeak(id) => {
+                self.set_weak(id);
+                Ok(NamespaceManagerResult::None)
+            }
+            NamespaceManagerReq::RemoveWeak(id) => {
+                self.remove_weak(id);
+                Ok(NamespaceManagerResult::None)
+            }
             NamespaceManagerReq::QueryNamespace(param) => {
-                let (total, list) = self.query_namespace(param);
+                let (total, list) = self.query_namespace_page(param);
                 Ok(NamespaceManagerResult::NamespacePageInfo(total, list))
+            }
+            NamespaceManagerReq::QueryList => {
+                let list = self.query_list();
+                Ok(NamespaceManagerResult::NamespaceList(list))
             }
         }
     }
