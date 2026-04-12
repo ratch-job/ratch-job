@@ -53,6 +53,8 @@ message JobTaskDo {
     uint32 timeout_second = 15;
     bool from_outside = 16;
     string trigger_user = 17;
+    string namespace = 18;
+    string app_name = 19;
 }
 
 

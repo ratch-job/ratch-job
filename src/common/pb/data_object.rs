@@ -188,6 +188,8 @@ pub struct JobTaskDo<'a> {
     pub timeout_second: u32,
     pub from_outside: bool,
     pub trigger_user: Cow<'a, str>,
+    pub namespace: Cow<'a, str>,
+    pub app_name: Cow<'a, str>,
 }
 
 impl<'a> MessageRead<'a> for JobTaskDo<'a> {
@@ -212,6 +214,8 @@ impl<'a> MessageRead<'a> for JobTaskDo<'a> {
                 Ok(120) => msg.timeout_second = r.read_uint32(bytes)?,
                 Ok(128) => msg.from_outside = r.read_bool(bytes)?,
                 Ok(138) => msg.trigger_user = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(146) => msg.namespace = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(154) => msg.app_name = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -240,6 +244,8 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
         + if self.timeout_second == 0u32 { 0 } else { 1 + sizeof_varint(*(&self.timeout_second) as u64) }
         + if self.from_outside == false { 0 } else { 2 + sizeof_varint(*(&self.from_outside) as u64) }
         + if self.trigger_user == "" { 0 } else { 2 + sizeof_len((&self.trigger_user).len()) }
+        + if self.namespace == "" { 0 } else { 2 + sizeof_len((&self.namespace).len()) }
+        + if self.app_name == "" { 0 } else { 2 + sizeof_len((&self.app_name).len()) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -260,6 +266,8 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
         if self.timeout_second != 0u32 { w.write_with_tag(120, |w| w.write_uint32(*&self.timeout_second))?; }
         if self.from_outside != false { w.write_with_tag(128, |w| w.write_bool(*&self.from_outside))?; }
         if self.trigger_user != "" { w.write_with_tag(138, |w| w.write_string(&**&self.trigger_user))?; }
+        if self.namespace != "" { w.write_with_tag(146, |w| w.write_string(&**&self.namespace))?; }
+        if self.app_name != "" { w.write_with_tag(154, |w| w.write_string(&**&self.app_name))?; }
         Ok(())
     }
 }

@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct JobTaskListRequest {
     pub job_id: Option<u64>,
+    pub namespace: Option<String>,
+    pub app_name: Option<String>,
     pub page_no: Option<usize>,
     pub page_size: Option<usize>,
 }
@@ -22,6 +24,8 @@ impl JobTaskListRequest {
             job_id: self.job_id.unwrap_or_default(),
             offset,
             limit,
+            namespace: self.namespace,
+            app_name: self.app_name,
         }
     }
 }
@@ -30,6 +34,8 @@ impl JobTaskListRequest {
 #[serde(rename_all = "camelCase")]
 pub struct JobTaskHistoryRequest {
     pub job_id: Option<u64>,
+    pub namespace: Option<String>,
+    pub app_name: Option<String>,
     pub page_no: Option<usize>,
     pub page_size: Option<usize>,
 }
@@ -47,6 +53,8 @@ impl JobTaskHistoryRequest {
             job_id: self.job_id.unwrap_or_default(),
             offset,
             limit,
+            namespace: self.namespace,
+            app_name: self.app_name,
         }
     }
 }

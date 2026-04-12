@@ -394,6 +394,8 @@ pub struct JobTaskLogQueryParam {
     pub job_id: u64,
     pub offset: usize,
     pub limit: usize,
+    pub namespace: Option<String>,
+    pub app_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

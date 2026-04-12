@@ -37,6 +37,10 @@ pub struct JobTaskInfo {
     pub from_outside: bool,
     #[serde(default)]
     pub trigger_user: Arc<String>,
+    #[serde(default)]
+    pub namespace: Arc<String>,
+    #[serde(default)]
+    pub app_name: Arc<String>,
 }
 
 impl JobTaskInfo {
@@ -63,6 +67,8 @@ impl JobTaskInfo {
             timeout_second: trigger_item.job_info.timeout_second,
             from_outside,
             trigger_user,
+            namespace: trigger_item.job_info.namespace.clone(),
+            app_name: trigger_item.job_info.app_name.clone(),
         }
     }
 
@@ -124,6 +130,8 @@ impl JobTaskInfo {
             timeout_second: self.timeout_second,
             from_outside: self.from_outside,
             trigger_user: Cow::Borrowed(&self.trigger_user),
+            namespace: Cow::Borrowed(&self.namespace),
+            app_name: Cow::Borrowed(&self.app_name),
         }
     }
 }
@@ -155,6 +163,8 @@ impl<'a> From<JobTaskDo<'a>> for JobTaskInfo {
             timeout_second: task_do.timeout_second,
             from_outside: task_do.from_outside,
             trigger_user: Arc::new(task_do.trigger_user.to_string()),
+            namespace: Arc::new(task_do.namespace.to_string()),
+            app_name: Arc::new(task_do.app_name.to_string()),
         }
     }
 }

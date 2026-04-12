@@ -2,6 +2,7 @@ use crate::common::datetime_utils::now_millis;
 use crate::common::model::privilege::PrivilegeGroup;
 use crate::common::model::UserSession;
 use crate::common::namespace_util::get_namespace_by_option;
+use crate::common::string_utils::StringUtils;
 use crate::job::job_index::JobQueryParam;
 use crate::job::model::enum_type::{
     ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
@@ -136,6 +137,8 @@ impl JobQueryListRequest {
 #[serde(rename_all = "camelCase")]
 pub struct JobTaskLogQueryListRequest {
     pub job_id: Option<u64>,
+    pub namespace: Option<String>,
+    pub app_name: Option<String>,
     pub page_no: Option<usize>,
     pub page_size: Option<usize>,
 }
@@ -149,10 +152,22 @@ impl JobTaskLogQueryListRequest {
             self.page_no.unwrap_or(1)
         };
         let offset = (page_no - 1) * limit;
+        let namespace = if StringUtils::is_option_empty(&self.namespace) {
+            None
+        } else {
+            self.namespace
+        };
+        let app_name = if StringUtils::is_option_empty(&self.app_name) {
+            None
+        } else {
+            self.app_name
+        };
         JobTaskLogQueryParam {
             job_id: self.job_id.unwrap_or_default(),
             offset,
             limit,
+            namespace,
+            app_name,
         }
     }
 }
