@@ -1,6 +1,6 @@
 use crate::app::model::{AppInstanceParam, AppKey, AppManagerRaftReq};
-use crate::common::constant::DEFAULT_XXL_NAMESPACE;
 use crate::common::datetime_utils::{now_millis_i64, now_second_u32};
+use crate::common::registry_util;
 use crate::common::share_data::ShareData;
 use crate::openapi::xxljob::model::server_request::{CallbackParam, RegistryParam};
 use crate::openapi::xxljob::model::{xxl_api_empty_success, XxlApiResult};
@@ -14,9 +14,9 @@ pub(crate) async fn register(
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<RegistryParam>,
 ) -> impl Responder {
-    let app_name = param.registry_key;
+    let parsed = registry_util::parse_registry_key(&param.registry_key);
     let instance_addr = param.registry_value;
-    let app_key = AppKey::new(app_name.clone(), DEFAULT_XXL_NAMESPACE.clone());
+    let app_key = AppKey::new(parsed.app_name.clone(), parsed.namespace);
     let app_param = AppInstanceParam {
         app_key,
         instance_addr: instance_addr.clone(),
@@ -33,7 +33,7 @@ pub(crate) async fn register(
     } else {
         let error_msg = format!(
             "register error,app_name:{},addr:{}",
-            app_name, instance_addr
+            parsed.app_name, instance_addr
         );
         log::error!("{}", &error_msg);
         HttpResponse::Ok().json(XxlApiResult::<()>::fail(Some(error_msg)))
@@ -44,9 +44,9 @@ pub(crate) async fn unregister(
     share_data: Data<Arc<ShareData>>,
     web::Json(param): web::Json<RegistryParam>,
 ) -> impl Responder {
-    let app_name = param.registry_key;
+    let parsed = registry_util::parse_registry_key(&param.registry_key);
     let instance_addr = param.registry_value;
-    let app_key = AppKey::new(app_name.clone(), DEFAULT_XXL_NAMESPACE.clone());
+    let app_key = AppKey::new(parsed.app_name.clone(), parsed.namespace);
     let app_param = AppInstanceParam {
         app_key,
         instance_addr: instance_addr.clone(),
@@ -63,7 +63,7 @@ pub(crate) async fn unregister(
     } else {
         let error_msg = format!(
             "unregister error,app_name:{},addr:{}",
-            app_name, instance_addr
+            parsed.app_name, instance_addr
         );
         log::error!("{}", &error_msg);
         HttpResponse::Ok().json(XxlApiResult::<()>::fail(Some(error_msg)))

@@ -12,6 +12,7 @@ pub mod namespace_util;
 pub mod option_utils;
 pub mod pb;
 pub mod protobuf_utils;
+pub mod registry_util;
 pub mod sequence_utils;
 pub mod share_data;
 pub mod string_utils;
