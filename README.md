@@ -193,7 +193,31 @@ ratchjob
 ### 二、 运行xxl-job执行器
 
 
-#### 1、 java执行器
+#### 1、命名空间隔离
+
+ratch-job支持多命名空间，应用任务可按命名空间隔离。控制台开放命名空间管理。
+
+在执行器注册时会尝试从应用名中按 `ns://{namespace}/{appName}` 格式解析出命名空间，如果不是这个格式则使用默认命名空间 `xxl`。
+
+**原默认命名空间接入方式：**
+
+```properties
+# 默认命名空间: xxl
+xxl.job.executor.appname=xxl-job-executor-sample
+```
+
+**新自定义命名空间接入方式：**
+
+```properties
+# 命名空间为: dev
+xxl.job.executor.appname=ns://dev/xxl-job-executor-sample
+```
+
+通过控制台的命名空间管理页面可以查看和管理所有命名空间，在不同命名空间下的应用和任务相互隔离。
+
+
+
+#### 2、 java执行器
 
 参考[xxl-job执行样例](https://github.com/xuxueli/xxl-job/tree/2.4.2/xxl-job-executor-samples/xxl-job-executor-sample-springboot)
 
@@ -210,7 +234,7 @@ xxl.job.accessToken=default_token
 ![](https://github.com/ratch-job/ratch-job/raw/master/doc/assets/imgs/20250331003904.png)
 
 
-#### 2、rust执行器
+#### 3、rust执行器
 
 参考作者写的rust xxl-job sdk对应样例[xxljob-sdk-rs examples](https://github.com/heqingpan/xxljob-sdk-rs/blob/master/examples/src/registry.rs)
 
