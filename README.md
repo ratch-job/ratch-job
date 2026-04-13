@@ -185,7 +185,7 @@ ratchjob
 | RATCH_CONSOLE_LOGIN_TIMEOUT | 控制台登陆session过期时间(秒) | 86400 | 86400 | 0.1.5 |
 | RATCH_INIT_ADMIN_USERNAME | 初始化管理员用户名 | admin | admin | 0.1.5 |
 | RATCH_INIT_ADMIN_PASSWORD | 初始化管理员密码 | admin | admin | 0.1.5 |
-| RATCH_JOB_TASK_LOG_LIMIT | 单个任务保留的日志条数限制，最小20 | 100 | 50 | 0.1.x |
+| RATCH_JOB_TASK_LOG_LIMIT | 单个任务保留的日志条数限制，最小20 | 100 | 50 | 0.2.1 |
 
 
 
