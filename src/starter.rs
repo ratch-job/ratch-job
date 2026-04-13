@@ -48,7 +48,7 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         app_manager.clone(),
     ));
-    let job_manager = JobManager::new().start();
+    let job_manager = JobManager::new(&app_config).start();
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         job_manager.clone(),
     ));

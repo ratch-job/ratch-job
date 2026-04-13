@@ -31,6 +31,7 @@ pub struct AppConfig {
     pub console_login_timeout: i32,
     pub init_admin_username: String,
     pub init_admin_password: String,
+    pub job_task_log_limit: usize,
 }
 
 impl AppConfig {
@@ -126,6 +127,13 @@ impl AppConfig {
         let init_admin_password =
             StringUtils::map_not_empty(std::env::var("RATCH_INIT_ADMIN_PASSWORD").ok())
                 .unwrap_or("admin".to_owned());
+        let mut job_task_log_limit = std::env::var("RATCH_JOB_TASK_LOG_LIMIT")
+            .unwrap_or("100".to_owned())
+            .parse()
+            .unwrap_or(100);
+        if job_task_log_limit < 20 {
+            job_task_log_limit = 20;
+        }
         Self {
             local_db_dir,
             http_api_port,
@@ -152,6 +160,7 @@ impl AppConfig {
             console_login_timeout,
             init_admin_username,
             init_admin_password,
+            job_task_log_limit,
         }
     }
 

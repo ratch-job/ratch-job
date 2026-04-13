@@ -1,3 +1,4 @@
+use crate::common::app_config::AppConfig;
 use crate::common::byte_utils::id_to_bin;
 use crate::common::constant::{JOB_TABLE_NAME, JOB_TASK_TABLE_NAME};
 use crate::common::datetime_utils::now_millis;
@@ -31,12 +32,12 @@ pub struct JobManager {
 }
 
 impl JobManager {
-    pub fn new() -> Self {
+    pub fn new(config: &Arc<AppConfig>) -> Self {
         JobManager {
             job_map: BTreeMap::new(),
             job_key_map: HashMap::new(),
             schedule_manager: None,
-            job_task_log_limit: 100,
+            job_task_log_limit: config.job_task_log_limit,
         }
     }
 

@@ -721,9 +721,16 @@ impl ScheduleManager {
             for job_id in &delay_job_ids {
                 if !running_jobs.contains(job_id) {
                     if let Some(job_run_state) = self.job_run_state.get_mut(job_id) {
+                        if job_run_state.version == u32::MAX {
+                            job_run_state.version = 0;
+                        } else {
+                            job_run_state.version += 1;
+                        }
                         job_run_state.next_active = true;
                         //上次完成时间
-                        job_run_state.last_finish_time = now;
+                        if job_run_state.last_finish_time == 0 {
+                            job_run_state.last_finish_time = now;
+                        }
                         job_run_state.marked_delay_trigger = true;
                         job_run_state.next_trigger_time =
                             job_run_state.calculate_next_trigger_time(&now_datetime);
