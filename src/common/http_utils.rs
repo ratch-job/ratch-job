@@ -1,3 +1,4 @@
+use futures_util::StreamExt;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -39,14 +40,40 @@ impl ResponseWrap {
 pub struct HttpUtils;
 
 impl HttpUtils {
-    async fn get_response_wrap(resp: reqwest::Response) -> anyhow::Result<ResponseWrap> {
+    async fn get_response_wrap(
+        resp: reqwest::Response,
+        max_body_bytes: Option<usize>,
+    ) -> anyhow::Result<ResponseWrap> {
         let status = resp.status().as_u16();
         let mut resp_headers = vec![];
         for (k, v) in resp.headers() {
             let value = String::from_utf8(v.as_bytes().to_vec())?;
             resp_headers.push((k.as_str().to_owned(), value));
         }
-        let body = resp.bytes().await?.to_vec();
+        if let (Some(max_body_bytes), Some(content_length)) =
+            (max_body_bytes, resp.content_length())
+        {
+            if content_length > max_body_bytes as u64 {
+                return Err(anyhow::anyhow!(
+                    "response body exceeds limit: {} bytes",
+                    max_body_bytes
+                ));
+            }
+        }
+        let mut body = Vec::new();
+        let mut stream = resp.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            if let Some(max_body_bytes) = max_body_bytes {
+                if body.len() + chunk.len() > max_body_bytes {
+                    return Err(anyhow::anyhow!(
+                        "response body exceeds limit: {} bytes",
+                        max_body_bytes
+                    ));
+                }
+            }
+            body.extend_from_slice(&chunk);
+        }
         Ok(ResponseWrap {
             status,
             headers: resp_headers,
@@ -62,7 +89,49 @@ impl HttpUtils {
         headers: Option<&HashMap<String, String>>,
         timeout_millis: Option<u64>,
     ) -> anyhow::Result<ResponseWrap> {
-        let mut req_builer = match method_name {
+        Self::request_inner(
+            client,
+            method_name,
+            url,
+            body,
+            headers,
+            timeout_millis,
+            None,
+        )
+        .await
+    }
+
+    pub async fn request_with_max_body(
+        client: &reqwest::Client,
+        method_name: &str,
+        url: &str,
+        body: Vec<u8>,
+        headers: Option<&HashMap<String, String>>,
+        timeout_millis: Option<u64>,
+        max_body_bytes: usize,
+    ) -> anyhow::Result<ResponseWrap> {
+        Self::request_inner(
+            client,
+            method_name,
+            url,
+            body,
+            headers,
+            timeout_millis,
+            Some(max_body_bytes),
+        )
+        .await
+    }
+
+    async fn request_inner(
+        client: &reqwest::Client,
+        method_name: &str,
+        url: &str,
+        body: Vec<u8>,
+        headers: Option<&HashMap<String, String>>,
+        timeout_millis: Option<u64>,
+        max_body_bytes: Option<usize>,
+    ) -> anyhow::Result<ResponseWrap> {
+        let mut req_builder = match method_name {
             "GET" => client.get(url),
             "POST" => client.post(url),
             "PUT" => client.put(url),
@@ -70,17 +139,17 @@ impl HttpUtils {
             _ => client.post(url),
         };
         if let Some(headers) = headers {
-            for (k, v) in headers.iter() {
-                req_builer = req_builer.header(k, v.to_string());
+            for (key, value) in headers {
+                req_builder = req_builder.header(key, value);
             }
         }
         if let Some(timeout) = timeout_millis {
-            req_builer = req_builer.timeout(Duration::from_millis(timeout));
+            req_builder = req_builder.timeout(Duration::from_millis(timeout));
         }
         if !body.is_empty() {
-            req_builer = req_builer.body(body);
+            req_builder = req_builder.body(body);
         }
-        let res = req_builer.send().await?;
-        Self::get_response_wrap(res).await
+        let response = req_builder.send().await?;
+        Self::get_response_wrap(response, max_body_bytes).await
     }
 }

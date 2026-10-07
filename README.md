@@ -181,6 +181,7 @@ ratchjob
 | RATCH_METRICS_ENABLE_LOG | 是否记录指标日志 | false | false | 0.1.x |
 | RATCH_METRICS_LOG_INTERVAL_SECOND | 指标日志记录间隔(秒)，最小5秒 | 60 | 30 | 0.1.x |
 | RATCH_TASK_REQUEST_PARALLEL | 任务请求(协程)并行处理数 | 20 | 50 | 0.1.x |
+| RATCH_EXECUTOR_LOG_RESPONSE_MAX_BYTES | 单次读取执行器日志响应体最大字节数 | 5242880 | 10485760 | 0.2.x |
 | RATCH_CONSOLE_ENABLE_CAPTCHA | 控制台登陆是否启用验证码 | true | true | 0.1.5 |
 | RATCH_CONSOLE_LOGIN_TIMEOUT | 控制台登陆session过期时间(秒) | 86400 | 86400 | 0.1.5 |
 | RATCH_INIT_ADMIN_USERNAME | 初始化管理员用户名 | admin | admin | 0.1.5 |

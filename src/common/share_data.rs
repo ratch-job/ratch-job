@@ -12,6 +12,7 @@ use crate::schedule::batch_call::BatchCallManager;
 use crate::schedule::core::ScheduleManager;
 use crate::sequence::SequenceManager;
 use crate::task::core::TaskManager;
+use crate::task::request_actor::TaskRequestActor;
 use crate::task::task_history::TaskHistoryManager;
 use crate::user::core::UserManager;
 use actix::Addr;
@@ -28,6 +29,7 @@ pub struct ShareData {
     pub sequence_manager: Addr<SequenceManager>,
     pub schedule_manager: Addr<ScheduleManager>,
     pub task_manager: Addr<TaskManager>,
+    pub task_request_actor: Addr<TaskRequestActor>,
     pub task_history_manager: Addr<TaskHistoryManager>,
     pub metrics_manager: Addr<MetricsManager>,
     pub namespace_manager: Addr<NamespaceManager>,

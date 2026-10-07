@@ -224,6 +224,13 @@ impl JobManager {
         (index, rlist)
     }
 
+    fn get_job_task_log(&self, job_id: u64, task_id: u64) -> Option<Arc<JobTaskInfo>> {
+        self.job_map
+            .get(&job_id)
+            .and_then(|job_wrap| job_wrap.task_log_map.get(&task_id))
+            .cloned()
+    }
+
     fn build_snapshot(&self, writer: Addr<SnapshotWriterActor>) -> anyhow::Result<()> {
         //任务
         for (key, job_wrap) in &self.job_map {
@@ -324,6 +331,11 @@ impl Handler<JobManagerReq> for JobManager {
                     None
                 };
                 return Ok(JobManagerResult::JobInfo(job_info));
+            }
+            JobManagerReq::GetJobTaskLog(job_id, task_id) => {
+                return Ok(JobManagerResult::JobTaskInfo(
+                    self.get_job_task_log(job_id, task_id),
+                ));
             }
             JobManagerReq::GetJobIdByKey(job_key) => {
                 if job_key.job_key.is_empty() {

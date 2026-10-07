@@ -3,9 +3,9 @@ use crate::common::datetime_utils::now_second_u32;
 use crate::common::get_app_version;
 use crate::schedule::batch_call::{BatchCallManager, BatchUpdateTaskManagerReq};
 use crate::task::model::enum_type::TaskStatusType;
-use crate::task::model::request_model::JobRunParam;
+use crate::task::model::request_model::{JobLogInfo, JobRunParam};
 use crate::task::model::task::JobTaskInfo;
-use crate::task::model::task_request::{TaskRequestCmd, TaskRequestResult};
+use crate::task::model::task_request::{TaskLogRequestCmd, TaskRequestCmd, TaskRequestResult};
 use crate::task::request_client::XxlClient;
 use actix::prelude::*;
 use bean_factory::{bean, BeanFactory, FactoryData, Inject};
@@ -19,6 +19,7 @@ pub struct TaskRequestActor {
     xxl_request_header: HashMap<String, String>,
     batch_call_manager: Option<Addr<BatchCallManager>>,
     request_semaphore: Arc<tokio::sync::Semaphore>,
+    executor_log_response_max_bytes: usize,
     pub(crate) running_count: usize,
 }
 
@@ -42,6 +43,7 @@ impl TaskRequestActor {
             xxl_request_header,
             batch_call_manager: None,
             request_semaphore: Arc::new(tokio::sync::Semaphore::new(config.task_request_parallel)),
+            executor_log_response_max_bytes: config.executor_log_response_max_bytes,
             running_count: 0,
         }
     }
@@ -87,6 +89,24 @@ impl TaskRequestActor {
         let xxl_client = XxlClient::new(&client, &xxl_request_header, instance_addr);
         xxl_client.run_job(param).await?;
         Ok(())
+    }
+}
+
+impl Handler<TaskLogRequestCmd> for TaskRequestActor {
+    type Result = ResponseActFuture<Self, anyhow::Result<JobLogInfo>>;
+
+    fn handle(&mut self, msg: TaskLogRequestCmd, _ctx: &mut Context<Self>) -> Self::Result {
+        let client = self.client.clone();
+        let headers = self.xxl_request_header.clone();
+        let max_body_bytes = self.executor_log_response_max_bytes;
+        Box::pin(
+            async move {
+                XxlClient::new(&client, &headers, &msg.addr)
+                    .read_log(&msg.param, max_body_bytes)
+                    .await
+            }
+            .into_actor(self),
+        )
     }
 }
 

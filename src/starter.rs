@@ -213,6 +213,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         sequence_manager: factory_data.get_actor().unwrap(),
         schedule_manager: factory_data.get_actor().unwrap(),
         task_manager: factory_data.get_actor().unwrap(),
+        task_request_actor: factory_data.get_actor().unwrap(),
         task_history_manager: factory_data.get_actor().unwrap(),
         metrics_manager: factory_data.get_actor().unwrap(),
         namespace_manager: factory_data.get_actor().unwrap(),

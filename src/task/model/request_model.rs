@@ -56,3 +56,42 @@ pub struct JobLogInfo {
     pub to_line_num: i64,
     pub is_end: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{JobLogInfo, JobLogParam};
+
+    #[test]
+    fn should_serialize_xxl_job_242_log_param() {
+        let param = JobLogParam {
+            log_id: 12,
+            log_date_time: Some(1_789_891_683_000),
+            from_line_num: 3,
+        };
+
+        let value = serde_json::to_value(param).expect("log param should serialize");
+
+        assert_eq!(value["logDateTim"], 1_789_891_683_000_u64);
+        assert_eq!(value["logId"], 12);
+        assert_eq!(value["fromLineNum"], 3);
+        assert!(value.get("logDateTime").is_none());
+    }
+
+    #[test]
+    fn should_deserialize_xxl_job_242_log_result() {
+        let value = br#"{
+            "fromLineNum": 1,
+            "toLineNum": 8,
+            "logContent": "hello\n",
+            "isEnd": false
+        }"#;
+
+        let info: JobLogInfo =
+            serde_json::from_slice(value).expect("log result should deserialize");
+
+        assert_eq!(info.from_line_num, 1);
+        assert_eq!(info.to_line_num, 8);
+        assert_eq!(info.log_content, "hello\n");
+        assert!(!info.is_end);
+    }
+}

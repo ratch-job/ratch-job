@@ -9,6 +9,7 @@ use crate::job::model::enum_type::{
 };
 use crate::job::model::job::{JobParam, JobTaskLogQueryParam};
 use crate::task::model::enum_type::TaskStatusType;
+use crate::task::model::request_model::JobLogInfo;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -178,6 +179,66 @@ impl JobTaskLogQueryListRequest {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct JobTaskLogDetailRequest {
+    pub job_id: Option<u64>,
+    pub task_id: Option<u64>,
+    pub from_line_num: Option<i64>,
+    pub attempt: Option<usize>,
+}
+
+impl JobTaskLogDetailRequest {
+    pub fn validate(&self) -> Result<(u64, u64, i64), String> {
+        let job_id = self.job_id.unwrap_or_default();
+        if job_id == 0 {
+            return Err("jobId is required".to_string());
+        }
+        let task_id = self.task_id.unwrap_or_default();
+        if task_id == 0 {
+            return Err("taskId is required".to_string());
+        }
+        let from_line_num = self.from_line_num.unwrap_or(1);
+        if from_line_num < 1 || from_line_num > i32::MAX as i64 {
+            return Err("fromLineNum must be between 1 and 2147483647".to_string());
+        }
+        Ok((job_id, task_id, from_line_num))
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobTaskLogDetailResponse {
+    pub task_id: u64,
+    pub attempt: usize,
+    pub attempt_count: usize,
+    pub instance_addr: Arc<String>,
+    pub task_status: TaskStatusType,
+    pub from_line_num: i64,
+    pub to_line_num: i64,
+    pub log_content: String,
+    pub is_end: bool,
+}
+
+impl JobTaskLogDetailResponse {
+    pub fn new(
+        task_id: u64,
+        attempt: usize,
+        attempt_count: usize,
+        instance_addr: Arc<String>,
+        task_status: TaskStatusType,
+        log_info: JobLogInfo,
+        is_end: bool,
+    ) -> Self {
+        Self {
+            task_id,
+            attempt,
+            attempt_count,
+            instance_addr,
+            task_status,
+            from_line_num: log_info.from_line_num,
+            to_line_num: log_info.to_line_num,
+            log_content: log_info.log_content,
+            is_end,
+        }
 pub struct JobTaskHistoryQueryListRequest {
     pub namespace: Option<String>,
     pub app_name: Option<String>,
@@ -232,8 +293,36 @@ impl JobTaskHistoryQueryListRequest {
 
 #[cfg(test)]
 mod tests {
+    use super::JobTaskLogDetailRequest;
     use super::JobTaskHistoryQueryListRequest;
     use crate::task::model::enum_type::TaskStatusType;
+  
+    #[test]
+    fn should_validate_task_log_request() {
+        let request = JobTaskLogDetailRequest {
+            job_id: Some(1),
+            task_id: Some(2),
+            from_line_num: Some(3),
+            attempt: None,
+        };
+
+        assert_eq!(request.validate(), Ok((1, 2, 3)));
+    }
+
+    #[test]
+    fn should_reject_invalid_task_log_request() {
+        let request = JobTaskLogDetailRequest {
+            job_id: Some(1),
+            task_id: Some(2),
+            from_line_num: Some(0),
+            attempt: None,
+        };
+
+        assert_eq!(
+            request.validate().unwrap_err(),
+            "fromLineNum must be between 1 and 2147483647"
+        );
+    }
 
     #[test]
     fn should_convert_task_history_filters() {

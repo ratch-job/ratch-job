@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub enum JobManagerReq {
     UpdateTask(Arc<JobTaskInfo>),
     GetJob(u64),
+    GetJobTaskLog(u64, u64),
     GetJobIdByKey(JobKey),
     QueryJob(JobQueryParam),
     QueryJobTaskLog(JobTaskLogQueryParam),
@@ -19,6 +20,7 @@ pub enum JobManagerReq {
 #[derive(Debug, Clone)]
 pub enum JobManagerResult {
     JobInfo(Option<Arc<JobInfo>>),
+    JobTaskInfo(Option<Arc<JobTaskInfo>>),
     JobId(Option<u64>),
     JobPageInfo(usize, Vec<JobInfoDto>),
     JobTaskLogPageInfo(usize, Vec<Arc<JobTaskInfo>>),

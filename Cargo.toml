@@ -46,7 +46,7 @@ chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 lazy_static = "1.4"
 bean_factory = "0.1.4"
-reqwest = { version = "0.11", features = ["json"], default-features = false }
+reqwest = { version = "0.11", features = ["json", "stream"], default-features = false }
 async-trait = "0.1"
 if-addrs = "0.13.3"
 futures-util = "0.3.29"

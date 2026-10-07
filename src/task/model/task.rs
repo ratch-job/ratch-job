@@ -104,6 +104,20 @@ impl JobTaskInfo {
         }
     }
 
+    pub fn log_attempt_count(&self) -> usize {
+        self.try_logs.len() + 1
+    }
+
+    pub fn get_log_attempt_addr(&self, attempt: usize) -> Option<Arc<String>> {
+        if attempt < self.try_logs.len() {
+            return Some(self.try_logs[attempt].addr.clone());
+        }
+        if attempt == self.try_logs.len() {
+            return Some(self.instance_addr.clone());
+        }
+        None
+    }
+
     pub fn to_do(&self) -> JobTaskDo<'_> {
         JobTaskDo {
             task_id: self.task_id,
@@ -190,6 +204,35 @@ pub struct TaskWrap {
 pub struct UpdateTaskMetricsInfo {
     pub success_count: u64,
     pub fail_count: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{JobTaskInfo, TaskTryLog};
+    use std::sync::Arc;
+
+    #[test]
+    fn should_resolve_current_and_retry_log_addresses() {
+        let task = JobTaskInfo {
+            instance_addr: Arc::new("http://127.0.0.1:9999".to_string()),
+            try_logs: vec![TaskTryLog {
+                execution_time: 100,
+                addr: Arc::new("http://127.0.0.1:9998".to_string()),
+            }],
+            ..Default::default()
+        };
+
+        assert_eq!(task.log_attempt_count(), 2);
+        assert_eq!(
+            task.get_log_attempt_addr(0).as_deref(),
+            Some(&"http://127.0.0.1:9998".to_string())
+        );
+        assert_eq!(
+            task.get_log_attempt_addr(1).as_deref(),
+            Some(&"http://127.0.0.1:9999".to_string())
+        );
+        assert!(task.get_log_attempt_addr(2).is_none());
+    }
 }
 
 impl UpdateTaskMetricsInfo {

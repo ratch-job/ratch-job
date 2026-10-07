@@ -3,11 +3,12 @@ use crate::common::datetime_utils::{now_millis, now_second_u32};
 use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
 use crate::console::model::job::{
-    JobInfoParam, JobQueryListRequest, JobTaskHistoryQueryListRequest, JobTaskLogQueryListRequest,
-    TriggerJobParam,
+    JobInfoParam, JobQueryListRequest, JobTaskLogDetailRequest, JobTaskLogDetailResponse,
+    JobTaskLogQueryListRequest, TriggerJobParam,
 };
 use crate::console::v1::{
     ERROR_CODE_JOB_KEY_DUPLICATE, ERROR_CODE_NO_APP_PERMISSION, ERROR_CODE_SYSTEM_ERROR,
+    ERROR_CODE_TASK_LOG_NOT_FOUND, ERROR_CODE_TASK_LOG_READ_ERROR, ERROR_CODE_TASK_LOG_UNAVAILABLE,
 };
 use crate::job::model::actor_model::{
     JobManagerRaftReq, JobManagerRaftResult, JobManagerReq, JobManagerResult,
@@ -17,6 +18,8 @@ use crate::raft::store::{ClientRequest, ClientResponse};
 use crate::schedule::model::actor_model::{ScheduleManagerReq, ScheduleManagerResult};
 use crate::sequence::{SequenceRequest, SequenceResult};
 use crate::task::model::actor_model::{TaskManagerReq, TriggerItem};
+use crate::task::model::request_model::JobLogParam;
+use crate::task::model::task_request::TaskLogRequestCmd;
 use actix_http::HttpMessage;
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
@@ -457,5 +460,161 @@ pub(crate) async fn query_latest_task(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
             Some("query_latest_task error".to_string()),
         ))
+    }
+}
+
+pub(crate) async fn query_job_task_log(
+    req: actix_web::HttpRequest,
+    share_data: Data<Arc<ShareData>>,
+    web::Query(request): web::Query<JobTaskLogDetailRequest>,
+) -> HttpResponse {
+    let (job_id, task_id, from_line_num) = match request.validate() {
+        Ok(value) => value,
+        Err(message) => {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                "INVALID_PARAMETER".to_string(),
+                Some(message),
+            ));
+        }
+    };
+    let session = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    let job_info = match share_data
+        .job_manager
+        .send(JobManagerReq::GetJob(job_id))
+        .await
+    {
+        Ok(Ok(JobManagerResult::JobInfo(Some(job_info)))) => job_info,
+        _ => {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_TASK_LOG_NOT_FOUND.to_string(),
+                Some(format!("job not found: {}", job_id)),
+            ));
+        }
+    };
+    if !session.app_privilege.check_permission(&job_info.app_name) {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_NO_APP_PERMISSION.to_string(),
+            Some(format!("user no app permission:{}", &job_info.app_name)),
+        ));
+    }
+    let task_info = match share_data
+        .job_manager
+        .send(JobManagerReq::GetJobTaskLog(job_id, task_id))
+        .await
+    {
+        Ok(Ok(JobManagerResult::JobTaskInfo(Some(task_info)))) => task_info,
+        _ => {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_TASK_LOG_NOT_FOUND.to_string(),
+                Some(format!(
+                    "task log not found,job_id:{},task_id:{}",
+                    job_id, task_id
+                )),
+            ));
+        }
+    };
+    let attempt_count = task_info.log_attempt_count();
+    let attempt = request.attempt.unwrap_or(attempt_count - 1);
+    let instance_addr = if let Some(instance_addr) = task_info.get_log_attempt_addr(attempt) {
+        instance_addr
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            "INVALID_PARAMETER".to_string(),
+            Some(format!(
+                "attempt out of range,attempt:{},attempt_count:{}",
+                attempt, attempt_count
+            )),
+        ));
+    };
+    if instance_addr.is_empty() {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_TASK_LOG_UNAVAILABLE.to_string(),
+            Some(format!(
+                "task executor address is empty,job_id:{},task_id:{}",
+                job_id, task_id
+            )),
+        ));
+    }
+    let log_param = JobLogParam {
+        log_id: task_id,
+        log_date_time: Some(task_info.trigger_time as u64 * 1000),
+        from_line_num,
+    };
+    match share_data
+        .task_request_actor
+        .send(TaskLogRequestCmd {
+            addr: instance_addr.clone(),
+            param: log_param,
+        })
+        .await
+    {
+        Ok(Ok(log_info)) => {
+            if log_info.from_line_num != from_line_num {
+                log::error!(
+                    "executor log line mismatch,job_id:{},task_id:{},attempt:{},addr:{},request_from:{},response_from:{}",
+                    job_id,
+                    task_id,
+                    attempt,
+                    instance_addr,
+                    from_line_num,
+                    log_info.from_line_num
+                );
+                return HttpResponse::Ok().json(ApiResult::<()>::error(
+                    ERROR_CODE_TASK_LOG_READ_ERROR.to_string(),
+                    Some("executor log line mismatch".to_string()),
+                ));
+            }
+            let is_end = if task_info.status.is_running() {
+                false
+            } else {
+                log_info.is_end || task_info.status.is_finish()
+            };
+            HttpResponse::Ok().json(ApiResult::success(Some(JobTaskLogDetailResponse::new(
+                task_id,
+                attempt,
+                attempt_count,
+                instance_addr,
+                task_info.status.clone(),
+                log_info,
+                is_end,
+            ))))
+        }
+        Ok(Err(error)) => {
+            log::error!(
+                "read executor log error,job_id:{},task_id:{},attempt:{},addr:{},from_line_num:{},error:{}",
+                job_id,
+                task_id,
+                attempt,
+                instance_addr,
+                from_line_num,
+                error
+            );
+            HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_TASK_LOG_READ_ERROR.to_string(),
+                Some(error.to_string()),
+            ))
+        }
+        Err(error) => {
+            log::error!(
+                "read executor log mailbox error,job_id:{},task_id:{},attempt:{},addr:{},from_line_num:{},error:{}",
+                job_id,
+                task_id,
+                attempt,
+                instance_addr,
+                from_line_num,
+                error
+            );
+            HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_TASK_LOG_READ_ERROR.to_string(),
+                Some("read executor log mailbox error".to_string()),
+            ))
+        }
     }
 }

@@ -13,6 +13,9 @@ pub const ERROR_CODE_SYSTEM_ERROR: &str = "SYSTEM_ERROR";
 pub const ERROR_CODE_NO_PERMISSION: &str = "NO_PERMISSION";
 pub const ERROR_CODE_NO_APP_PERMISSION: &str = "NO_APP_PERMISSION";
 pub const ERROR_CODE_JOB_KEY_DUPLICATE: &str = "JOB_KEY_DUPLICATE";
+pub const ERROR_CODE_TASK_LOG_NOT_FOUND: &str = "TASK_LOG_NOT_FOUND";
+pub const ERROR_CODE_TASK_LOG_UNAVAILABLE: &str = "TASK_LOG_UNAVAILABLE";
+pub const ERROR_CODE_TASK_LOG_READ_ERROR: &str = "TASK_LOG_READ_ERROR";
 
 pub fn console_api_v1(config: &mut ServiceConfig) {
     config.service(
@@ -69,6 +72,9 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
             .service(
                 web::resource("/job/task/latest-history")
                     .route(web::get().to(job_api::query_latest_task)),
+            )
+            .service(
+                web::resource("/job/task/log").route(web::get().to(job_api::query_job_task_log)),
             )
             .service(
                 web::resource("/metrics/timeline")

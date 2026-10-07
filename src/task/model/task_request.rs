@@ -1,4 +1,4 @@
-use crate::task::model::request_model::JobRunParam;
+use crate::task::model::request_model::{JobLogInfo, JobLogParam, JobRunParam};
 use crate::task::model::task::JobTaskInfo;
 use actix::Message;
 use std::sync::Arc;
@@ -8,6 +8,13 @@ use std::sync::Arc;
 pub enum TaskRequestCmd {
     RunTask(Arc<String>, JobRunParam, JobTaskInfo),
     RunBroadcastTask(Arc<Vec<Arc<String>>>, JobRunParam),
+}
+
+#[derive(Debug, Message)]
+#[rtype(result = "anyhow::Result<JobLogInfo>")]
+pub struct TaskLogRequestCmd {
+    pub addr: Arc<String>,
+    pub param: JobLogParam,
 }
 
 impl TaskRequestCmd {

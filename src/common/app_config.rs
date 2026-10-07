@@ -27,6 +27,7 @@ pub struct AppConfig {
     pub metrics_log_interval_second: u64,
     pub metrics_log_enable: bool,
     pub task_request_parallel: usize,
+    pub executor_log_response_max_bytes: usize,
     pub console_captcha_enable: bool,
     pub console_login_timeout: i32,
     pub init_admin_username: String,
@@ -113,6 +114,14 @@ impl AppConfig {
             .unwrap_or("20".to_owned())
             .parse()
             .unwrap_or(20);
+        let mut executor_log_response_max_bytes =
+            std::env::var("RATCH_EXECUTOR_LOG_RESPONSE_MAX_BYTES")
+                .unwrap_or((5 * 1024 * 1024).to_string())
+                .parse()
+                .unwrap_or(5 * 1024 * 1024);
+        if executor_log_response_max_bytes < 64 * 1024 {
+            executor_log_response_max_bytes = 64 * 1024;
+        }
         let console_captcha_enable = std::env::var("RATCH_CONSOLE_ENABLE_CAPTCHA")
             .unwrap_or("true".to_owned())
             .parse()
@@ -156,6 +165,7 @@ impl AppConfig {
             metrics_collect_interval_second,
             metrics_log_interval_second,
             task_request_parallel,
+            executor_log_response_max_bytes,
             console_captcha_enable,
             console_login_timeout,
             init_admin_username,
