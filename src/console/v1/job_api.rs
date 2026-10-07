@@ -3,7 +3,8 @@ use crate::common::datetime_utils::{now_millis, now_second_u32};
 use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
 use crate::console::model::job::{
-    JobInfoParam, JobQueryListRequest, JobTaskLogQueryListRequest, TriggerJobParam,
+    JobInfoParam, JobQueryListRequest, JobTaskHistoryQueryListRequest, JobTaskLogQueryListRequest,
+    TriggerJobParam,
 };
 use crate::console::v1::{
     ERROR_CODE_JOB_KEY_DUPLICATE, ERROR_CODE_NO_APP_PERMISSION, ERROR_CODE_SYSTEM_ERROR,
@@ -434,9 +435,17 @@ pub(crate) async fn query_job_task_logs(
 
 pub(crate) async fn query_latest_task(
     share_data: Data<Arc<ShareData>>,
-    web::Query(request): web::Query<JobTaskLogQueryListRequest>,
+    web::Query(request): web::Query<JobTaskHistoryQueryListRequest>,
 ) -> impl Responder {
-    let param = request.to_param();
+    let param = match request.to_param() {
+        Ok(param) => param,
+        Err(error_message) => {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                "INVALID_PARAMETER".to_string(),
+                Some(error_message),
+            ));
+        }
+    };
     if let Ok(Ok(ScheduleManagerResult::JobTaskLogPageInfo(total_count, list))) = share_data
         .schedule_manager
         .send(ScheduleManagerReq::QueryJobTaskLog(param))

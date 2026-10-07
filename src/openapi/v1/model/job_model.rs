@@ -26,6 +26,9 @@ impl JobTaskListRequest {
             limit,
             namespace: self.namespace,
             app_name: self.app_name,
+            start_trigger_time: None,
+            end_trigger_time: None,
+            status: None,
         }
     }
 }
@@ -55,6 +58,9 @@ impl JobTaskHistoryRequest {
             limit,
             namespace: self.namespace,
             app_name: self.app_name,
+            start_trigger_time: None,
+            end_trigger_time: None,
+            status: None,
         }
     }
 }

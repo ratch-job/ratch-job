@@ -8,6 +8,7 @@ use crate::job::model::enum_type::{
     ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
 };
 use crate::job::model::job::{JobParam, JobTaskLogQueryParam};
+use crate::task::model::enum_type::TaskStatusType;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -168,6 +169,131 @@ impl JobTaskLogQueryListRequest {
             limit,
             namespace,
             app_name,
+            start_trigger_time: None,
+            end_trigger_time: None,
+            status: None,
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct JobTaskHistoryQueryListRequest {
+    pub namespace: Option<String>,
+    pub app_name: Option<String>,
+    pub start_trigger_time: Option<u32>,
+    pub end_trigger_time: Option<u32>,
+    pub status: Option<String>,
+    pub page_no: Option<usize>,
+    pub page_size: Option<usize>,
+}
+
+impl JobTaskHistoryQueryListRequest {
+    pub fn to_param(self) -> Result<JobTaskLogQueryParam, String> {
+        if let (Some(start_trigger_time), Some(end_trigger_time)) =
+            (self.start_trigger_time, self.end_trigger_time)
+        {
+            if start_trigger_time > end_trigger_time {
+                return Err("startTriggerTime cannot be greater than endTriggerTime".to_string());
+            }
+        }
+
+        let status = self
+            .status
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| match value {
+                "RUNNING" => Ok(TaskStatusType::Running),
+                "SUCCESS" => Ok(TaskStatusType::Success),
+                "FAIL" => Ok(TaskStatusType::Fail),
+                _ => Err(format!("invalid task status: {value}")),
+            })
+            .transpose()?;
+        let limit = self.page_size.unwrap_or(10);
+        let page_no = if self.page_no.unwrap_or(1) < 1 {
+            1
+        } else {
+            self.page_no.unwrap_or(1)
+        };
+
+        Ok(JobTaskLogQueryParam {
+            job_id: 0,
+            offset: (page_no - 1) * limit,
+            limit,
+            namespace: StringUtils::map_not_empty(self.namespace),
+            app_name: StringUtils::map_not_empty(self.app_name),
+            start_trigger_time: self.start_trigger_time,
+            end_trigger_time: self.end_trigger_time,
+            status,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::JobTaskHistoryQueryListRequest;
+    use crate::task::model::enum_type::TaskStatusType;
+
+    #[test]
+    fn should_convert_task_history_filters() {
+        let request = JobTaskHistoryQueryListRequest {
+            namespace: Some("xxl".to_string()),
+            app_name: Some("demo-app".to_string()),
+            start_trigger_time: Some(100),
+            end_trigger_time: Some(200),
+            status: Some("SUCCESS".to_string()),
+            page_no: Some(2),
+            page_size: Some(20),
+        };
+
+        let param = request.to_param().expect("valid filters should convert");
+
+        assert_eq!(param.namespace.as_deref(), Some("xxl"));
+        assert_eq!(param.app_name.as_deref(), Some("demo-app"));
+        assert_eq!(param.start_trigger_time, Some(100));
+        assert_eq!(param.end_trigger_time, Some(200));
+        assert_eq!(param.status, Some(TaskStatusType::Success));
+        assert_eq!(param.offset, 20);
+        assert_eq!(param.limit, 20);
+    }
+
+    #[test]
+    fn should_reject_reversed_trigger_time_range() {
+        let request = JobTaskHistoryQueryListRequest {
+            start_trigger_time: Some(200),
+            end_trigger_time: Some(100),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            request.to_param().unwrap_err(),
+            "startTriggerTime cannot be greater than endTriggerTime"
+        );
+    }
+
+    #[test]
+    fn should_reject_unknown_task_status() {
+        let request = JobTaskHistoryQueryListRequest {
+            status: Some("UNKNOWN".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            request.to_param().unwrap_err(),
+            "invalid task status: UNKNOWN"
+        );
+    }
+
+    #[test]
+    fn should_convert_running_task_status() {
+        let request = JobTaskHistoryQueryListRequest {
+            status: Some("RUNNING".to_string()),
+            ..Default::default()
+        };
+
+        let param = request.to_param().expect("RUNNING should be supported");
+
+        assert_eq!(param.status, Some(TaskStatusType::Running));
     }
 }
