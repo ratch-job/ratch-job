@@ -563,15 +563,8 @@ impl ScheduleManager {
         let mut index = 0;
 
         for (_task_id, task_log) in self.history_task.task_log_map.iter().rev() {
-            if let Some(ref ns) = query_param.namespace {
-                if task_log.namespace.as_ref() != ns {
-                    continue;
-                }
-            }
-            if let Some(ref app_name) = query_param.app_name {
-                if task_log.app_name.as_ref() != app_name {
-                    continue;
-                }
+            if !query_param.matches_latest_history(task_log) {
+                continue;
             }
             if index >= query_param.offset && index < end_index {
                 rlist.push(task_log.clone());
@@ -860,5 +853,96 @@ impl Handler<VoteChangeRequest> for ScheduleManager {
             }
         }
         Ok(VoteChangeResponse::None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScheduleManager;
+    use crate::job::model::job::JobTaskLogQueryParam;
+    use crate::task::model::enum_type::TaskStatusType;
+    use crate::task::model::task::JobTaskInfo;
+    use std::sync::Arc;
+
+    fn task(
+        task_id: u64,
+        trigger_time: u32,
+        status: TaskStatusType,
+        namespace: &str,
+        app_name: &str,
+    ) -> Arc<JobTaskInfo> {
+        Arc::new(JobTaskInfo {
+            task_id,
+            job_id: 1,
+            trigger_time,
+            status,
+            namespace: Arc::new(namespace.to_string()),
+            app_name: Arc::new(app_name.to_string()),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn should_filter_latest_history_before_pagination() {
+        let mut manager = ScheduleManager::new(Some(0));
+        manager.history_task.update_task_log(
+            task(1, 100, TaskStatusType::Success, "xxl", "demo-app"),
+            10000,
+        );
+        manager
+            .history_task
+            .update_task_log(task(2, 150, TaskStatusType::Fail, "xxl", "demo-app"), 10000);
+        manager.history_task.update_task_log(
+            task(3, 200, TaskStatusType::Success, "xxl", "demo-app"),
+            10000,
+        );
+        manager.history_task.update_task_log(
+            task(4, 200, TaskStatusType::Success, "other", "demo-app"),
+            10000,
+        );
+
+        let query = JobTaskLogQueryParam {
+            offset: 1,
+            limit: 1,
+            namespace: Some("xxl".to_string()),
+            app_name: Some("demo-app".to_string()),
+            start_trigger_time: Some(100),
+            end_trigger_time: Some(200),
+            status: Some(TaskStatusType::Success),
+            ..Default::default()
+        };
+
+        let (total_count, list) = manager.query_latest_history_task_logs(&query);
+
+        assert_eq!(total_count, 2);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].task_id, 1);
+    }
+
+    #[test]
+    fn should_keep_existing_latest_history_behavior_without_filters() {
+        let mut manager = ScheduleManager::new(Some(0));
+        manager.history_task.update_task_log(
+            task(1, 100, TaskStatusType::Success, "xxl", "demo-app"),
+            10000,
+        );
+        manager.history_task.update_task_log(
+            task(2, 200, TaskStatusType::Fail, "other", "other-app"),
+            10000,
+        );
+
+        let query = JobTaskLogQueryParam {
+            offset: 0,
+            limit: 10,
+            ..Default::default()
+        };
+
+        let (total_count, list) = manager.query_latest_history_task_logs(&query);
+
+        assert_eq!(total_count, 2);
+        assert_eq!(
+            list.iter().map(|item| item.task_id).collect::<Vec<_>>(),
+            vec![2, 1]
+        );
     }
 }

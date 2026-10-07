@@ -39,15 +39,8 @@ impl TaskHistoryManager {
         let mut index = 0;
 
         for (_task_id, task_log) in self.task_latest_history_map.iter().rev() {
-            if let Some(ref ns) = query_param.namespace {
-                if task_log.namespace.as_ref() != ns {
-                    continue;
-                }
-            }
-            if let Some(ref app_name) = query_param.app_name {
-                if task_log.app_name.as_ref() != app_name {
-                    continue;
-                }
+            if !query_param.matches_latest_history(task_log) {
+                continue;
             }
             if index >= query_param.offset && index < end_index {
                 rlist.push(task_log.clone());

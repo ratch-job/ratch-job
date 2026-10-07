@@ -438,9 +438,17 @@ pub(crate) async fn query_job_task_logs(
 
 pub(crate) async fn query_latest_task(
     share_data: Data<Arc<ShareData>>,
-    web::Query(request): web::Query<JobTaskLogQueryListRequest>,
+    web::Query(request): web::Query<JobTaskHistoryQueryListRequest>,
 ) -> impl Responder {
-    let param = request.to_param();
+    let param = match request.to_param() {
+        Ok(param) => param,
+        Err(error_message) => {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                "INVALID_PARAMETER".to_string(),
+                Some(error_message),
+            ));
+        }
+    };
     if let Ok(Ok(ScheduleManagerResult::JobTaskLogPageInfo(total_count, list))) = share_data
         .schedule_manager
         .send(ScheduleManagerReq::QueryJobTaskLog(param))

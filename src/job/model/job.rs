@@ -396,6 +396,40 @@ pub struct JobTaskLogQueryParam {
     pub limit: usize,
     pub namespace: Option<String>,
     pub app_name: Option<String>,
+    pub start_trigger_time: Option<u32>,
+    pub end_trigger_time: Option<u32>,
+    pub status: Option<TaskStatusType>,
+}
+
+impl JobTaskLogQueryParam {
+    pub fn matches_latest_history(&self, task_log: &JobTaskInfo) -> bool {
+        if let Some(ref namespace) = self.namespace {
+            if task_log.namespace.as_ref() != namespace {
+                return false;
+            }
+        }
+        if let Some(ref app_name) = self.app_name {
+            if task_log.app_name.as_ref() != app_name {
+                return false;
+            }
+        }
+        if let Some(start_trigger_time) = self.start_trigger_time {
+            if task_log.trigger_time < start_trigger_time {
+                return false;
+            }
+        }
+        if let Some(end_trigger_time) = self.end_trigger_time {
+            if task_log.trigger_time > end_trigger_time {
+                return false;
+            }
+        }
+        if let Some(ref status) = self.status {
+            if &task_log.status != status {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
