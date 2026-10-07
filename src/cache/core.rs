@@ -220,7 +220,8 @@ impl CacheManager {
             let mut buf = Vec::new();
             {
                 let mut writer = Writer::new(&mut buf);
-                let value_do = v.value.to_do(key);
+                let mut value_do = v.value.to_do(key);
+                value_do.timeout = v.expire;
                 writer.write_message(&value_do)?;
             }
             let record = SnapshotRecordDto {
