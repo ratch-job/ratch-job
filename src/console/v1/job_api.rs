@@ -3,8 +3,8 @@ use crate::common::datetime_utils::{now_millis, now_second_u32};
 use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
 use crate::console::model::job::{
-    JobInfoParam, JobQueryListRequest, JobTaskLogDetailRequest, JobTaskLogDetailResponse,
-    JobTaskLogQueryListRequest, TriggerJobParam,
+    JobInfoParam, JobQueryListRequest, JobTaskHistoryQueryListRequest, JobTaskLogDetailRequest,
+    JobTaskLogDetailResponse, JobTaskLogQueryListRequest, TriggerJobParam,
 };
 use crate::console::v1::{
     ERROR_CODE_JOB_KEY_DUPLICATE, ERROR_CODE_NO_APP_PERMISSION, ERROR_CODE_SYSTEM_ERROR,
@@ -556,7 +556,7 @@ pub(crate) async fn query_job_task_log(
         .await
     {
         Ok(Ok(log_info)) => {
-            if log_info.from_line_num != from_line_num {
+            if log_info.from_line_num != from_line_num && log_info.from_line_num != 0 {
                 log::error!(
                     "executor log line mismatch,job_id:{},task_id:{},attempt:{},addr:{},request_from:{},response_from:{}",
                     job_id,

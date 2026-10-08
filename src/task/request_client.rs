@@ -56,9 +56,15 @@ impl<'a> XxlClient<'a> {
                 result.msg.unwrap_or_default()
             ));
         }
-        result
-            .content
-            .ok_or_else(|| anyhow::anyhow!("executor log response content is empty"))
+        match result.content {
+            Some(content) => Ok(content),
+            None => Ok(JobLogInfo {
+                log_content: "[The log is empty]".to_string(),
+                from_line_num: 0,
+                to_line_num: 0,
+                is_end: true,
+            }),
+        }
     }
 
     fn build_url(&self, sub_url: &str) -> String {

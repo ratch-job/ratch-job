@@ -239,6 +239,11 @@ impl JobTaskLogDetailResponse {
             log_content: log_info.log_content,
             is_end,
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct JobTaskHistoryQueryListRequest {
     pub namespace: Option<String>,
     pub app_name: Option<String>,
@@ -293,10 +298,10 @@ impl JobTaskHistoryQueryListRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::JobTaskLogDetailRequest;
     use super::JobTaskHistoryQueryListRequest;
+    use super::JobTaskLogDetailRequest;
     use crate::task::model::enum_type::TaskStatusType;
-  
+
     #[test]
     fn should_validate_task_log_request() {
         let request = JobTaskLogDetailRequest {

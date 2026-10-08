@@ -43,3 +43,9 @@ where
 pub fn xxl_api_empty_success() -> XxlApiResult<XxlApiResult<()>> {
     XxlApiResult::success(None)
 }
+
+impl<T> Default for XxlApiResult<T> {
+    fn default() -> Self {
+        XxlApiResult::success(None)
+    }
+}
