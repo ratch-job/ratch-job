@@ -28,6 +28,7 @@ message JobDo {
     uint64 create_time = 20;
     uint32 retry_interval = 21;
     string job_key = 22;
+    string glue_source = 23;
 }
 
 message TaskTryLogDo {
@@ -55,6 +56,7 @@ message JobTaskDo {
     string trigger_user = 17;
     string namespace = 18;
     string app_name = 19;
+    string trigger_param = 20;
 }
 
 

@@ -78,6 +78,10 @@ impl JobRunMode {
             JobRunMode::GluePowerShell => "GLUE_POWERSHELL",
         }
     }
+
+    pub fn is_glue(&self) -> bool {
+        !matches!(self, JobRunMode::Bean)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

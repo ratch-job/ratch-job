@@ -280,6 +280,7 @@ pub(crate) async fn import_jobs(
     let mut errors: Vec<String> = Vec::new();
 
     for mut param in params {
+        param.migrate_legacy_glue_source();
         // 为每个导入的任务分配新 id
         match share_data
             .sequence_manager

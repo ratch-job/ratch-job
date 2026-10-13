@@ -380,6 +380,7 @@ pub(crate) async fn trigger_job(
         job_info,
         param.instance_addr.unwrap_or(EMPTY_ARC_STR.clone()),
         session.username.clone(),
+        param.trigger_param,
     );
     log::info!("trigger_job task_item:{:?}", &task_item);
     if let Ok(Ok(_)) = share_data

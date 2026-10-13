@@ -41,6 +41,8 @@ pub struct JobTaskInfo {
     pub namespace: Arc<String>,
     #[serde(default)]
     pub app_name: Arc<String>,
+    #[serde(default)]
+    pub trigger_param: Arc<String>,
 }
 
 impl JobTaskInfo {
@@ -69,6 +71,10 @@ impl JobTaskInfo {
             trigger_user,
             namespace: trigger_item.job_info.namespace.clone(),
             app_name: trigger_item.job_info.app_name.clone(),
+            trigger_param: trigger_item
+                .trigger_param
+                .clone()
+                .unwrap_or_else(|| trigger_item.job_info.dispatch_trigger_param()),
         }
     }
 
@@ -146,6 +152,7 @@ impl JobTaskInfo {
             trigger_user: Cow::Borrowed(&self.trigger_user),
             namespace: Cow::Borrowed(&self.namespace),
             app_name: Cow::Borrowed(&self.app_name),
+            trigger_param: Cow::Borrowed(&self.trigger_param),
         }
     }
 }
@@ -179,6 +186,7 @@ impl<'a> From<JobTaskDo<'a>> for JobTaskInfo {
             trigger_user: Arc::new(task_do.trigger_user.to_string()),
             namespace: Arc::new(task_do.namespace.to_string()),
             app_name: Arc::new(task_do.app_name.to_string()),
+            trigger_param: Arc::new(task_do.trigger_param.to_string()),
         }
     }
 }
@@ -232,6 +240,96 @@ mod tests {
             Some(&"http://127.0.0.1:9999".to_string())
         );
         assert!(task.get_log_attempt_addr(2).is_none());
+    }
+
+    #[test]
+    fn empty_manual_trigger_param_overrides_saved_param() {
+        use crate::common::constant::EMPTY_ARC_STR;
+        use crate::job::model::job::JobInfo;
+        use crate::task::model::actor_model::TriggerItem;
+
+        let job = Arc::new(JobInfo {
+            trigger_param: Arc::new("saved".to_string()),
+            ..JobInfo::default()
+        });
+        let item = TriggerItem::new_with_user(
+            1,
+            job,
+            EMPTY_ARC_STR.clone(),
+            Arc::new("admin".to_string()),
+            Some(Arc::new(String::new())),
+        );
+        let task = JobTaskInfo::from_job_trigger(&item);
+
+        assert!(task.from_outside);
+        assert_eq!(task.trigger_param.as_str(), "");
+    }
+
+    #[test]
+    fn missing_manual_trigger_param_uses_saved_param() {
+        use crate::common::constant::EMPTY_ARC_STR;
+        use crate::job::model::job::JobInfo;
+        use crate::task::model::actor_model::TriggerItem;
+
+        let job = Arc::new(JobInfo {
+            trigger_param: Arc::new("saved".to_string()),
+            ..JobInfo::default()
+        });
+        let item = TriggerItem::new_with_user(
+            1,
+            job,
+            EMPTY_ARC_STR.clone(),
+            Arc::new("admin".to_string()),
+            None,
+        );
+        let task = JobTaskInfo::from_job_trigger(&item);
+
+        assert_eq!(task.trigger_param.as_str(), "saved");
+    }
+
+    #[test]
+    fn legacy_glue_system_trigger_does_not_use_script_as_param() {
+        use crate::job::model::enum_type::JobRunMode;
+        use crate::job::model::job::JobInfo;
+        use crate::task::model::actor_model::TriggerItem;
+
+        let job = Arc::new(JobInfo {
+            run_mode: JobRunMode::GlueGroovy,
+            trigger_param: Arc::new("println 1".to_string()),
+            glue_source: Arc::new(String::new()),
+            ..JobInfo::default()
+        });
+        let item = TriggerItem::new(1, job);
+        let task = JobTaskInfo::from_job_trigger(&item);
+
+        assert!(!task.from_outside);
+        assert_eq!(task.trigger_param.as_str(), "");
+    }
+
+    #[test]
+    fn legacy_glue_omitted_manual_param_does_not_use_script() {
+        use crate::common::constant::EMPTY_ARC_STR;
+        use crate::job::model::enum_type::JobRunMode;
+        use crate::job::model::job::JobInfo;
+        use crate::task::model::actor_model::TriggerItem;
+
+        let job = Arc::new(JobInfo {
+            run_mode: JobRunMode::GlueShell,
+            trigger_param: Arc::new("echo hi".to_string()),
+            glue_source: Arc::new(String::new()),
+            ..JobInfo::default()
+        });
+        let item = TriggerItem::new_with_user(
+            1,
+            job,
+            EMPTY_ARC_STR.clone(),
+            Arc::new("admin".to_string()),
+            None,
+        );
+        let task = JobTaskInfo::from_job_trigger(&item);
+
+        assert!(task.from_outside);
+        assert_eq!(task.trigger_param.as_str(), "");
     }
 }
 

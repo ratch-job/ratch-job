@@ -29,6 +29,7 @@ pub struct JobInfoParam {
     pub run_mode: Option<String>,
     pub handle_name: Option<Arc<String>>,
     pub trigger_param: Option<Arc<String>>,
+    pub glue_source: Option<Arc<String>>,
     pub router_strategy: Option<String>,
     pub past_due_strategy: Option<String>,
     pub blocking_strategy: Option<String>,
@@ -55,6 +56,7 @@ impl JobInfoParam {
                 .map(|s| JobRunMode::from_str(&s).unwrap_or(JobRunMode::Bean)),
             handle_name: self.handle_name,
             trigger_param: self.trigger_param,
+            glue_source: self.glue_source,
             router_strategy: self
                 .router_strategy
                 .map(|s| RouterStrategy::from_str(&s).unwrap_or(RouterStrategy::RoundRobin)),
@@ -77,6 +79,7 @@ impl JobInfoParam {
 pub struct TriggerJobParam {
     pub job_id: Option<u64>,
     pub instance_addr: Option<Arc<String>>,
+    pub trigger_param: Option<Arc<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]

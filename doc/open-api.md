@@ -28,7 +28,8 @@
 | intervalSecond | number | 否 | 间隔秒数（当scheduleType为INTERVAL时必填） |
 | runMode | string | 否 | 运行模式：BEAN、GLUE_GROOVY、GLUE_SHELL、GLUE_PYTHON、GLUE_PHP、GLUE_NODEJS、GLUE_POWERSHELL |
 | description | string | 否 | 任务描述 |
-| triggerParam | string | 否 | 触发参数 |
+| triggerParam | string | 否 | 触发参数，下发给执行器的 executorParams |
+| glueSource | string | 否 | GLUE 脚本（GLUE 模式必填；未传时把 triggerParam 迁入并清空 triggerParam）。BEAN 模式忽略 |
 | routerStrategy | string | 否 | 路由策略：FIRST、LAST、ROUND_ROBIN、RANDOM、CONSISTENT_HASH、SHARDING_BROADCAST |
 | pastDueStrategy | string | 否 | 过期策略：DEFAULT、IGNORE、EXECUTE |
 | blockingStrategy | string | 否 | 阻塞策略：SERIAL_EXECUTION、DISCARD_LATER、COVER_EARLY、OTHER |
@@ -55,6 +56,7 @@
 | content.runMode | string | 运行模式 |
 | content.handleName | string | 任务处理器名称 |
 | content.triggerParam | string | 触发参数 |
+| content.glueSource | string | GLUE 脚本 |
 | content.routerStrategy | string | 路由策略 |
 | content.pastDueStrategy | string | 过期策略 |
 | content.blockingStrategy | string | 阻塞策略 |
@@ -112,7 +114,8 @@ curl -X POST "http://127.0.0.1:8725/ratch/v1/job/create" -H 'Content-Type: appli
 | intervalSecond | number | 否 | 间隔秒数 |
 | runMode | string | 否 | 运行模式 |
 | description | string | 否 | 任务描述 |
-| triggerParam | string | 否 | 触发参数 |
+| triggerParam | string | 否 | 触发参数，下发给执行器的 executorParams |
+| glueSource | string | 否 | GLUE 脚本（GLUE 模式不可为空）。不传则保持原值；原值为空且是 GLUE 模式时把 triggerParam 迁入并清空 triggerParam |
 | routerStrategy | string | 否 | 路由策略 |
 | pastDueStrategy | string | 否 | 过期策略 |
 | blockingStrategy | string | 否 | 阻塞策略 |
@@ -207,6 +210,7 @@ curl -X POST "http://127.0.0.1:8725/ratch/v1/job/remove" -H 'Content-Type: appli
 | data.runMode | string | 运行模式 |
 | data.handleName | string | 任务处理器名称 |
 | data.triggerParam | string | 触发参数 |
+| data.glueSource | string | GLUE 脚本 |
 | data.routerStrategy | string | 路由策略 |
 | data.pastDueStrategy | string | 过期策略 |
 | data.blockingStrategy | string | 阻塞策略 |
@@ -506,6 +510,7 @@ curl -X GET "http://127.0.0.1:8725/ratch/v1/job/queryIdByKey?namespace=xxl&appNa
 | data.runMode | string | 运行模式 |
 | data.handleName | string | 任务处理器名称 |
 | data.triggerParam | string | 触发参数 |
+| data.glueSource | string | GLUE 脚本 |
 | data.routerStrategy | string | 路由策略 |
 | data.pastDueStrategy | string | 过期策略 |
 | data.blockingStrategy | string | 阻塞策略 |
