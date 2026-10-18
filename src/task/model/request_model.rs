@@ -21,17 +21,26 @@ pub struct JobRunParam {
 }
 
 impl JobRunParam {
-    pub fn from_job_info(log_id: u64, job_info: &Arc<JobInfo>) -> Self {
+    pub fn from_job_info(
+        log_id: u64,
+        job_info: &Arc<JobInfo>,
+        executor_params: Arc<String>,
+    ) -> Self {
         Self {
             job_id: job_info.id,
             log_id,
             executor_handler: Some(job_info.handle_name.clone()),
-            executor_params: Some(job_info.trigger_param.clone()),
+            executor_params: Some(executor_params),
             executor_block_strategy: Some(job_info.blocking_strategy.to_str().to_string()),
             executor_timeout: Some(job_info.timeout_second as i32),
             log_date_time: Some(job_info.last_modified_millis),
             glue_type: Some(job_info.run_mode.to_str().to_string()),
-            glue_source: Some(job_info.trigger_param.clone()),
+            glue_source: Some(if job_info.glue_source.is_empty() && job_info.run_mode.is_glue() {
+                // Unsaved legacy GLUE jobs: script still lives in trigger_param.
+                job_info.trigger_param.clone()
+            } else {
+                job_info.glue_source.clone()
+            }),
             glue_update_time: Some(job_info.last_modified_millis),
             broadcast_index: Some(0),
             broadcast_total: Some(0),
@@ -93,5 +102,72 @@ mod tests {
         assert_eq!(info.to_line_num, 8);
         assert_eq!(info.log_content, "hello\n");
         assert!(!info.is_end);
+    }
+
+    #[test]
+    fn run_param_keeps_executor_param_separate_from_glue_script() {
+        use crate::job::model::enum_type::JobRunMode;
+        use crate::job::model::job::JobInfo;
+        use std::sync::Arc;
+
+        let job = Arc::new(JobInfo {
+            id: 3,
+            run_mode: JobRunMode::GlueShell,
+            handle_name: Arc::new("demo".to_string()),
+            trigger_param: Arc::new("saved".to_string()),
+            glue_source: Arc::new("echo hi".to_string()),
+            ..JobInfo::default()
+        });
+        let param = super::JobRunParam::from_job_info(9, &job, Arc::new("once".to_string()));
+        let value = serde_json::to_value(param).expect("run param should serialize");
+
+        assert_eq!(value["executorParams"], "once");
+        assert_eq!(value["glueSource"], "echo hi");
+        assert_eq!(value["glueType"], "GLUE_SHELL");
+    }
+
+    #[test]
+    fn run_param_falls_back_to_trigger_param_when_glue_source_empty() {
+        use crate::job::model::enum_type::JobRunMode;
+        use crate::job::model::job::JobInfo;
+        use std::sync::Arc;
+
+        let job = Arc::new(JobInfo {
+            id: 4,
+            run_mode: JobRunMode::GlueGroovy,
+            handle_name: Arc::new("demo".to_string()),
+            trigger_param: Arc::new("println 1".to_string()),
+            glue_source: Arc::new(String::new()),
+            ..JobInfo::default()
+        });
+        // Caller must not dual-use the legacy script as executorParams.
+        let param = super::JobRunParam::from_job_info(10, &job, Arc::new(String::new()));
+        let value = serde_json::to_value(param).expect("run param should serialize");
+
+        assert_eq!(value["executorParams"], "");
+        assert_eq!(value["glueSource"], "println 1");
+        assert_eq!(value["glueType"], "GLUE_GROOVY");
+    }
+
+    #[test]
+    fn bean_run_param_does_not_fallback_glue_source() {
+        use crate::job::model::enum_type::JobRunMode;
+        use crate::job::model::job::JobInfo;
+        use std::sync::Arc;
+
+        let job = Arc::new(JobInfo {
+            id: 5,
+            run_mode: JobRunMode::Bean,
+            handle_name: Arc::new("demo".to_string()),
+            trigger_param: Arc::new("arg".to_string()),
+            glue_source: Arc::new(String::new()),
+            ..JobInfo::default()
+        });
+        let param = super::JobRunParam::from_job_info(11, &job, Arc::new("arg".to_string()));
+        let value = serde_json::to_value(param).expect("run param should serialize");
+
+        assert_eq!(value["executorParams"], "arg");
+        assert_eq!(value["glueSource"], "");
+        assert_eq!(value["glueType"], "BEAN");
     }
 }

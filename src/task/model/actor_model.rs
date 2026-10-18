@@ -40,6 +40,7 @@ pub struct TriggerItem {
     pub trigger_time: u32,
     pub job_info: Arc<JobInfo>,
     pub trigger_source: TriggerSourceInfo,
+    pub trigger_param: Option<Arc<String>>,
 }
 
 impl TriggerItem {
@@ -47,6 +48,7 @@ impl TriggerItem {
         TriggerItem {
             trigger_time,
             job_info,
+            trigger_param: None,
             trigger_source: TriggerSourceInfo {
                 fix_addr: EMPTY_ARC_STR.clone(),
                 source_type: TriggerSourceType::System,
@@ -59,10 +61,12 @@ impl TriggerItem {
         job_info: Arc<JobInfo>,
         fix_addr: Arc<String>,
         user_name: Arc<String>,
+        trigger_param: Option<Arc<String>>,
     ) -> Self {
         TriggerItem {
             trigger_time,
             job_info,
+            trigger_param,
             trigger_source: TriggerSourceInfo {
                 fix_addr,
                 source_type: TriggerSourceType::User(user_name),

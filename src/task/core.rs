@@ -357,7 +357,17 @@ impl TaskManager {
         for task_wrap in task_wrap_list {
             index += 1;
             let mut task_info = task_wrap.task;
-            let mut param = JobRunParam::from_job_info(task_info.task_id, &task_wrap.job_info);
+            let executor_params = if task_info.trigger_param.is_empty() && !task_info.from_outside {
+                // Legacy GLUE: trigger_param may still hold the script; do not dual-use as args.
+                task_wrap.job_info.dispatch_trigger_param()
+            } else {
+                task_info.trigger_param.clone()
+            };
+            let mut param = JobRunParam::from_job_info(
+                task_info.task_id,
+                &task_wrap.job_info,
+                executor_params,
+            );
             param.log_date_time = Some(task_info.trigger_time as u64 * 1000);
             if index >= task_request_parallel {
                 index = 0;

@@ -82,7 +82,7 @@ impl JobManager {
             };
             let mut new_job = job_info.as_ref().clone();
             new_job.update_param(job_param);
-            job_info.check_valid()?;
+            new_job.check_valid()?;
             let value = Arc::new(new_job);
 
             if let Some(old_key) = old_job_key {

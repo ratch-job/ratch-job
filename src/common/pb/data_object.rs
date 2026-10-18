@@ -41,6 +41,7 @@ pub struct JobDo<'a> {
     pub create_time: u64,
     pub retry_interval: u32,
     pub job_key: Cow<'a, str>,
+    pub glue_source: Cow<'a, str>,
 }
 
 impl<'a> MessageRead<'a> for JobDo<'a> {
@@ -70,6 +71,7 @@ impl<'a> MessageRead<'a> for JobDo<'a> {
                 Ok(160) => msg.create_time = r.read_uint64(bytes)?,
                 Ok(168) => msg.retry_interval = r.read_uint32(bytes)?,
                 Ok(178) => msg.job_key = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(186) => msg.glue_source = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -103,6 +105,7 @@ impl<'a> MessageWrite for JobDo<'a> {
         + if self.create_time == 0u64 { 0 } else { 2 + sizeof_varint(*(&self.create_time) as u64) }
         + if self.retry_interval == 0u32 { 0 } else { 2 + sizeof_varint(*(&self.retry_interval) as u64) }
         + if self.job_key == "" { 0 } else { 2 + sizeof_len((&self.job_key).len()) }
+        + if self.glue_source == "" { 0 } else { 2 + sizeof_len((&self.glue_source).len()) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -128,6 +131,7 @@ impl<'a> MessageWrite for JobDo<'a> {
         if self.create_time != 0u64 { w.write_with_tag(160, |w| w.write_uint64(*&self.create_time))?; }
         if self.retry_interval != 0u32 { w.write_with_tag(168, |w| w.write_uint32(*&self.retry_interval))?; }
         if self.job_key != "" { w.write_with_tag(178, |w| w.write_string(&**&self.job_key))?; }
+        if self.glue_source != "" { w.write_with_tag(186, |w| w.write_string(&**&self.glue_source))?; }
         Ok(())
     }
 }
@@ -190,6 +194,7 @@ pub struct JobTaskDo<'a> {
     pub trigger_user: Cow<'a, str>,
     pub namespace: Cow<'a, str>,
     pub app_name: Cow<'a, str>,
+    pub trigger_param: Cow<'a, str>,
 }
 
 impl<'a> MessageRead<'a> for JobTaskDo<'a> {
@@ -216,6 +221,7 @@ impl<'a> MessageRead<'a> for JobTaskDo<'a> {
                 Ok(138) => msg.trigger_user = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(146) => msg.namespace = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(154) => msg.app_name = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(162) => msg.trigger_param = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -246,6 +252,7 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
         + if self.trigger_user == "" { 0 } else { 2 + sizeof_len((&self.trigger_user).len()) }
         + if self.namespace == "" { 0 } else { 2 + sizeof_len((&self.namespace).len()) }
         + if self.app_name == "" { 0 } else { 2 + sizeof_len((&self.app_name).len()) }
+        + if self.trigger_param == "" { 0 } else { 2 + sizeof_len((&self.trigger_param).len()) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
@@ -268,6 +275,7 @@ impl<'a> MessageWrite for JobTaskDo<'a> {
         if self.trigger_user != "" { w.write_with_tag(138, |w| w.write_string(&**&self.trigger_user))?; }
         if self.namespace != "" { w.write_with_tag(146, |w| w.write_string(&**&self.namespace))?; }
         if self.app_name != "" { w.write_with_tag(154, |w| w.write_string(&**&self.app_name))?; }
+        if self.trigger_param != "" { w.write_with_tag(162, |w| w.write_string(&**&self.trigger_param))?; }
         Ok(())
     }
 }
