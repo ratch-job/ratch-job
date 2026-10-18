@@ -35,12 +35,14 @@ impl JobRunParam {
             executor_timeout: Some(job_info.timeout_second as i32),
             log_date_time: Some(job_info.last_modified_millis),
             glue_type: Some(job_info.run_mode.to_str().to_string()),
-            glue_source: Some(if job_info.glue_source.is_empty() && job_info.run_mode.is_glue() {
-                // Unsaved legacy GLUE jobs: script still lives in trigger_param.
-                job_info.trigger_param.clone()
-            } else {
-                job_info.glue_source.clone()
-            }),
+            glue_source: Some(
+                if job_info.glue_source.is_empty() && job_info.run_mode.is_glue() {
+                    // Unsaved legacy GLUE jobs: script still lives in trigger_param.
+                    job_info.trigger_param.clone()
+                } else {
+                    job_info.glue_source.clone()
+                },
+            ),
             glue_update_time: Some(job_info.last_modified_millis),
             broadcast_index: Some(0),
             broadcast_total: Some(0),

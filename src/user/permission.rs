@@ -275,6 +275,8 @@ lazy_static::lazy_static! {
 
     static ref R_DEVELOPER: Arc<GroupResource> = Arc::new(GroupResource::new(vec![
         &M_BASE,
+        &M_APP_VISITOR,
+        &M_JOB_VISITOR,
         &M_APP_MANAGER,
         &M_JOB_MANAGER,
         &M_NAMESPACE_MANAGE,
@@ -285,6 +287,8 @@ lazy_static::lazy_static! {
 
     static ref R_MANAGER: Arc<GroupResource> = Arc::new(GroupResource::new(vec![
         &M_BASE,
+        &M_APP_VISITOR,
+        &M_JOB_VISITOR,
         &M_APP_MANAGER,
         &M_JOB_MANAGER,
         &M_NAMESPACE_MANAGE,

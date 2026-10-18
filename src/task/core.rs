@@ -363,11 +363,8 @@ impl TaskManager {
             } else {
                 task_info.trigger_param.clone()
             };
-            let mut param = JobRunParam::from_job_info(
-                task_info.task_id,
-                &task_wrap.job_info,
-                executor_params,
-            );
+            let mut param =
+                JobRunParam::from_job_info(task_info.task_id, &task_wrap.job_info, executor_params);
             param.log_date_time = Some(task_info.trigger_time as u64 * 1000);
             if index >= task_request_parallel {
                 index = 0;
