@@ -1,5 +1,8 @@
 use crate::common::constant;
 use crate::common::string_utils::StringUtils;
+use crate::ldap::model::LdapConfig;
+use crate::user::permission::{UserRoleHelper, USER_ROLE_VISITOR};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 const DEFAULT_DB_PATH: &str = "ratch_db";
@@ -33,6 +36,13 @@ pub struct AppConfig {
     pub init_admin_username: String,
     pub init_admin_password: String,
     pub job_task_log_limit: usize,
+    pub ldap_enable: bool,
+    pub ldap_url: Arc<String>,
+    pub ldap_user_base_dn: Arc<String>,
+    pub ldap_user_filter: Arc<String>,
+    pub ldap_user_developer_groups: Arc<HashSet<String>>,
+    pub ldap_user_admin_groups: Arc<HashSet<String>>,
+    pub ldap_user_default_role: Arc<String>,
 }
 
 impl AppConfig {
@@ -143,6 +153,31 @@ impl AppConfig {
         if job_task_log_limit < 20 {
             job_task_log_limit = 20;
         }
+        let ldap_enable = std::env::var("RATCH_LDAP_ENABLE")
+            .unwrap_or("false".to_owned())
+            .parse()
+            .unwrap_or(false);
+        let ldap_url = std::env::var("RATCH_LDAP_URL")
+            .map(Arc::new)
+            .unwrap_or(constant::EMPTY_ARC_STR.clone());
+        let ldap_user_base_dn = std::env::var("RATCH_LDAP_USER_BASE_DN")
+            .map(Arc::new)
+            .unwrap_or(constant::EMPTY_ARC_STR.clone());
+        let ldap_user_filter = std::env::var("RATCH_LDAP_USER_FILTER")
+            .map(Arc::new)
+            .unwrap_or(constant::EMPTY_ARC_STR.clone());
+        let ldap_user_developer_groups = Arc::new(StringUtils::split_to_hashset(
+            &std::env::var("RATCH_LDAP_USER_DEVELOPER_GROUP").unwrap_or_default(),
+        ));
+        let ldap_user_admin_groups = Arc::new(StringUtils::split_to_hashset(
+            &std::env::var("RATCH_LDAP_USER_ADMIN_GROUP").unwrap_or_default(),
+        ));
+        let ldap_user_default_role = std::env::var("RATCH_LDAP_USER_DEFAULT_ROLE")
+            .map(|v| {
+                let upper = v.to_uppercase();
+                UserRoleHelper::get_role_by_name(&upper, USER_ROLE_VISITOR.clone())
+            })
+            .unwrap_or(USER_ROLE_VISITOR.clone());
         Self {
             local_db_dir,
             http_api_port,
@@ -171,6 +206,13 @@ impl AppConfig {
             init_admin_username,
             init_admin_password,
             job_task_log_limit,
+            ldap_enable,
+            ldap_url,
+            ldap_user_base_dn,
+            ldap_user_filter,
+            ldap_user_developer_groups,
+            ldap_user_admin_groups,
+            ldap_user_default_role,
         }
     }
 
@@ -208,6 +250,17 @@ impl AppConfig {
 
     pub fn get_grpc_cluster_addr(&self) -> String {
         format!("0.0.0.0:{}", &self.grpc_cluster_port)
+    }
+
+    pub fn get_ldap_config(&self) -> Arc<LdapConfig> {
+        Arc::new(LdapConfig {
+            ldap_url: self.ldap_url.clone(),
+            ldap_user_base_dn: self.ldap_user_base_dn.clone(),
+            ldap_user_filter: self.ldap_user_filter.clone(),
+            ldap_user_developer_groups: self.ldap_user_developer_groups.clone(),
+            ldap_user_admin_groups: self.ldap_user_admin_groups.clone(),
+            ldap_user_default_role: self.ldap_user_default_role.clone(),
+        })
     }
 
     pub fn get_http_api_addr(&self) -> String {

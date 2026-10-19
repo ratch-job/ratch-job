@@ -421,6 +421,16 @@ impl UserRoleHelper {
         Arc::new(role_value.to_owned())
     }
 
+    pub fn get_role_by_name(role_name: &str, default: Arc<String>) -> Arc<String> {
+        match role_name {
+            "VISITOR" => USER_ROLE_VISITOR.clone(),
+            "DEVELOPER" => USER_ROLE_DEVELOPER.clone(),
+            "ADMIN" => USER_ROLE_MANAGER.clone(),
+            "MANAGER" => USER_ROLE_MANAGER.clone(),
+            _ => default,
+        }
+    }
+
     pub fn match_url_by_base(path: &str, method: &str) -> bool {
         M_BASE.match_url(path, method)
     }

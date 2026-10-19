@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use actix_web::http::header;
@@ -16,6 +17,8 @@ use crate::common::constant::CONSOLE_TOKEN_COOKIE_KEY;
 use crate::common::datetime_utils::now_second_i32;
 use crate::common::share_data::ShareData;
 use crate::console::model::login_model::{LoginParam, LoginToken};
+use crate::ldap::model::actor_model::{LdapMsgReq, LdapMsgResult};
+use crate::ldap::model::LdapUserParam;
 use crate::raft::store::ClientRequest;
 use crate::user::actor_model::{UserManagerRaftResult, UserManagerReq};
 use crate::{
@@ -44,7 +47,7 @@ pub async fn login(
                 Some("captcha token is empty".to_owned()),
             )));
         }
-        let captcha_code = param.captcha.unwrap_or_default().to_uppercase();
+        let captcha_code = param.captcha.clone().unwrap_or_default().to_uppercase();
         let cache_req = CacheManagerLocalReq::Get(CacheKey::new(
             CacheType::String,
             Arc::new(format!("Captcha_{}", &captcha_token)),
@@ -84,70 +87,125 @@ pub async fn login(
             )));
         }
     };
+    let mut session: Option<Arc<UserSession>> = None;
+    let mut error_code = "USER_CHECK_ERROR".to_owned();
     let msg = UserManagerReq::CheckUser {
-        name: param.username,
-        password,
+        name: param.username.clone(),
+        password: password.clone(),
     };
     if let Ok(Ok(res)) = app.user_manager.send(msg).await {
         if let UserManagerRaftResult::CheckUser(valid, user) = res {
             if valid {
-                //增加长度避免遍历
-                let token = Arc::new(
-                    uuid::Uuid::new_v4().to_string().replace('-', "")
-                        + &uuid::Uuid::new_v4().to_string().replace('-', ""),
-                );
-                let now = now_second_i32();
-                let session = Arc::new(UserSession {
+                session = Some(Arc::new(UserSession {
                     username: user.username,
                     nickname: user.nickname,
                     roles: user.roles,
                     extend_infos: user.extend_info,
                     namespace_privilege: user.namespace_privilege,
                     app_privilege: user.app_privilege,
-                    refresh_time: now as u32,
-                });
-                let set_info = SetInfo {
-                    key: CacheKey::new(CacheType::UserSession, token.clone()),
-                    value: CacheValue::UserSession(session),
-                    ttl: app.app_config.console_login_timeout,
-                    now,
-                    nx: false,
-                    xx: false,
-                };
-                let cache_req = CacheManagerRaftReq::Set(set_info);
-                app.raft_request_route
-                    .request(ClientRequest::CacheReq { req: cache_req })
-                    .await
-                    .ok();
-                //登录成功后清除登陆限流计数
-                //let clear_limit_req =
-                //    CacheManagerReq::Remove(CacheKey::new(CacheType::String, limit_key));
-                //app.cache_manager.do_send(clear_limit_req);
-                let login_token = LoginToken {
-                    token: token.to_string(),
-                };
-                return Ok(HttpResponse::Ok()
-                    .cookie(
-                        Cookie::build(CONSOLE_TOKEN_COOKIE_KEY, token.as_str())
-                            .path("/")
-                            .http_only(true)
-                            .finish(),
-                    )
-                    .cookie(
-                        Cookie::build("ratch_captcha_token", "")
-                            .path("/")
-                            .http_only(true)
-                            .finish(),
-                    )
-                    .insert_header(header::ContentType(mime::APPLICATION_JSON))
-                    .json(ApiResult::success(Some(login_token))));
+                    refresh_time: now_second_i32() as u32,
+                }));
             }
         }
-        return Ok(
-            HttpResponse::Ok().json(ApiResult::<()>::error("USER_CHECK_ERROR".to_owned(), None))
-        );
+        if !app.app_config.ldap_enable && session.is_none() {
+            return Ok(HttpResponse::Ok().json(ApiResult::<()>::error(error_code, None)));
+        }
+    } else {
+        error_code = "SYSTEM_ERROR".to_owned();
     }
-    Ok(HttpResponse::Ok().json(ApiResult::<()>::error("SYSTEM_ERROR".to_owned(), None)))
+    if session.is_none() && app.app_config.ldap_enable {
+        match ldap_login(&app, param.clone(), password).await {
+            Ok(v) => {
+                session = v;
+            }
+            Err(e) => {
+                return Ok(HttpResponse::Ok()
+                    .json(ApiResult::<()>::error(error_code, Some(e.to_string()))));
+            }
+        }
+    }
+    if let Some(session) = session {
+        return match save_login_session(&app, session).await {
+            Ok(value) => Ok(value),
+            Err(e) => Ok(HttpResponse::Ok().json(ApiResult::<()>::error(
+                "SAVE_SESSION_ERROR".to_string(),
+                Some(e.to_string()),
+            ))),
+        };
+    }
+    Ok(HttpResponse::Ok().json(ApiResult::<()>::error(error_code, None)))
+}
+
+async fn save_login_session(
+    app: &Data<Arc<ShareData>>,
+    session: Arc<UserSession>,
+) -> anyhow::Result<HttpResponse> {
+    //增加长度避免遍历
+    let token = Arc::new(
+        uuid::Uuid::new_v4().to_string().replace('-', "")
+            + &uuid::Uuid::new_v4().to_string().replace('-', ""),
+    );
+    let now = now_second_i32();
+    let set_info = SetInfo {
+        key: CacheKey::new(CacheType::UserSession, token.clone()),
+        value: CacheValue::UserSession(session),
+        ttl: app.app_config.console_login_timeout,
+        now,
+        nx: false,
+        xx: false,
+    };
+    let cache_req = CacheManagerRaftReq::Set(set_info);
+    app.raft_request_route
+        .request(ClientRequest::CacheReq { req: cache_req })
+        .await
+        .ok();
+    let login_token = LoginToken {
+        token: token.to_string(),
+    };
+    Ok(HttpResponse::Ok()
+        .cookie(
+            Cookie::build(CONSOLE_TOKEN_COOKIE_KEY, token.as_str())
+                .path("/")
+                .http_only(true)
+                .finish(),
+        )
+        .cookie(
+            Cookie::build("ratch_captcha_token", "")
+                .path("/")
+                .http_only(true)
+                .finish(),
+        )
+        .insert_header(header::ContentType(mime::APPLICATION_JSON))
+        .json(ApiResult::success(Some(login_token))))
+}
+
+async fn ldap_login(
+    app: &Data<Arc<ShareData>>,
+    param: LoginParam,
+    password: String,
+) -> anyhow::Result<Option<Arc<UserSession>>> {
+    let res = app
+        .ldap_manager
+        .send(LdapMsgReq::Bind(LdapUserParam {
+            user_name: param.username.as_ref().to_owned(),
+            password,
+            query_meta: true,
+        }))
+        .await??;
+    let v = if let LdapMsgResult::UserMeta(meta) = res {
+        Some(Arc::new(UserSession {
+            username: param.username.clone(),
+            nickname: meta.user_name,
+            roles: vec![meta.role],
+            extend_infos: HashMap::default(),
+            namespace_privilege: meta.namespace_privilege,
+            app_privilege: meta.app_privilege,
+            refresh_time: now_second_i32() as u32,
+        }))
+    } else {
+        None
+    };
+    Ok(v)
 }
 
 fn decode_password(password: &str, captcha_token: &str) -> anyhow::Result<String> {

@@ -6,6 +6,7 @@ use crate::common::share_data::ShareData;
 use crate::grpc::handler::RAFT_ROUTE_REQUEST;
 use crate::grpc::payload_utils::PayloadUtils;
 use crate::job::core::JobManager;
+use crate::ldap::core::LdapManager;
 use crate::metrics::core::MetricsManager;
 use crate::namespace::core::NamespaceManager;
 use crate::raft::cluster::model::RouterRequest;
@@ -125,6 +126,12 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         namespace_manager.clone(),
     ));
+    let ldap_manager = LdapManager::new(
+        app_config.get_ldap_config(),
+        app_config.ldap_enable,
+    )
+    .start();
+    factory.register(BeanDefinition::actor_with_inject_from_obj(ldap_manager));
     let raft_data_wrap = Arc::new(RaftDataHandler {
         sequence_db: sequence_db_addr,
         app_manager,
@@ -224,6 +231,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<ShareDa
         batch_call_manager: factory_data.get_actor().unwrap(),
         cache_manager: factory_data.get_actor().unwrap(),
         user_manager: factory_data.get_actor().unwrap(),
+        ldap_manager: factory_data.get_actor().unwrap(),
         factory_data,
     });
     Ok(app_data)

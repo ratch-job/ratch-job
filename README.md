@@ -187,6 +187,13 @@ ratchjob
 | RATCH_INIT_ADMIN_USERNAME | 初始化管理员用户名 | admin | admin | 0.1.5 |
 | RATCH_INIT_ADMIN_PASSWORD | 初始化管理员密码 | admin | admin | 0.1.5 |
 | RATCH_JOB_TASK_LOG_LIMIT | 单个任务保留的日志条数限制，最小20 | 100 | 50 | 0.2.1 |
+| RATCH_LDAP_ENABLE | 控制台是否启用Ldap登陆 | false | true | 0.3.0 |
+| RATCH_LDAP_URL | Ldap服务地址 | 空 | ldap://127.0.0.1:389 | 0.3.0 |
+| RATCH_LDAP_USER_BASE_DN | Ldap用户Base DN | 空 | ou=people,dc=example,dc=com | 0.3.0 |
+| RATCH_LDAP_USER_FILTER | Ldap用户查询过滤器，%s会被替换为登陆用户名 | 空 |(&(objectClass=person)(uid=%s))| 0.3.0 |
+| RATCH_LDAP_USER_DEVELOPER_GROUP | Ldap用户开发者角色分组，多个用逗号分隔 | 空 | developer | 0.3.0 |
+| RATCH_LDAP_USER_ADMIN_GROUP | Ldap用户管理员角色分组，多个用逗号分隔 | 空 | admin | 0.3.0 |
+| RATCH_LDAP_USER_DEFAULT_ROLE | Ldap登陆用户默认角色,VISITOR/DEVELOPER/ADMIN | VISITOR | DEVELOPER | 0.3.0 |
 
 
 
@@ -252,6 +259,10 @@ ratch-job支持通过控制台或open-api创建任务。
 1、方式一：任务管理中创建任务
 
 系统会默认创建一个名为`admin`的用户，密码为`admin`(也可以通过环境变量 RATCH_INIT_ADMIN_USERNAME 和 RATCH_INIT_ADMIN_PASSWORD 修改默认账号的账户名和密码)。 
+
+#### Ldap登陆
+
+控制台支持Ldap登陆。设置环境变量 `RATCH_LDAP_ENABLE=true` 并配置 `RATCH_LDAP_URL`、`RATCH_LDAP_USER_BASE_DN`、`RATCH_LDAP_USER_FILTER` 等参数后，控制台登陆时会先校验本地用户，校验不通过时自动使用Ldap进行登陆认证。Ldap用户首次登陆成功后会自动创建对应的本地用户记录，并按Ldap分组（`RATCH_LDAP_USER_DEVELOPER_GROUP`、`RATCH_LDAP_USER_ADMIN_GROUP`）映射为对应的控制台角色。
 
 使用默认账户登陆控制台并创建任务：
 

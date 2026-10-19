@@ -5,6 +5,7 @@ pub mod common;
 pub mod console;
 pub mod grpc;
 pub mod job;
+pub mod ldap;
 pub mod metrics;
 pub mod namespace;
 pub mod openapi;

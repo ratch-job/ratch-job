@@ -2,6 +2,7 @@ use crate::app::core::AppManager;
 use crate::cache::core::CacheManager;
 use crate::common::app_config::AppConfig;
 use crate::job::core::JobManager;
+use crate::ldap::core::LdapManager;
 use crate::metrics::core::MetricsManager;
 use crate::namespace::core::NamespaceManager;
 use crate::raft::cluster::node_manager::ClusterNodeManager;
@@ -41,4 +42,5 @@ pub struct ShareData {
     pub batch_call_manager: Addr<BatchCallManager>,
     pub cache_manager: Addr<CacheManager>,
     pub user_manager: Addr<UserManager>,
+    pub ldap_manager: Addr<LdapManager>,
 }
