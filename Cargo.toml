@@ -32,6 +32,8 @@ debug=[]
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 serde_urlencoded = "0.7"
+serde_yaml = "0.9"
+zip = "0.6"
 actix-web = "4"
 actix-http = "3"
 actix = "0.13"
