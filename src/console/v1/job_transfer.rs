@@ -1,20 +1,30 @@
 use crate::common::datetime_utils::now_millis;
 use crate::common::get_app_version;
+use crate::common::model::privilege::PrivilegeGroup;
 use crate::common::model::{ApiResult, UserSession};
+use crate::common::namespace_util::{get_namespace, get_namespace_by_option};
 use crate::common::share_data::ShareData;
-use crate::console::model::job::{JobExportInfo, JobQueryListRequest, RatchMeta};
-use crate::console::v1::ERROR_CODE_SYSTEM_ERROR;
+use crate::console::model::job::{
+    JobExportInfo, JobImportForm, JobImportResult, JobQueryListRequest, RatchMeta,
+};
+use crate::console::v1::job_api::{do_create_job, do_update_job};
+use crate::console::v1::{ERROR_CODE_NO_PERMISSION, ERROR_CODE_SYSTEM_ERROR};
 use crate::job::job_index::JobQueryParam;
 use crate::job::model::actor_model::{JobManagerReq, JobManagerResult};
-use crate::job::model::job::JobInfoDto;
+use crate::job::model::enum_type::{
+    ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
+};
+use crate::job::model::job::{JobInfoDto, JobKey, JobParam};
 use actix_http::HttpMessage;
+use actix_multipart::form::text::Text;
+use actix_multipart::form::MultipartForm;
 use actix_web::http::header::{ContentDisposition, ContentType};
 use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Read, Write};
 use std::sync::Arc;
 use zip::write::FileOptions;
-use zip::ZipWriter;
+use zip::{ZipArchive, ZipWriter};
 
 /// 导出包元数据文件名
 pub(crate) const RATCH_META_FILE_NAME: &str = ".ratch_meta";
@@ -55,6 +65,207 @@ pub(crate) fn build_export_zip(mut list: Vec<JobInfoDto>) -> anyhow::Result<Vec<
         writer.finish()?;
     }
     Ok(buf)
+}
+
+/// 解析导入 zip 为任务列表，`namespace` 为上传时指定的目标命名空间；
+/// 返回（任务列表，失败明细），yaml 条目解析失败计入明细且不中断；zip 非法或模块不匹配时整体报错
+pub(crate) fn parse_import_zip(
+    bytes: &[u8],
+    namespace: &str,
+) -> anyhow::Result<(Vec<JobInfoDto>, Vec<String>)> {
+    let mut archive = ZipArchive::new(Cursor::new(bytes))
+        .map_err(|e| anyhow::anyhow!("import file is not a valid zip,{}", e))?;
+    let mut dto_list = Vec::new();
+    let mut errors = Vec::new();
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        if entry.is_dir() {
+            continue;
+        }
+        let name = entry.name().to_string();
+        if name == RATCH_META_FILE_NAME {
+            let mut content = String::new();
+            entry.read_to_string(&mut content)?;
+            parse_ratch_meta(&content)?;
+            continue;
+        }
+        if !name.ends_with(".yaml") {
+            continue;
+        }
+        let mut content = String::new();
+        if let Err(e) = entry.read_to_string(&mut content) {
+            errors.push(format!("{}: read entry error,{}", name, e));
+            continue;
+        }
+        match serde_yaml::from_str::<JobExportInfo>(&content) {
+            Ok(export_info) => dto_list.push(build_import_job_dto(export_info, namespace)),
+            Err(e) => errors.push(format!("{}: yaml parse error,{}", name, e)),
+        }
+    }
+    Ok((dto_list, errors))
+}
+
+/// 把导出内容转换为导入任务，id 归零、命名空间统一取上传时指定值
+fn build_import_job_dto(export_info: JobExportInfo, namespace: &str) -> JobInfoDto {
+    JobInfoDto {
+        id: 0,
+        enable: export_info.enable,
+        app_name: export_info.app_name,
+        key: export_info.key,
+        namespace: Arc::new(namespace.to_owned()),
+        description: export_info.description,
+        schedule_type: export_info.schedule_type,
+        cron_value: export_info.cron_value,
+        delay_second: export_info.delay_second,
+        interval_second: export_info.interval_second,
+        run_mode: export_info.run_mode,
+        handle_name: export_info.handle_name,
+        trigger_param: export_info.trigger_param,
+        glue_source: export_info.glue_source,
+        router_strategy: export_info.router_strategy,
+        past_due_strategy: export_info.past_due_strategy,
+        blocking_strategy: export_info.blocking_strategy,
+        timeout_second: export_info.timeout_second,
+        try_times: export_info.try_times,
+        version_id: export_info.version_id,
+        last_modified_millis: export_info.last_modified_millis,
+        register_time: export_info.register_time,
+        retry_interval: export_info.retry_interval,
+    }
+}
+
+/// 导入任务的单条 upsert：已存在（JobId 命中）走更新分支，否则走创建分支，与页面创建/更新行为一致
+async fn upsert_job(
+    share_data: &Data<Arc<ShareData>>,
+    app_privilege: &PrivilegeGroup<Arc<String>>,
+    dto: JobInfoDto,
+    existing_job_id: Option<u64>,
+) -> anyhow::Result<()> {
+    if dto.key.is_empty() {
+        return Err(anyhow::anyhow!("job key is empty"));
+    }
+    if !app_privilege.check_permission(&dto.app_name) {
+        return Err(anyhow::anyhow!("user no app permission:{}", &dto.app_name));
+    }
+    let mut param = JobParam {
+        id: None,
+        enable: Some(dto.enable),
+        app_name: Some(dto.app_name.clone()),
+        namespace: Some(dto.namespace.clone()),
+        key: Some(dto.key.clone()),
+        description: Some(dto.description.clone()),
+        schedule_type: Some(ScheduleType::from_str(&dto.schedule_type)),
+        cron_value: Some(dto.cron_value.clone()),
+        delay_second: Some(dto.delay_second),
+        interval_second: Some(dto.interval_second),
+        run_mode: Some(JobRunMode::from_str(&dto.run_mode).unwrap_or(JobRunMode::Bean)),
+        handle_name: Some(dto.handle_name.clone()),
+        trigger_param: Some(dto.trigger_param.clone()),
+        glue_source: Some(dto.glue_source.clone()),
+        router_strategy: Some(
+            RouterStrategy::from_str(&dto.router_strategy).unwrap_or(RouterStrategy::RoundRobin),
+        ),
+        past_due_strategy: Some(PastDueStrategy::from_str(&dto.past_due_strategy)),
+        blocking_strategy: Some(ExecutorBlockStrategy::from_str(&dto.blocking_strategy)),
+        timeout_second: Some(dto.timeout_second),
+        try_times: Some(dto.try_times),
+        update_time: Some(now_millis()),
+        retry_interval: Some(dto.retry_interval),
+    };
+    param.migrate_legacy_glue_source();
+    match existing_job_id {
+        Some(job_id) if job_id != 0 => {
+            param.id = Some(job_id);
+            do_update_job(share_data.clone(), app_privilege, param).await
+        }
+        _ => do_create_job(share_data.clone(), param).await.map(|_| ()),
+    }
+}
+
+/// 导入任务：解析 zip 后经批量 JobKey 查询逐条 upsert，返回导入结果统计（有失败项仍返回成功并携带明细）
+pub(crate) async fn import_jobs(
+    req: actix_web::HttpRequest,
+    share_data: Data<Arc<ShareData>>,
+    MultipartForm(form): MultipartForm<JobImportForm>,
+) -> impl Responder {
+    let session = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.clone()
+    } else {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_SYSTEM_ERROR.to_string(),
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    let namespace = match form.namespace {
+        Some(Text(namespace)) => get_namespace(&Arc::new(namespace)),
+        None => get_namespace_by_option(&None),
+    };
+    if !session.namespace_privilege.check_permission(&namespace) {
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
+            ERROR_CODE_NO_PERMISSION.to_string(),
+            Some(format!("user no namespace permission:{}", namespace)),
+        ));
+    }
+    let file_bytes = match std::fs::read(form.file.file.path()) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some(format!("import_jobs read upload file error,{}", e)),
+            ));
+        }
+    };
+    let (dto_list, parse_errors) = match parse_import_zip(&file_bytes, &namespace) {
+        Ok(result) => result,
+        Err(e) => {
+            log::error!("import_jobs parse zip error,{}", e);
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some(format!("import_jobs error,{}", e)),
+            ));
+        }
+    };
+    let keys: Vec<JobKey> = dto_list
+        .iter()
+        .map(|dto| JobKey::new(&namespace, &dto.app_name, &dto.key))
+        .collect();
+    let id_map = match share_data
+        .job_manager
+        .send(JobManagerReq::GetJobIdsByKeys(keys))
+        .await
+    {
+        Ok(Ok(JobManagerResult::JobIdMap(map))) => map,
+        _ => {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some("import_jobs query job ids by keys error".to_string()),
+            ));
+        }
+    };
+
+    let mut result = JobImportResult {
+        total_count: (dto_list.len() + parse_errors.len()) as u64,
+        ..Default::default()
+    };
+    for error in parse_errors {
+        result.fail_count += 1;
+        result.errors.push(error);
+    }
+    for dto in dto_list {
+        let job_key = JobKey::new(&namespace, &dto.app_name, &dto.key);
+        let existing_job_id = id_map.get(&job_key).copied();
+        match upsert_job(&share_data, &session.app_privilege, dto, existing_job_id).await {
+            Ok(()) => result.success_count += 1,
+            Err(e) => {
+                result.fail_count += 1;
+                result.errors.push(format!(
+                    "job {}/{}: {}",
+                    job_key.app_name, job_key.job_key, e
+                ));
+            }
+        }
+    }
+    HttpResponse::Ok().json(ApiResult::success(Some(result)))
 }
 
 /// 按查询条件全量导出任务为 zip 下载
@@ -237,5 +448,102 @@ mod tests {
             .read_to_string(&mut yaml)
             .unwrap();
         assert!(yaml.contains("key: job-a"));
+    }
+
+    #[test]
+    fn test_export_zip_import_zip_roundtrip() {
+        let list = vec![
+            build_test_job_dto(300, "job-a"),
+            build_test_job_dto(100, "job-b"),
+            build_test_job_dto(200, "job-c"),
+        ];
+        let bytes = build_export_zip(list).unwrap();
+        let (dto_list, errors) = parse_import_zip(&bytes, "target-ns").unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(dto_list.len(), 3);
+        assert_eq!(dto_list[0].id, 0);
+        assert_eq!(dto_list[0].namespace.as_str(), "target-ns");
+        assert_eq!(dto_list[0].key.as_str(), "job-b");
+        assert_eq!(dto_list[1].key.as_str(), "job-c");
+        assert_eq!(dto_list[2].key.as_str(), "job-a");
+        for dto in dto_list.iter() {
+            assert_eq!(dto.app_name.as_str(), "demo-app");
+            assert_eq!(
+                dto.description.as_str(),
+                format!("job description {}", dto.key)
+            );
+            assert_eq!(dto.schedule_type, "CRON");
+            assert_eq!(dto.cron_value.as_str(), "0 0 * * * ?");
+            assert_eq!(dto.handle_name.as_str(), "demoHandler");
+            assert_eq!(dto.run_mode, "BEAN");
+            assert_eq!(dto.router_strategy, "ROUND");
+            assert_eq!(dto.past_due_strategy, "DEFAULT");
+            assert_eq!(dto.blocking_strategy, "SERIAL_EXECUTION");
+        }
+
+        let empty_bytes = build_export_zip(vec![]).unwrap();
+        let (empty_list, empty_errors) = parse_import_zip(&empty_bytes, "target-ns").unwrap();
+        assert!(empty_list.is_empty());
+        assert!(empty_errors.is_empty());
+    }
+
+    #[test]
+    fn test_parse_import_zip_invalid_bytes() {
+        let err = parse_import_zip(&[0x50, 0x4b, 0x01, 0x02], "target-ns").unwrap_err();
+        assert!(err.to_string().contains("zip"));
+    }
+
+    #[test]
+    fn test_parse_import_zip_invalid_module() {
+        let yaml = build_test_yaml("job-001");
+        let bytes = build_test_zip(
+            &[(
+                RATCH_META_FILE_NAME,
+                "version: 0.3.0\nmodule: other".as_bytes(),
+            )],
+            &[("0001.yaml", yaml.as_bytes())],
+        );
+        let err = parse_import_zip(&bytes, "target-ns").unwrap_err();
+        assert!(err.to_string().contains("joblist"));
+    }
+
+    #[test]
+    fn test_parse_import_zip_invalid_yaml_entry() {
+        let yaml = build_test_yaml("job-001");
+        let bytes = build_test_zip(
+            &[(
+                RATCH_META_FILE_NAME,
+                "version: 0.3.0\nmodule: joblist".as_bytes(),
+            )],
+            &[
+                ("0001.yaml", yaml.as_bytes()),
+                ("0002.yaml", ": : 非法yaml".as_bytes()),
+            ],
+        );
+        let (dto_list, errors) = parse_import_zip(&bytes, "target-ns").unwrap();
+        assert_eq!(dto_list.len(), 1);
+        assert_eq!(dto_list[0].key.as_str(), "job-001");
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("0002.yaml"));
+        assert!(errors[0].contains("yaml parse error"));
+    }
+
+    fn build_test_yaml(key: &str) -> String {
+        let dto = build_test_job_dto(100, key);
+        serde_yaml::to_string(&JobExportInfo::from(&dto)).unwrap()
+    }
+
+    fn build_test_zip(meta_entries: &[(&str, &[u8])], yaml_entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut writer = ZipWriter::new(Cursor::new(&mut buf));
+            let options = FileOptions::default();
+            for (name, content) in meta_entries.iter().chain(yaml_entries.iter()) {
+                writer.start_file(*name, options).unwrap();
+                writer.write_all(content).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        buf
     }
 }

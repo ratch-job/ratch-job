@@ -1,5 +1,6 @@
 use crate::common::constant::{EMPTY_ARC_STR, SEQ_JOB_ID};
 use crate::common::datetime_utils::{now_millis, now_second_u32};
+use crate::common::model::privilege::PrivilegeGroup;
 use crate::common::model::{ApiResult, PageResult, UserSession};
 use crate::common::share_data::ShareData;
 use crate::console::model::job::{
@@ -92,7 +93,7 @@ pub(crate) async fn query_job_info(
     }
 }
 
-async fn do_create_job(
+pub(crate) async fn do_create_job(
     share_data: Data<Arc<ShareData>>,
     mut param: JobParam,
 ) -> anyhow::Result<HttpResponse> {
@@ -187,33 +188,18 @@ pub(crate) async fn create_job(
     }
 }
 
-pub(crate) async fn update_job(
-    req: actix_web::HttpRequest,
+pub(crate) async fn do_update_job(
     share_data: Data<Arc<ShareData>>,
-    web::Json(param): web::Json<JobInfoParam>,
-) -> impl Responder {
-    let param = param.to_param();
+    app_privilege: &PrivilegeGroup<Arc<String>>,
+    param: JobParam,
+) -> anyhow::Result<()> {
     let id = param.id.clone().unwrap_or_default();
     if id == 0 {
-        return HttpResponse::Ok().json(ApiResult::<()>::error(
-            ERROR_CODE_SYSTEM_ERROR.to_string(),
-            Some("update_job error,the job id is invalid".to_string()),
-        ));
+        return Err(anyhow::anyhow!("the job id is invalid"));
     }
-    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
-        session.app_privilege.clone()
-    } else {
-        return HttpResponse::Ok().json(ApiResult::<()>::error(
-            ERROR_CODE_SYSTEM_ERROR.to_string(),
-            Some("user session is invalid".to_string()),
-        ));
-    };
     if let Some(app_name) = param.app_name.as_ref() {
         if !app_privilege.check_permission(app_name) {
-            return HttpResponse::Ok().json(ApiResult::<()>::error(
-                ERROR_CODE_NO_APP_PERMISSION.to_string(),
-                Some(format!("user no app permission:{}", app_name)),
-            ));
+            return Err(anyhow::anyhow!("user no app permission:{}", app_name));
         }
     }
 
@@ -221,10 +207,7 @@ pub(crate) async fn update_job(
         share_data.job_manager.send(JobManagerReq::GetJob(id)).await
     {
         if !app_privilege.check_permission(&info.app_name) {
-            return HttpResponse::Ok().json(ApiResult::<()>::error(
-                ERROR_CODE_NO_APP_PERMISSION.to_string(),
-                Some(format!("user no app permission:{}", &info.app_name)),
-            ));
+            return Err(anyhow::anyhow!("user no app permission:{}", &info.app_name));
         }
         Some(info)
     } else {
@@ -239,12 +222,8 @@ pub(crate) async fn update_job(
                     if let Some(ref info) = original_job_info {
                         (info.namespace.clone(), info.app_name.clone())
                     } else {
-                        return HttpResponse::Ok().json(ApiResult::<()>::error(
-                            ERROR_CODE_SYSTEM_ERROR.to_string(),
-                            Some(
-                                "update_job error,namespace/app_name is required when key is set"
-                                    .to_string(),
-                            ),
+                        return Err(anyhow::anyhow!(
+                            "namespace/app_name is required when key is set"
                         ));
                     }
                 }
@@ -258,37 +237,55 @@ pub(crate) async fn update_job(
                 .await
             {
                 if existing_id != id {
-                    return HttpResponse::Ok().json(ApiResult::<()>::error(
-                        ERROR_CODE_JOB_KEY_DUPLICATE.to_string(),
-                        Some(format!(
-                            "job key already exists: namespace={}, app_name={}, key={}",
-                            namespace, app_name, key
-                        )),
+                    return Err(anyhow::anyhow!(
+                        "job key already exists: namespace={}, app_name={}, key={}",
+                        namespace,
+                        app_name,
+                        key
                     ));
                 }
             }
         }
     }
 
-    if let Err(e) = param.check_valid() {
-        return HttpResponse::Ok().json(ApiResult::<()>::error(
-            ERROR_CODE_SYSTEM_ERROR.to_string(),
-            Some(format!("update_job error,{}", e)),
-        ));
-    }
-    if let Ok(_) = share_data
+    param.check_valid()?;
+
+    share_data
         .raft_request_route
         .request(ClientRequest::JobReq {
             req: JobManagerRaftReq::UpdateJob(param),
         })
-        .await
-    {
-        HttpResponse::Ok().json(ApiResult::success(Some(())))
+        .await?;
+    Ok(())
+}
+
+pub(crate) async fn update_job(
+    req: actix_web::HttpRequest,
+    share_data: Data<Arc<ShareData>>,
+    web::Json(param): web::Json<JobInfoParam>,
+) -> impl Responder {
+    let param = param.to_param();
+    let app_privilege = if let Some(session) = req.extensions().get::<Arc<UserSession>>() {
+        session.app_privilege.clone()
     } else {
-        HttpResponse::Ok().json(ApiResult::<()>::error(
+        return HttpResponse::Ok().json(ApiResult::<()>::error(
             ERROR_CODE_SYSTEM_ERROR.to_string(),
-            Some("update_job error".to_string()),
-        ))
+            Some("user session is invalid".to_string()),
+        ));
+    };
+    match do_update_job(share_data, &app_privilege, param).await {
+        Ok(()) => HttpResponse::Ok().json(ApiResult::success(Some(()))),
+        Err(e) => {
+            let error_msg = format!("update_job error,{}", e);
+            let error_code = if error_msg.contains("job key already exists") {
+                ERROR_CODE_JOB_KEY_DUPLICATE.to_string()
+            } else if error_msg.contains("user no app permission") {
+                ERROR_CODE_NO_APP_PERMISSION.to_string()
+            } else {
+                ERROR_CODE_SYSTEM_ERROR.to_string()
+            };
+            HttpResponse::Ok().json(ApiResult::<()>::error(error_code, Some(error_msg)))
+        }
     }
 }
 

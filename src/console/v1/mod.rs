@@ -63,6 +63,7 @@ pub fn console_api_v1(config: &mut ServiceConfig) {
             .service(web::resource("/app/remove").route(web::post().to(app_api::remove_app)))
             .service(web::resource("/job/list").route(web::get().to(job_api::query_job_list)))
             .service(web::resource("/job/export").route(web::get().to(job_transfer::export_jobs)))
+            .service(web::resource("/job/import").route(web::post().to(job_transfer::import_jobs)))
             .service(web::resource("/job/info").route(web::get().to(job_api::query_job_info)))
             .service(web::resource("/job/create").route(web::post().to(job_api::create_job)))
             .service(web::resource("/job/update").route(web::post().to(job_api::update_job)))
