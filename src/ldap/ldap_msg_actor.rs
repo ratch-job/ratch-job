@@ -49,7 +49,10 @@ async fn get_or_add_user(
     let mut added = false;
     if let Some(raft_request_route) = raft_request_route {
         let req = UserManagerRaftReq::AddUser(user);
-        match raft_request_route.request(ClientRequest::UserReq { req }).await {
+        match raft_request_route
+            .request(ClientRequest::UserReq { req })
+            .await
+        {
             Ok(_) => {
                 added = true;
             }

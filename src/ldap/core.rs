@@ -39,16 +39,16 @@ impl LdapManager {
             LdapConnActorAddr::new_from_config(ldap_config, user_manager_addr, raft_request_route)
                 .await
         }
-            .into_actor(self)
-            .map(|res, act, _ctx| match res {
-                Ok(res) => {
-                    act.ldap_conn_addr = Some(res);
-                }
-                Err(err) => {
-                    log::error!("init ldap error:{}", err);
-                }
-            })
-            .wait(ctx);
+        .into_actor(self)
+        .map(|res, act, _ctx| match res {
+            Ok(res) => {
+                act.ldap_conn_addr = Some(res);
+            }
+            Err(err) => {
+                log::error!("init ldap error:{}", err);
+            }
+        })
+        .wait(ctx);
     }
 
     async fn handle_req(

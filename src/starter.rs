@@ -126,11 +126,8 @@ pub async fn config_factory(app_config: Arc<AppConfig>) -> anyhow::Result<Factor
     factory.register(BeanDefinition::actor_with_inject_from_obj(
         namespace_manager.clone(),
     ));
-    let ldap_manager = LdapManager::new(
-        app_config.get_ldap_config(),
-        app_config.ldap_enable,
-    )
-    .start();
+    let ldap_manager =
+        LdapManager::new(app_config.get_ldap_config(), app_config.ldap_enable).start();
     factory.register(BeanDefinition::actor_with_inject_from_obj(ldap_manager));
     let raft_data_wrap = Arc::new(RaftDataHandler {
         sequence_db: sequence_db_addr,
