@@ -215,6 +215,7 @@ lazy_static::lazy_static! {
         R::Path("/ratchjob/manage/job/task",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/job/list",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/job/info",HTTP_METHOD_GET),
+        R::Path("/ratchjob/api/console/v1/job/export",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/job/task/list",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/job/task/latest-history",HTTP_METHOD_GET),
         R::Path("/ratchjob/api/console/v1/job/task/log",HTTP_METHOD_GET),
@@ -237,6 +238,7 @@ lazy_static::lazy_static! {
         R::Path("/ratchjob/api/console/v1/job/update",HTTP_METHOD_ALL),
         R::Path("/ratchjob/api/console/v1/job/remove",HTTP_METHOD_ALL),
         R::Path("/ratchjob/api/console/v1/job/trigger",HTTP_METHOD_ALL),
+        R::Path("/ratchjob/api/console/v1/job/import",HTTP_METHOD_ALL),
     ]);
 
 
