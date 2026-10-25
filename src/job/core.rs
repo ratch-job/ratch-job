@@ -344,6 +344,15 @@ impl Handler<JobManagerReq> for JobManager {
                 let job_id = self.job_key_map.get(&job_key).copied();
                 return Ok(JobManagerResult::JobId(job_id));
             }
+            JobManagerReq::GetJobIdsByKeys(keys) => {
+                let mut map = HashMap::with_capacity(keys.len());
+                for key in keys {
+                    if let Some(id) = self.job_key_map.get(&key).copied() {
+                        map.insert(key, id);
+                    }
+                }
+                return Ok(JobManagerResult::JobIdMap(map));
+            }
             JobManagerReq::UpdateTask(task_info) => {
                 self.update_job_task(task_info);
             }

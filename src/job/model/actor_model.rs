@@ -3,6 +3,7 @@ use crate::job::model::job::{JobInfo, JobInfoDto, JobKey, JobParam, JobTaskLogQu
 use crate::task::model::task::JobTaskInfo;
 use actix::Message;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Message)]
@@ -12,6 +13,7 @@ pub enum JobManagerReq {
     GetJob(u64),
     GetJobTaskLog(u64, u64),
     GetJobIdByKey(JobKey),
+    GetJobIdsByKeys(Vec<JobKey>),
     QueryJob(JobQueryParam),
     QueryJobTaskLog(JobTaskLogQueryParam),
     CountJobsByNamespace(String),
@@ -22,6 +24,7 @@ pub enum JobManagerResult {
     JobInfo(Option<Arc<JobInfo>>),
     JobTaskInfo(Option<Arc<JobTaskInfo>>),
     JobId(Option<u64>),
+    JobIdMap(HashMap<JobKey, u64>),
     JobPageInfo(usize, Vec<JobInfoDto>),
     JobTaskLogPageInfo(usize, Vec<Arc<JobTaskInfo>>),
     Count(usize),

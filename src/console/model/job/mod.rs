@@ -8,8 +8,12 @@ use crate::job::model::enum_type::{
     ExecutorBlockStrategy, JobRunMode, PastDueStrategy, RouterStrategy, ScheduleType,
 };
 use crate::job::model::job::{JobParam, JobTaskLogQueryParam};
+use crate::job::model::job::JobInfoDto;
 use crate::task::model::enum_type::TaskStatusType;
 use crate::task::model::request_model::JobLogInfo;
+use actix_multipart::form::tempfile::TempFile;
+use actix_multipart::form::text::Text;
+use actix_multipart::form::MultipartForm;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -297,6 +301,87 @@ impl JobTaskHistoryQueryListRequest {
             status,
         })
     }
+}
+
+/// 任务导出 yaml 内容模型，字段与 JobInfoDto 一致但不含 id、namespace
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct JobExportInfo {
+    pub enable: bool,
+    pub app_name: Arc<String>,
+    pub key: Arc<String>,
+    pub description: Arc<String>,
+    pub schedule_type: String,
+    pub cron_value: Arc<String>,
+    pub delay_second: u32,
+    pub interval_second: u32,
+    pub run_mode: String,
+    pub handle_name: Arc<String>,
+    pub trigger_param: Arc<String>,
+    pub glue_source: Arc<String>,
+    pub router_strategy: String,
+    pub past_due_strategy: String,
+    pub blocking_strategy: String,
+    pub timeout_second: u32,
+    pub try_times: u32,
+    pub version_id: u64,
+    pub last_modified_millis: u64,
+    pub register_time: u64,
+    pub retry_interval: u32,
+}
+
+impl From<&JobInfoDto> for JobExportInfo {
+    fn from(dto: &JobInfoDto) -> Self {
+        Self {
+            enable: dto.enable,
+            app_name: dto.app_name.clone(),
+            key: dto.key.clone(),
+            description: dto.description.clone(),
+            schedule_type: dto.schedule_type.clone(),
+            cron_value: dto.cron_value.clone(),
+            delay_second: dto.delay_second,
+            interval_second: dto.interval_second,
+            run_mode: dto.run_mode.clone(),
+            handle_name: dto.handle_name.clone(),
+            trigger_param: dto.trigger_param.clone(),
+            glue_source: dto.glue_source.clone(),
+            router_strategy: dto.router_strategy.clone(),
+            past_due_strategy: dto.past_due_strategy.clone(),
+            blocking_strategy: dto.blocking_strategy.clone(),
+            timeout_second: dto.timeout_second,
+            try_times: dto.try_times,
+            version_id: dto.version_id,
+            last_modified_millis: dto.last_modified_millis,
+            register_time: dto.register_time,
+            retry_interval: dto.retry_interval,
+        }
+    }
+}
+
+/// 导出包元数据文件 .ratch_meta 内容模型
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct RatchMeta {
+    pub version: String,
+    pub module: String,
+}
+
+/// 任务导入结果统计
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct JobImportResult {
+    pub total_count: u64,
+    pub success_count: u64,
+    pub fail_count: u64,
+    pub errors: Vec<String>,
+}
+
+/// 任务导入上传表单（multipart/form-data）
+#[derive(Debug, MultipartForm)]
+pub struct JobImportForm {
+    #[multipart(rename = "namespace")]
+    pub namespace: Option<Text<String>>,
+    #[multipart(rename = "file")]
+    pub file: TempFile,
 }
 
 #[cfg(test)]
