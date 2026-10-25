@@ -206,8 +206,15 @@ pub(crate) async fn import_jobs(
             Some(format!("user no namespace permission:{}", namespace)),
         ));
     }
-    let file_bytes = match std::fs::read(form.file.file.path()) {
-        Ok(bytes) => bytes,
+    let file_path = form.file.file.path().to_path_buf();
+    let file_bytes = match web::block(move || std::fs::read(file_path)).await {
+        Ok(Ok(bytes)) => bytes,
+        Ok(Err(e)) => {
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some(format!("import_jobs read upload file error,{}", e)),
+            ));
+        }
         Err(e) => {
             return HttpResponse::Ok().json(ApiResult::<()>::error(
                 ERROR_CODE_SYSTEM_ERROR.to_string(),
@@ -215,8 +222,20 @@ pub(crate) async fn import_jobs(
             ));
         }
     };
-    let (dto_list, parse_errors) = match parse_import_zip(&file_bytes, &namespace) {
-        Ok(result) => result,
+    let (dto_list, parse_errors) = match web::block({
+        let namespace = namespace.clone();
+        move || parse_import_zip(&file_bytes, namespace.as_str())
+    })
+    .await
+    {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            log::error!("import_jobs parse zip error,{}", e);
+            return HttpResponse::Ok().json(ApiResult::<()>::error(
+                ERROR_CODE_SYSTEM_ERROR.to_string(),
+                Some(format!("import_jobs error,{}", e)),
+            ));
+        }
         Err(e) => {
             log::error!("import_jobs parse zip error,{}", e);
             return HttpResponse::Ok().json(ApiResult::<()>::error(
